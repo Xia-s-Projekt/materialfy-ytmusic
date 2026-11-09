@@ -265,7 +265,7 @@ Page {
                     Button {
                         visible: page.shown === "signedOut"
                         text: I18n.t("Paste the headers below")
-                        icon: "content_paste"
+                        icon: "content_copy"
                         size: "m"
                         onClicked: page._focusHeaders()
                     }
@@ -332,9 +332,19 @@ Page {
                             color: Theme.fgSurface
                             selectionColor: Theme.primaryContainer
                             selectedTextColor: Theme.fgPrimaryContainer
-                            font.family: Theme.fontFamilyMonospace ?? Theme.fontFamily
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.type.bodyMedium.size
-                            placeholderText: "{\"authorization\": \"SAPISIDHASH ...\", \"cookie\": \"...\"}"
+                        }
+                        Label {
+                            visible: headersEdit.text === ""
+                            x: 12
+                            y: 12
+                            width: parent.width - 24
+                            text: I18n.t("Paste the JSON here, e.g. {\"authorization\":\"SAPISIDHASH ...\",\"cookie\":\"...\"}")
+                            type: "bodyMedium"
+                            color: Theme.fgSurfaceVariant
+                            wrapMode: Text.WordWrap
+                            elide: Text.ElideNone
                         }
                     }
                     Label {
