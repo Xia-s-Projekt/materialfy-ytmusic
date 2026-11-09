@@ -9,7 +9,7 @@ use cxx::UniquePtr;
 use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use md3_model::{ListChange, PlayContext, PlaylistId, contexts};
-use sf_services::{AuthEvent, HistoryEvent, LibraryEvent, LibraryKind};
+use yt_services::{AuthEvent, HistoryEvent, LibraryEvent, LibraryKind};
 use tokio::sync::{Semaphore, broadcast};
 
 use super::{Delivery, forward_events, json_str, model_ptr, string_list, track_from_map, with_model};

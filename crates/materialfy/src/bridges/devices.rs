@@ -5,7 +5,7 @@ use std::sync::Arc;
 use cxx::UniquePtr;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
-use sf_services::{DevicesEvent, DevicesSnapshot};
+use yt_services::{DevicesEvent, DevicesSnapshot};
 
 use super::{Delivery, forward_events, forward_watch, model_ptr, to_qmap, with_model};
 use crate::context::ctx;

@@ -1,4 +1,4 @@
-// Player — зеркало sf_player::PlayerHandle (локальный librespot или устройство Connect). Свойства сверяются со снимком
+// Player — зеркало yt_player::PlayerHandle (локальный librespot или устройство Connect). Свойства сверяются со снимком
 // на каждом событии; структурные события (трек, состояние, очередь, устройство) проходят полный sync(), а «дешёвые»
 // (уровень ~30 Гц, позиция ~5 Гц, громкость, режимы, обложка, ошибка) обновляют только свою группу свойств.
 // Сигнал — только по изменившейся группе; TrackChanged — всегда. Модель очереди приводится
@@ -14,7 +14,7 @@ use cxx::UniquePtr;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList, QVariant};
 use md3_model::{DeviceItem, PlayContext, QueueRow, TrackItem};
-use sf_player::{LocalPlayback, PlayerEvent, PlayerSnapshot, Repeat};
+use yt_player::{LocalPlayback, PlayerEvent, PlayerSnapshot, Repeat};
 use mf_platform::{SettingKey, SettingValue};
 
 use super::{Delivery, forward_events, held, model_ptr, string_list, to_qmap, track_from_map, with_model};
@@ -341,7 +341,7 @@ const VOLUME_SAVE_DELAY: Duration = Duration::from_millis(400);
 /// Списки присылают только URI, а выбранный трек нужен ядру, чтобы показать его сразу — до ответа движка.
 /// Метаданные уже лежат в общем кэше каталога (его наполняют те же списки).
 fn remember_track(uri: &str) {
-    if let Some(track) = sf_services::data::known::get(uri) {
+    if let Some(track) = yt_services::data::known::get(uri) {
         ctx().services.player.remember(track);
     }
 }
@@ -579,7 +579,7 @@ impl qobject::Player {
         if uri.is_empty() {
             return;
         }
-        let kind = sf_api::util::uri_kind(&uri).unwrap_or_default().to_owned();
+        let kind = yt_api::util::uri_kind(&uri).unwrap_or_default().to_owned();
         let offset = offset_uri.to_string();
         remember_track(&offset);
         let context = PlayContext::with_uri(&kind, uri);
@@ -591,7 +591,7 @@ impl qobject::Player {
         if uri.is_empty() {
             return;
         }
-        let kind = sf_api::util::uri_kind(&uri).unwrap_or_default().to_owned();
+        let kind = yt_api::util::uri_kind(&uri).unwrap_or_default().to_owned();
         ctx().services.player.play_context(PlayContext::with_uri(&kind, uri), None, Some(true));
     }
 

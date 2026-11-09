@@ -36,7 +36,7 @@ Item {
     }
 
     readonly property string _trackId: _v("trackId", "")
-    readonly property string _uri: _v("uri", "") || (_trackId !== "" ? "spotify:track:" + _trackId : "")
+    readonly property string _uri: _v("uri", "") || (_trackId !== "" ? "ytmusic:track:" + _trackId : "")
     readonly property string _albumId: _v("albumId", "")
     readonly property var _refs: (_v("artistRefs", []) ?? []).filter(r => r && r.id)
 

@@ -1,4 +1,4 @@
-//! Covers: запасная обложка не со Spotify (sf_services::cover_fallback, Deezer). MorphImage спрашивает её, когда
+//! Covers: запасная обложка не со Spotify (yt_services::cover_fallback, Deezer). MorphImage спрашивает её, когда
 //! картинку Spotify не удалось загрузить ни с одного его CDN: find(kind, artist, title) возвращает ключ запроса,
 //! ответ приходит сигналом found(key, url) — url пустой, если ничего не нашлось.
 use std::pin::Pin;
@@ -6,7 +6,7 @@ use std::sync::{Arc, OnceLock};
 
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
-use sf_services::cover_fallback::{CoverFallback, CoverKind};
+use yt_services::cover_fallback::{CoverFallback, CoverKind};
 
 use crate::context::ctx;
 

@@ -10,7 +10,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use serde_json::{Map, Value};
 use md3_model::{PlayContext, contexts};
-use sf_services::{
+use yt_services::{
     AlbumPage, ArtistPage, AuthEvent, CatalogService, EpisodePage, SearchKind, SearchResults, ServiceError, ShowPage,
 };
 
@@ -429,23 +429,25 @@ impl qobject::Catalog {
             return true;
         }
         if text.starts_with("spotify:station:") {
-            let Some(seed) = sf_api::util::station_seed(text) else { return false };
+            let Some(seed) = yt_api::util::station_seed(text) else { return false };
             self.navigate("radio", props(&[("seed", Value::from(seed))]));
             return true;
         }
-        let Some(uri) = sf_api::link::parse(text) else { return false };
-        if let Some(query) = sf_api::link::search_query(&uri) {
+        let Some(link) = yt_api::link::parse(text) else { return false };
+        if let Some(query) = yt_api::link::search_query(&link) {
             self.as_mut().search_all(&QString::from(query.as_str()));
             self.navigate("search", QVariantMap::default());
             return true;
         }
-        let (Some(kind), Some(id)) = (sf_api::util::uri_kind(&uri), sf_api::util::uri_id(&uri)) else { return false };
+        let (kind, id) = (link.kind.as_str(), link.id.clone());
+        if kind.is_empty() || id.is_empty() { return false; }
+        let uri = format!("ytmusic:{kind}:{id}");
         let id = QString::from(id);
         match kind {
             "artist" => self.open_artist(&id),
             "album" => self.open_album(&id),
             // DJ выглядит плейлистом, но списка треков у него нет: ссылка на него только запускает его
-            "playlist" if uri == sf_services::data::home_feed::DJ_URI => {
+            "playlist" if uri == yt_services::data::home_feed::DJ_URI => {
                 let context = PlayContext::with_uri("playlist", uri.clone());
                 ctx().services.player.play_context(context, None, None);
             }
@@ -715,7 +717,7 @@ impl qobject::Catalog {
         let track_id = json_str(&track, "trackId");
         let episode = track.get("isEpisode").and_then(Value::as_bool).unwrap_or(false);
         let url = if !uri.is_empty() {
-            sf_api::util::open_spotify_url(&uri).unwrap_or_default()
+            yt_api::util::open_spotify_url(&uri).unwrap_or_default()
         } else if !track_id.is_empty() {
             format!("https://open.spotify.com/{}/{track_id}", if episode { "episode" } else { "track" })
         } else {
@@ -732,7 +734,7 @@ impl qobject::Catalog {
     }
 
     fn uri_url(&self, uri: &QString) -> QString {
-        QString::from(sf_api::util::open_spotify_url(&uri.to_string()).unwrap_or_default().as_str())
+        QString::from(yt_api::util::open_spotify_url(&uri.to_string()).unwrap_or_default().as_str())
     }
 
     fn request_track_details(self: Pin<&mut Self>, track: &QVariantMap) {

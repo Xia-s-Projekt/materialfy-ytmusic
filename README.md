@@ -1,3 +1,37 @@
+# Materialfy — YouTube Music fork
+
+> **Fork of [fatyzzz/materialfy](https://github.com/fatyzzz/materialfy)** adapted from Spotify to
+> [YouTube Music](https://music.youtube.com) using
+> [sigma67/ytmusicapi](https://github.com/sigma67/ytmusicapi). This repo:
+> `Xia-s-Projekt/materialfy-ytmusic`.
+
+This fork keeps the Materialfy Qt/QML shell and **replaces the Spotify stack** (`sf-auth`/`sf-api`/
+`sf-player`/`sf-services`, librespot, Spotify Connect) with new `yt-*` crates that shell out to a
+Python **ytmusicapi bridge** (`crates/yt-api/python/yt_bridge.py`):
+
+| Old (Spotify) | New (YouTube Music) |
+|---|---|
+| `sf-auth` (OAuth PKCE + librespot session) | `yt-auth` (browser headers-auth JSON) |
+| `sf-api` (Web API) | `yt-api` (`YtClient` → `yt_bridge.py`) |
+| `sf-player` (librespot playback) | `yt-player` (queue + `get_song` stream URL; local audio output is a stub — see below) |
+| `sf-services` | `yt-services` (bridge API mirrors `sf-services`) |
+
+## Quick start (YTMusic)
+
+```bash
+pip install ytmusicapi
+# sign in: https://music.youtube.com → open DevTools → Application → copy browser headers
+# save them as ~/.ytmusic_headers_auth or headers_auth.json (see crates/yt-auth)
+cargo run -p materialfy
+```
+
+Audio output is currently stubbed (rodio/fastframe-sink conflict on this branch); the queue,
+`get_song` resolution, search, library and home mapping are wired. See [YTMUSIC.md](YTMUSIC.md)
+for the migration map and known limitations. The original Spotify docs below are kept for reference
+except where marked as fork-specific.
+
+---
+
 <p align="center"><b>English</b> · <a href="README.ru.md">Русский</a> · <a href="README.pt-BR.md">Português</a></p>
 
 <div align="center">

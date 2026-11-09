@@ -2572,13 +2572,13 @@ dependencies = [
  "mf-theme",
  "serde",
  "serde_json",
- "sf-api",
- "sf-player",
- "sf-services",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "yt-api",
+ "yt-player",
+ "yt-services",
 ]
 
 [[package]]
@@ -5735,6 +5735,79 @@ dependencies = [
  "quote",
  "syn 3.0.7",
  "synstructure",
+]
+
+[[package]]
+name = "yt-api"
+version = "0.5.1"
+dependencies = [
+ "anyhow",
+ "log",
+ "md3-model",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "yt-auth",
+]
+
+[[package]]
+name = "yt-auth"
+version = "0.5.1"
+dependencies = [
+ "anyhow",
+ "log",
+ "open",
+ "rand 0.9.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "yt-player"
+version = "0.5.1"
+dependencies = [
+ "anyhow",
+ "futures",
+ "log",
+ "md3-model",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "yt-api",
+]
+
+[[package]]
+name = "yt-services"
+version = "0.5.1"
+dependencies = [
+ "anyhow",
+ "fastrand",
+ "futures",
+ "jiff",
+ "log",
+ "md3-model",
+ "mf-lyrics",
+ "mf-platform",
+ "rand 0.9.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "yt-api",
+ "yt-auth",
+ "yt-player",
 ]
 
 [[package]]

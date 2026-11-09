@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
-use sf_services::LyricsSnapshot;
+use yt_services::LyricsSnapshot;
 
 use super::forward_watch;
 use crate::context::ctx;

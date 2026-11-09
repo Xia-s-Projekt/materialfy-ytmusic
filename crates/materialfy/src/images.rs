@@ -4,7 +4,7 @@
 //! Прокси — действующий у сервисов (AuthService::proxy / watch_proxy), тот же, что у запросов к Web API.
 use cxx_qt_lib::{QQmlApplicationEngine, QString};
 use mf_platform::SettingKey;
-use sf_services::{ProxyConfig, Services};
+use yt_services::{ProxyConfig, Services};
 use std::pin::Pin;
 
 pub const CACHE_BYTES: i64 = 512 * 1024 * 1024;

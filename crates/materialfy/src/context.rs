@@ -20,7 +20,7 @@ pub struct StartupFlags {
 pub struct AppContext {
     /// tokio-рантайм (многопоточный); мосты делают rt.spawn(...) и возвращаются в GUI через CxxQtThread::queue
     pub rt: Handle,
-    pub services: sf_services::Services,
+    pub services: yt_services::Services,
     pub flags: StartupFlags,
     /// системная тёмная тема (QStyleHints::colorScheme), обновляется оболочкой по colorSchemeChanged
     pub system_dark: watch::Receiver<bool>,

@@ -2,6 +2,10 @@
 resolver = "3"
 members = [
     "crates/md3-model",
+    "crates/yt-auth",
+    "crates/yt-api",
+    "crates/yt-player",
+    "crates/yt-services",
     "crates/sf-auth",
     "crates/sf-api",
     "crates/sf-player",
@@ -14,7 +18,7 @@ members = [
 ]
 
 [workspace.package]
-description = "Materialfy — клиент Spotify на Qt Quick (Material 3 Expressive) и Rust"
+description = "Materialfy YTMusic — YouTube Music client on Qt Quick (Material 3 Expressive) and Rust (fork of fatyzzz/materialfy)"
 version = "0.5.1"
 edition = "2024"
 rust-version = "1.98"
@@ -23,6 +27,10 @@ license = "GPL-3.0-or-later"
 [workspace.dependencies]
 # внутренние
 md3-model = { path = "crates/md3-model" }
+yt-auth = { path = "crates/yt-auth" }
+yt-api = { path = "crates/yt-api" }
+yt-player = { path = "crates/yt-player" }
+yt-services = { path = "crates/yt-services" }
 sf-auth = { path = "crates/sf-auth" }
 sf-api = { path = "crates/sf-api" }
 sf-player = { path = "crates/sf-player" }
@@ -33,7 +41,7 @@ mf-platform = { path = "crates/mf-platform" }
 mf-i18n = { path = "crates/mf-i18n" }
 
 # асинхронность и сеть
-tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net", "io-util"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net", "io-util", "process"] }
 futures = "0.3.34"
 reqwest = { version = "0.12.24", default-features = false, features = ["rustls-tls-native-roots", "json", "gzip", "http2", "blocking", "socks", "system-proxy"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy", "client-proxy-system"] }

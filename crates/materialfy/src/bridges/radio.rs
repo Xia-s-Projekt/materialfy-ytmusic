@@ -6,7 +6,7 @@ use cxx::UniquePtr;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use md3_model::{PlayContext, contexts};
-use sf_services::WaveSnapshot;
+use yt_services::WaveSnapshot;
 
 use super::{forward_watch, model_ptr, to_qlist, with_model};
 use crate::context::ctx;
@@ -107,7 +107,7 @@ impl Default for RadioRust {
 /// Сид станции: плитки «Радио» на главной несут и URI станции (spotify:station:…) — он сводится к сиду.
 fn seed_of(text: &QString) -> String {
     let text = text.to_string();
-    sf_api::util::station_seed(&text).unwrap_or(text)
+    yt_api::util::station_seed(&text).unwrap_or(text)
 }
 
 impl qobject::Radio {

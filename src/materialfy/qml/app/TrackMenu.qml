@@ -124,7 +124,7 @@ Item {
             if (root.playlistId !== "" && typeof track.pos === "number")
                 items.push({ id: "removefromplaylist", text: I18n.t("Remove from this playlist"), icon: "remove_circle" })
             if (hasAlbum) {
-                const saved = Library.savedRevision >= 0 && Library.isSaved("spotify:album:" + track.albumId)
+                const saved = Library.savedRevision >= 0 && Library.isSaved("ytmusic:album:" + track.albumId)
                 items.push({ id: "save", text: saved ? I18n.t("Remove album from library") : I18n.t("Save album"), icon: saved ? "library_add_check" : "library_add" })
             }
         } else {

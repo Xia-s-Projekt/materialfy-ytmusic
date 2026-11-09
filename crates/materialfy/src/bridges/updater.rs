@@ -1,4 +1,4 @@
-// Updater — mirror of sf_services::UpdateService (auto-update from GitHub Releases).
+// Updater — mirror of yt_services::UpdateService (auto-update from GitHub Releases).
 // state: "idle" | "checking" | "upToDate" | "available" | "downloading" | "verifying" | "readyToInstall" |
 // "installing" | "error". Download numbers have their own signal (progressChanged, ~8 times a second) so the
 // rest of the UI (release notes) doesn't re-evaluate on every tick. autoCheck/channel are the settings
@@ -13,7 +13,7 @@ use std::time::Duration;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use mf_platform::{SettingKey, SettingValue};
-use sf_services::update::{self, UpdateSnapshot, UpdateState};
+use yt_services::update::{self, UpdateSnapshot, UpdateState};
 
 use super::{Delivery, forward_events, forward_watch};
 use crate::context::ctx;

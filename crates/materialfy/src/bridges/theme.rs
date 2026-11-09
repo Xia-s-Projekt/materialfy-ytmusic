@@ -6,7 +6,7 @@ use std::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QColor, QString, QStringList, QVariant};
 use mf_platform::{SettingKey, SettingValue, SettingsStore};
-use sf_player::PlayerEvent;
+use yt_player::PlayerEvent;
 use mf_theme::{Scheme, Variant};
 
 use super::{Delivery, forward_events, local_path};

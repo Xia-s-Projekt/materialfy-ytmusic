@@ -1,6 +1,6 @@
 [package]
 name = "materialfy"
-description = "Materialfy — клиент Spotify на Qt Quick (Material 3 Expressive) + Rust"
+description = "Materialfy — клиент YouTube Music на Qt Quick (Material 3 Expressive) + Rust"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,9 +14,9 @@ path = "src/main.rs"
 [dependencies]
 mf-i18n.workspace = true
 md3-model.workspace = true
-sf-api.workspace = true
-sf-player.workspace = true
-sf-services.workspace = true
+yt-api.workspace = true
+yt-player.workspace = true
+yt-services.workspace = true
 mf-theme.workspace = true
 mf-lyrics.workspace = true
 mf-platform.workspace = true

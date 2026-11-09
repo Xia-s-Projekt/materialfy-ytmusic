@@ -1,0 +1,27 @@
+[package]
+name = "yt-services"
+description = "Services on tokio: auth, library, catalog, home, radio, history, devices"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+md3-model.workspace = true
+yt-auth.workspace = true
+yt-api.workspace = true
+yt-player.workspace = true
+mf-lyrics.workspace = true
+mf-platform.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+log.workspace = true
+jiff.workspace = true
+rand.workspace = true
+fastrand.workspace = true
+reqwest.workspace = true

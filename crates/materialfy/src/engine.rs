@@ -26,7 +26,7 @@ use std::time::Duration;
 use cxx_qt_lib::{QQmlApplicationEngine, QString, QUrl, QVariant};
 use tokio::sync::broadcast::error::RecvError;
 use mf_platform::{SettingKey, SettingsStore};
-use sf_services::{AppRequest, Services, ServicesOptions};
+use yt_services::{AppRequest, Services, ServicesOptions};
 
 use crate::cli::{Cli, InitialValue};
 use crate::context::{self, AppContext, StartupFlags};

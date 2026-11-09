@@ -302,7 +302,7 @@ Page {
                                slot.model.kind ? I18n.any(slot.model.kind) : ""].filter(x => x).join(" · ")
                     explicit: slot.model.explicit
                     // «Слушать» по наведению, как на главной: играющий альбом ставится на паузу
-                    readonly property string albumUri: slot.model.uri || ("spotify:album:" + slot.model.albumId)
+                    readonly property string albumUri: slot.model.uri || ("ytmusic:album:" + slot.model.albumId)
                     showPlay: true
                     playing: Player.playing && Player.contextUri === albumUri
                     onPlayClicked: Player.contextUri === albumUri ? Player.togglePlay() : Player.playContext(albumUri, "")
@@ -336,7 +336,7 @@ Page {
                     subtitle: slot.model.artists
                     explicit: slot.model.explicit
                     // «Слушать» по наведению, как на главной: играющий альбом ставится на паузу
-                    readonly property string albumUri: slot.model.uri || ("spotify:album:" + slot.model.albumId)
+                    readonly property string albumUri: slot.model.uri || ("ytmusic:album:" + slot.model.albumId)
                     showPlay: true
                     playing: Player.playing && Player.contextUri === albumUri
                     onPlayClicked: Player.contextUri === albumUri ? Player.togglePlay() : Player.playContext(albumUri, "")

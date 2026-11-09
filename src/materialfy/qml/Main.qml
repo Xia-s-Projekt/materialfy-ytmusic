@@ -641,11 +641,11 @@ Window {
         if (win.mini && (id === "queue" || id === "sound" || id === "removefromplaylist"))
             win.expandFromMini()
         if (id === "radio:track") {
-            win.radioFrom("spotify:track:" + track.trackId, track.title ?? "")
+            win.radioFrom("ytmusic:track:" + track.trackId, track.title ?? "")
         } else if (id.startsWith("radio:artist:")) {
             const artistId = id.slice("radio:artist:".length)
             const ref = (track.artistRefs ?? []).find(r => r.id === artistId)
-            win.radioFrom("spotify:artist:" + artistId, ref ? ref.name : (track.artists ?? ""))
+            win.radioFrom("ytmusic:artist:" + artistId, ref ? ref.name : (track.artists ?? ""))
         } else if (id === "addqueue") {
             Player.addToQueue(track)
             snackbar.show(I18n.t("Added to queue"))
@@ -654,7 +654,7 @@ Window {
         } else if (id === "like") {
             Library.toggleLike(track)
         } else if (id === "save") {
-            const uri = track.isEpisode ? (track.uri ?? "") : "spotify:album:" + (track.albumId ?? "")
+            const uri = track.isEpisode ? (track.uri ?? "") : "ytmusic:album:" + (track.albumId ?? "")
             const was = Library.isSaved(uri)
             Library.toggleSaved(uri)
             snackbar.show(was ? I18n.t("Removed from library") : I18n.t("Saved to library"))

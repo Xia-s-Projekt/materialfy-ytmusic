@@ -5,7 +5,7 @@ use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
-use sf_services::{AuthEvent, AuthSnapshot};
+use yt_services::{AuthEvent, AuthSnapshot};
 
 use super::{Delivery, forward_events, forward_watch, to_qmap};
 use crate::context::ctx;
@@ -168,7 +168,7 @@ impl Default for AuthRust {
             premium: false,
             personal_client_id: QString::default(),
             personal_state: QString::default(),
-            personal_redirect_uri: QString::from(sf_services::Grant::shared_web_api().redirect_uri().as_str()),
+            personal_redirect_uri: QString::from(yt_services::Grant::shared_web_api().redirect_uri().as_str()),
             web_state: QString::default(),
             snapshot,
         }

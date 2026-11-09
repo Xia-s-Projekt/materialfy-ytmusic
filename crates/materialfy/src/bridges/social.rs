@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
-use sf_services::SocialSnapshot;
+use yt_services::SocialSnapshot;
 
 use super::{forward_watch, to_qlist, to_qmap};
 use crate::context::ctx;

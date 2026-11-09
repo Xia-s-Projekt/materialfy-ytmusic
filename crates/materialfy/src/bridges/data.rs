@@ -10,8 +10,8 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use serde::Serialize;
 use md3_model::{EpisodeItem, PlayContext, contexts};
-use sf_api::ApiError;
-use sf_services::{AlbumPage, ArtistPage, EpisodePage, ServiceError, ShowPage};
+use yt_api::YtError;
+use yt_services::{AlbumPage, ArtistPage, EpisodePage, ServiceError, ShowPage};
 
 use super::{model_ptr, with_model};
 use crate::context::ctx;
@@ -159,13 +159,10 @@ page_data!(qobject::EpisodeData, EpisodePage);
 /// Текст ошибки загрузки страницы — по-русски.
 pub(crate) fn error_text(error: &ServiceError) -> String {
     match error {
-        ServiceError::NotSignedIn | ServiceError::Api(ApiError::NotSignedIn) => mf_i18n::t("Sign in to your account"),
-        ServiceError::Api(ApiError::SignInExpired { .. }) => mf_i18n::t("Sign-in expired — sign in again"),
-        ServiceError::Api(ApiError::Status { status: 404, .. }) => mf_i18n::t("Not found on Spotify"),
-        ServiceError::Api(ApiError::RateLimited | ApiError::QuotaExhausted) => {
-            mf_i18n::t("Spotify is limiting requests — try again later")
-        }
-        ServiceError::Api(ApiError::Network(_)) => mf_i18n::t("No connection to Spotify"),
+        ServiceError::NotSignedIn | ServiceError::Api(YtError::NotSignedIn) => mf_i18n::t("Sign in to your account"),
+        ServiceError::Api(YtError::PythonMissing) => mf_i18n::t("Install ytmusicapi (pip install ytmusicapi)"),
+        ServiceError::Api(YtError::Remote(message)) if message.contains("404") => mf_i18n::t("Not found on YouTube Music"),
+        ServiceError::Api(YtError::Network(_)) => mf_i18n::t("No connection to YouTube Music"),
         ServiceError::Api(_) => mf_i18n::t("Couldn't load"),
         ServiceError::Other(text) if !text.is_empty() => text.clone(),
         ServiceError::Other(_) => mf_i18n::t("Couldn't load"),

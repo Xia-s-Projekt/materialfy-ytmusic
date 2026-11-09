@@ -377,9 +377,9 @@ Item {
             }
         }
         const text = drop.hasUrls && drop.urls.length > 0 ? drop.urls[0].toString() : drop.hasText ? drop.text : ""
-        const m = /(?:spotify:|open\.spotify\.com\/)(track|episode|album|playlist)[:\/]([A-Za-z0-9]+)/.exec(text.trim())
+        const m = /(?:ytmusic:|music\.youtube\.com\/|youtube\.com\/watch\?v=)(track|episode|album|playlist)[:\/]([A-Za-z0-9_-]+)/.exec(text.trim())
         if (m) {
-            Player.addUriToQueue("spotify:" + m[1] + ":" + m[2])
+            Player.addUriToQueue("ytmusic:" + m[1] + ":" + m[2])
             return true
         }
         return false

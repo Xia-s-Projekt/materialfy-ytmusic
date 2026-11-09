@@ -14,7 +14,7 @@ Page {
 
     readonly property var radar: Releases.radar ?? ({})
     readonly property string radarId: radar.playlistId ?? ""
-    readonly property string radarUri: (radar.uri ?? "") !== "" ? radar.uri : (radarId !== "" ? "spotify:playlist:" + radarId : "")
+    readonly property string radarUri: (radar.uri ?? "") !== "" ? radar.uri : (radarId !== "" ? "ytmusic:playlist:" + radarId : "")
     // playlistTracks — ref-counted lifecycle API: this page is a second possible owner of Radar.
     // Keep the model stable while visible and release it when the retained page is hidden/destroyed.
     property var radarTracks: null

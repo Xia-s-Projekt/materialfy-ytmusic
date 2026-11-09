@@ -494,7 +494,7 @@ pub mod qobject {
         #[cxx_name = "webApiLimitChanged"]
         fn web_api_limit_changed(self: Pin<&mut Settings>);
 
-        /// Перечитать устройства вывода (sf_player::output_devices в spawn_blocking).
+        /// Перечитать устройства вывода (yt_player::output_devices в spawn_blocking).
         #[qinvokable]
         #[cxx_name = "refreshAudioDevices"]
         fn refresh_audio_devices(self: Pin<&mut Settings>);
@@ -760,7 +760,7 @@ impl qobject::Settings {
     fn refresh_audio_devices(self: Pin<&mut Self>) {
         let thread = self.qt_thread();
         ctx().rt.spawn_blocking(move || {
-            let devices = sf_player::output_devices();
+            let devices = yt_player::output_devices();
             let _ = thread.queue(move |settings| settings.set_audio_devices(devices));
         });
     }
@@ -870,7 +870,7 @@ impl qobject::Settings {
         username: &QString,
         password: &QString,
     ) {
-        ctx().services.auth.apply_proxy(sf_services::ProxyInput {
+        ctx().services.auth.apply_proxy(yt_services::ProxyInput {
             mode: mode.to_string(),
             host: host.to_string(),
             port: port.to_string(),
@@ -880,7 +880,7 @@ impl qobject::Settings {
     }
 
     /// engineRestartPending и proxyState/proxyError — из AuthSnapshot (флаг ведёт AuthService).
-    fn on_auth(mut self: Pin<&mut Self>, snapshot: sf_services::AuthSnapshot) {
+    fn on_auth(mut self: Pin<&mut Self>, snapshot: yt_services::AuthSnapshot) {
         if self.engine_restart_pending != snapshot.engine_restart_pending {
             self.as_mut().rust_mut().engine_restart_pending = snapshot.engine_restart_pending;
             self.as_mut().engine_restart_pending_changed();
@@ -894,8 +894,8 @@ impl qobject::Settings {
         }
     }
 
-    /// Охлаждение Web API после 429/квоты (sf_api::limits) — строка в «Аккаунте».
-    fn on_web_api_limits(mut self: Pin<&mut Self>, limits: sf_api::WebApiLimits) {
+    /// Охлаждение Web API после 429/квоты (yt_api::limits) — строка в «Аккаунте».
+    fn on_web_api_limits(mut self: Pin<&mut Self>, limits: yt_api::WebApiLimits) {
         let text = QString::from(limits.user_text().as_str());
         if self.web_api_limit != text {
             self.as_mut().rust_mut().web_api_limit = text;

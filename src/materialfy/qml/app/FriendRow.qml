@@ -125,9 +125,9 @@ Item {
                     text: root.friend.artist ?? ""
                     type: "bodyMedium"
                     color: Theme.fgSurfaceVariant
-                    linkEnabled: (root.friend.artistUri ?? "").startsWith("spotify:artist:")
-                                 || (root.friend.artistUri ?? "").startsWith("spotify:show:")
-                    previewArtistId: (root.friend.artistUri ?? "").startsWith("spotify:artist:")
+                    linkEnabled: (root.friend.artistUri ?? "").startsWith("ytmusic:artist:")
+                                 || (root.friend.artistUri ?? "").startsWith("ytmusic:show:")
+                    previewArtistId: (root.friend.artistUri ?? "").startsWith("ytmusic:artist:")
                                      ? root.friend.artistUri.split(":")[2] : ""
                     onClicked: Catalog.openUri(root.friend.artistUri)
                 }
@@ -140,8 +140,8 @@ Item {
                 Icon {
                     name: {
                         const uri = root.friend.contextUri ?? ""
-                        return uri.startsWith("spotify:album:") ? "album"
-                             : uri.startsWith("spotify:artist:") ? "person"
+                        return uri.startsWith("ytmusic:album:") ? "album"
+                             : uri.startsWith("ytmusic:artist:") ? "person"
                              : "playlist_play"
                     }
                     size: 14

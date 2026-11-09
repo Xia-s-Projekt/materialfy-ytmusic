@@ -31,7 +31,7 @@ TrackListPage {
     readonly property bool canEdit: _rev >= 0 && playlistId !== "" && Library.canEdit(playlistId)
     readonly property bool own: (info.ownerId ?? "") !== "" && info.ownerId === myId
     readonly property bool collaborative: info.collaborative === true
-    readonly property string uri: (info.uri ?? "") !== "" ? info.uri : (playlistId !== "" ? "spotify:playlist:" + playlistId : "")
+    readonly property string uri: (info.uri ?? "") !== "" ? info.uri : (playlistId !== "" ? "ytmusic:playlist:" + playlistId : "")
     property bool panelOpen: false
     readonly property bool compactPanel: width < 760
 
