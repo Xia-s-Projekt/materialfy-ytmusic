@@ -311,7 +311,7 @@ Page {
                 Layout.alignment: Qt.AlignTop
                 text: I18n.t("Sign in")
                 icon: "login"
-                onClicked: page.router ? page.router.reset("account") : Auth.startLogin()
+                onClicked: page.router ? page.router.reset("account") : null
             }
         }
 
@@ -353,7 +353,7 @@ Page {
                     icon: "login"
                     style: "filled"
                     size: "xs"
-                    onClicked: page.router ? page.router.reset("account") : Auth.startLogin()
+                    onClicked: page.router ? page.router.reset("account") : null
                 }
             }
         }

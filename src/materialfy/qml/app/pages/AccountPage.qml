@@ -56,6 +56,12 @@ Page {
             page.router.push(name, props)
     }
     function _proxy() { _go("settings", { section: "network" }) }
+    function _focusHeaders() {
+        if (headersEdit.visible) {
+            headersEdit.forceActiveFocus()
+            headersEdit.cursorPosition = headersEdit.length
+        }
+    }
 
     // Пояснения к ошибкам входа (тексты ошибок — из Auth.errorText, уже переведены в Rust;
     // подсказку выбираем по стабильному коду Auth.errorCode)
@@ -258,10 +264,17 @@ Page {
 
                     Button {
                         visible: page.shown === "signedOut"
-                        text: I18n.t("Sign in with YouTube Music")
-                        icon: "open_in_new"
+                        text: I18n.t("Paste the headers below")
+                        icon: "content_paste"
                         size: "m"
-                        onClicked: Auth.startLogin()
+                        onClicked: page._focusHeaders()
+                    }
+                    Button {
+                        visible: page.shown === "signedOut"
+                        text: I18n.t("Open music.youtube.com")
+                        icon: "open_in_new"
+                        style: "outlined"
+                        onClicked: Qt.openUrlExternally("https://music.youtube.com")
                     }
                     Button {
                         visible: page.shown === "error"
@@ -298,7 +311,7 @@ Page {
 
                     Label {
                         Layout.fillWidth: true
-                        text: I18n.t("Or paste your headers-auth JSON here — no files, no terminal.")
+                        text: I18n.t("Paste your headers-auth JSON here — no files, no terminal.")
                         type: "titleSmall"
                         wrapMode: Text.WordWrap
                         elide: Text.ElideNone
