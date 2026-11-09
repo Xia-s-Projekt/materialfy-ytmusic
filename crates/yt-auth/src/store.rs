@@ -8,20 +8,75 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HeadersAuth {
-    /// Raw headers-auth JSON as produced by `ytmusicapi` / browser extension.
+    /// Normalized headers-auth JSON: `{"cookie":"..."}` (ytmusicapi derives the
+    /// `authorization` header itself; `authorization` is only stored when the
+    /// caller supplied it).
     pub json: String,
 }
 
 impl HeadersAuth {
-    pub fn is_valid(&self) -> bool {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&self.json) else {
-            return false;
-        };
-        let obj = v.as_object();
-        match obj {
-            Some(o) => o.contains_key("cookie") || o.contains_key("authorization"),
-            None => false,
+    /// Accept pasted text in any of the usual formats and return a normalized
+    /// headers-auth JSON string:
+    ///
+    /// 1. Already-normalized object: `{"cookie":"...","authorization":"..."}`
+    ///    (used as-is; string values are re-serialized, other keys ignored).
+    /// 2. Cookie-Editor / browser extension export: a JSON array of
+    ///    `{"name":"...","value":"...","domain":".youtube.com", ...}` —
+    ///    joined into a `Cookie` header string.
+    ///
+    /// Anything else is rejected with a human-readable error.
+    pub fn normalize(pasted: &str) -> anyhow::Result<String> {
+        let v: serde_json::Value = serde_json::from_str(pasted)
+            .map_err(|_| anyhow::anyhow!("Not valid JSON. Paste either: (a) headers-auth JSON object with a cookie field from DevTools request headers, or (b) a cookie export JSON array with name/value entries (e.g. from the Cookie-Editor extension)."))?;
+        match &v {
+            serde_json::Value::Object(o) => {
+                let cookie = o.get("cookie").or_else(|| o.get("Cookie")).and_then(|c| c.as_str());
+                let authorization = o.get("authorization").or_else(|| o.get("Authorization")).and_then(|c| c.as_str());
+                if cookie.is_none() && authorization.is_none() {
+                    anyhow::bail!("Not a ytmusicapi headers file — expected JSON with \"cookie\" or \"authorization\" (or paste a cookie export array instead).");
+                }
+                let mut map = serde_json::Map::new();
+                if let Some(c) = cookie {
+                    map.insert("cookie".into(), serde_json::Value::String(c.to_string()));
+                }
+                if let Some(a) = authorization {
+                    map.insert("authorization".into(), serde_json::Value::String(a.to_string()));
+                }
+                Ok(serde_json::to_string(&serde_json::Value::Object(map))?)
+            }
+            serde_json::Value::Array(items) => {
+                let mut cookie = String::new();
+                for item in items {
+                    let (Some(name), Some(value)) = (
+                        item.get("name").and_then(|n| n.as_str()),
+                        item.get("value").and_then(|v| v.as_str()),
+                    ) else {
+                        anyhow::bail!("Cookie export entries must have \"name\" and \"value\" string fields.");
+                    };
+                    if !name.is_empty() {
+                        if !cookie.is_empty() {
+                            cookie.push_str("; ");
+                        }
+                        cookie.push_str(name);
+                        cookie.push('=');
+                        cookie.push_str(value);
+                    }
+                }
+                if cookie.contains("__Secure-3PAPISID") || cookie.contains("__Secure-1PAPISID") {
+                    let map = serde_json::json!({ "cookie": cookie });
+                    Ok(map.to_string())
+                } else if cookie.is_empty() {
+                    anyhow::bail!("Cookie export is empty.");
+                } else {
+                    anyhow::bail!("Cookie export does not contain __Secure-3PAPISID — export cookies for music.youtube.com (or copy the request headers directly).");
+                }
+            }
+            _ => anyhow::bail!("Expected a headers-auth JSON object or a cookie export array."),
         }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        Self::normalize(&self.json).is_ok()
     }
 }
 
@@ -46,18 +101,13 @@ impl Store {
     }
 
     pub fn save(&self, json: &str) -> anyhow::Result<()> {
-        let auth = HeadersAuth { json: json.to_string() };
-        if !auth.is_valid() {
-            anyhow::bail!(
-                "Not a ytmusicapi headers file — expected JSON with \"cookie\" or \"authorization\""
-            );
-        }
+        let normalized = HeadersAuth::normalize(json)?;
         let path = self.file_path();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let tmp = path.with_extension("json.tmp");
-        write_private(&tmp, json.as_bytes())?;
+        write_private(&tmp, normalized.as_bytes())?;
         std::fs::rename(&tmp, &path)?;
         Ok(())
     }

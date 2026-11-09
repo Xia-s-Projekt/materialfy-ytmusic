@@ -28,4 +28,25 @@ mod tests {
         assert!(!HeadersAuth { json: r#"{}"#.into() }.is_valid());
         assert!(!HeadersAuth { json: "not json".into() }.is_valid());
     }
+
+    #[test]
+    fn cookie_export_array_normalizes_to_cookie_header() {
+        let pasted = r#"[
+            {"name":"VISITOR_PRIVACY_METADATA","value":"Cg==","domain":".youtube.com","hostOnly":false,"path":"/","secure":true,"httpOnly":true,"session":false,"expirationDate":1809764109.145},
+            {"name":"__Secure-3PAPISID","value":"abc123","domain":".youtube.com","hostOnly":false,"path":"/","secure":true,"httpOnly":false,"session":false,"expirationDate":1828717225.789},
+            {"name":"SID","value":"sid-val","domain":".youtube.com","hostOnly":false,"path":"/","secure":false,"httpOnly":false,"session":false,"expirationDate":1828717225.789}
+        ]"#;
+        let normalized = HeadersAuth::normalize(pasted).expect("cookie export should normalize");
+        let v: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let cookie = v.get("cookie").and_then(|c| c.as_str()).unwrap();
+        assert!(cookie.contains("__Secure-3PAPISID=abc123"), "got: {cookie}");
+        assert!(cookie.contains("SID=sid-val"), "got: {cookie}");
+        assert!(cookie.contains("VISITOR_PRIVACY_METADATA=Cg=="), "got: {cookie}");
+    }
+
+    #[test]
+    fn cookie_export_without_papisid_is_rejected() {
+        let pasted = r#"[{"name":"SID","value":"x","domain":".youtube.com"}]"#;
+        assert!(HeadersAuth::normalize(pasted).is_err());
+    }
 }
