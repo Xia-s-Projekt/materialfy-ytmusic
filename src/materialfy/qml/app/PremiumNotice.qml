@@ -15,7 +15,7 @@ Rectangle {
     radius: compact ? Theme.shape.large : Theme.shape.extraLarge
     color: Theme.tertiaryContainer
 
-    function _premium() { Qt.openUrlExternally("https://www.spotify.com/premium") }
+    function _premium() { Qt.openUrlExternally("https://music.youtube.com") }
 
     // ---- Сжатый вид ----
     RowLayout {
@@ -38,7 +38,7 @@ Rectangle {
             spacing: 2
             Label {
                 Layout.fillWidth: true
-                text: I18n.t("Spotify Premium required")
+                text: I18n.t("Sign-in required")
                 type: "titleSmall"
                 color: Theme.fgTertiaryContainer
             }
@@ -91,7 +91,7 @@ Rectangle {
                 spacing: 2
                 Label {
                     Layout.fillWidth: true
-                    text: I18n.t("Spotify Premium required")
+                    text: I18n.t("Sign-in required")
                     type: "titleMedium"
                     color: Theme.fgTertiaryContainer
                 }
@@ -99,8 +99,8 @@ Rectangle {
                     Layout.fillWidth: true
                     text: {
                         const name = Auth.account.displayName ?? ""
-                        return (name !== "" ? I18n.t("You're signed in as {0} (Spotify Free).", name) : I18n.t("A Free account gives you your library, search and playlists."))
-                               + " " + I18n.t("Spotify allows listening on a computer and switching devices only with Premium.")
+                        return (name !== "" ? I18n.t("You're signed in as {0}.", name) : I18n.t("Sign in with your YouTube Music account to use playback on this computer."))
+                               + " " + I18n.t("Library, search and playback on this computer unlock after sign-in.")
                     }
                     type: "bodyMedium"
                     color: Theme.fgTertiaryContainer

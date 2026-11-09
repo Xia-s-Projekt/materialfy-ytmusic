@@ -35,7 +35,7 @@ Window {
     minimumWidth: 400
     minimumHeight: 120
     visible: false
-    title: Player.hasTrack ? Player.title + " — " + Player.artist + " · Materialfy" : "Materialfy"
+    title: Player.hasTrack ? Player.title + " — " + Player.artist + " · Materialfy YTMusic" : "Materialfy YTMusic"
     // «Поверх всех окон» (кнопка мини-плеера, меню трека); не запоминается между запусками
     property bool pinnedOnTop: false
     // закрепление — свойство мини-режима: окно, развёрнутое обратно, поверх всех не висит
@@ -206,7 +206,7 @@ Window {
             icon.source: Qt.resolvedUrl("../assets/tray-" + (darkPanel && Qt.platform.os !== "osx" ? "white" : "black")
                                         + "-" + (dpr >= 1.75 ? 32 : dpr >= 1.25 ? 24 : 16) + ".png")
             icon.mask: Qt.platform.os === "osx"
-            tooltip: Player.hasTrack ? Player.title + " — " + Player.artist : "Materialfy"
+            tooltip: Player.hasTrack ? Player.title + " — " + Player.artist : "Materialfy YTMusic"
             onActivated: reason => {
                 if (reason === Platform.SystemTrayIcon.MiddleClick)
                     Player.togglePlay()
@@ -715,9 +715,11 @@ Window {
         id: newPlaylistDialog
         z: 2100
     }
-    // общий Client ID упёрся в лимит: как подключить своё приложение
-    ApiLimitDialog {
+    // YTMusic fork: no Spotify Web API client-ID dialog — sign-in is headers-based.
+    Loader {
         z: 2120
+        active: false
+        source: Qt.resolvedUrl("app/ApiLimitDialog.qml")
     }
     UpdateSheet {
         z: 2150

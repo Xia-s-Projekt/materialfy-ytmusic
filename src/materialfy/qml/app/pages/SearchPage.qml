@@ -103,10 +103,10 @@ Page {
              : Catalog.searchState === "empty" ? I18n.t("Nothing found")
              : Catalog.searchState === "error" ? I18n.t("Search didn't respond")
              : I18n.t("What do you want to hear?")
-        text: !page.signedIn ? I18n.t("Search works through your Spotify account")
+        text: !page.signedIn ? I18n.t("Sign in to search YouTube Music")
             : Catalog.searchState === "empty" ? I18n.t("Try different wording or another filter")
             : Catalog.searchState === "error" ? I18n.t("Check your connection and try again")
-            : I18n.t("Search for tracks, albums, artists, playlists and podcasts. You can also just paste an open.spotify.com link")
+            : I18n.t("Search for tracks, albums, artists, playlists and podcasts. You can also just paste a music.youtube.com link")
         actionText: !page.signedIn ? I18n.t("Sign in") : Catalog.searchState === "error" ? I18n.t("Retry") : ""
         actionIcon: !page.signedIn ? "login" : "refresh"
         onAction: {

@@ -67,7 +67,7 @@ Item {
         if (popularity >= 0)
             add(I18n.t("Popularity"), I18n.t("{0} / 100", popularity))
         add("ISRC", _v("isrc", ""), true)
-        add(I18n.t("Spotify URI"), _uri, true)
+        add(I18n.t("YouTube Music URI"), _uri, true)
         return rows
     }
     readonly property var _copyrights: {
@@ -267,7 +267,7 @@ Item {
                     spacing: 8
                     Button { text: I18n.t("Close"); onClicked: root.close() }
                     Button {
-                        text: I18n.t("Open in Spotify")
+                        text: I18n.t("Open in YouTube Music")
                         icon: "open_in_new"
                         style: "text"
                         enabled: root._uri !== ""

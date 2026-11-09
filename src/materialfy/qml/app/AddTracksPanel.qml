@@ -130,7 +130,7 @@ Item {
                 Layout.leftMargin: 16
                 Layout.rightMargin: 16
                 implicitHeight: 40
-                placeholder: I18n.t("Find a track on Spotify")
+                placeholder: I18n.t("Find a track on YouTube Music")
                 text: root.query
                 onTextChanged: root.query = text
                 Keys.onEscapePressed: root.query !== "" ? (root.query = "") : root.closeRequested()

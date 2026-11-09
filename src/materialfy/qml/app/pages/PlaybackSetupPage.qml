@@ -58,7 +58,7 @@ Page {
         if (code === "portBusy" || text.indexOf("8898") >= 0)
             return I18n.t("Close the program listening on 127.0.0.1:8898 and try again.")
         if (code === "audioKey")
-            return I18n.t("Spotify didn't provide a key for this track. Try another track or try again later.")
+            return I18n.t("YouTube Music didn't provide a stream for this track. Try another track or try again later.")
         return ""
     }
 
@@ -163,7 +163,7 @@ Page {
                         spacing: 4
                         Label {
                             Layout.fillWidth: true
-                            text: page.shownMode === "done" ? I18n.t("Spotify Connect device") : "Spotify Premium"
+                            text: page.shownMode === "done" ? I18n.t("This computer") : "YouTube Music"
                             type: "labelMedium"
                             font.capitalization: Font.AllUppercase
                             color: Theme.primary
@@ -182,10 +182,10 @@ Page {
                 Label {
                     Layout.fillWidth: true
                     text: page.mode === "done"
-                          ? I18n.t("This computer, “{0}”, is in your Spotify devices list. You can move music here from your phone and back.", page.deviceName)
+                          ? I18n.t("Music plays on this computer, “{0}”.", page.deviceName)
                           : page.mode === "signedOut"
-                          ? I18n.t("Sign in with Spotify Premium — music on this computer turns on with the same sign-in.")
-                          : I18n.t("Materialfy becomes a Spotify Connect device: music plays here, and your phone sees this computer in its device list. Confirm in your browser; after that your library also goes through this sign-in, with no Web API limits.")
+                          ? I18n.t("Sign in to YouTube Music — music on this computer turns on with the same sign-in.")
+                          : I18n.t("Music plays on this computer once you sign in. Your library and search come from your YouTube Music account.")
                     type: "bodyMedium"
                     color: Theme.fgSurfaceVariant
                     wrapMode: Text.WordWrap
@@ -205,8 +205,8 @@ Page {
                             { icon: "high_quality", text: I18n.t("Up to 320 kbps, gapless") },
                             { icon: "devices", text: I18n.t("Remote: move music between your phone and computer") },
                             { icon: "lock", text: Qt.platform.os === "windows"
-                                                  ? I18n.t("No password needed: you confirm on the Spotify website, and the key is stored in Credential Manager")
-                                                  : I18n.t("No password needed: you confirm on the Spotify website, and the key is stored in the keychain") }
+                                                  ? I18n.t("No password needed: your saved headers are stored in Credential Manager")
+                                                  : I18n.t("No password needed: your saved headers are stored in the keychain") }
                         ]
                         RowLayout {
                             id: point
@@ -264,7 +264,7 @@ Page {
                                 Label {
                                     Layout.fillWidth: true
                                     text: page.shownMode === "authorizing" ? I18n.t("Confirm in your browser")
-                                        : page.shownMode === "connecting" ? I18n.t("Connecting to Spotify Connect…")
+                                        : page.shownMode === "connecting" ? I18n.t("Connecting…")
                                         : I18n.t("{0} · this computer", page.deviceName)
                                     type: "titleSmall"
                                     wrapMode: Text.WordWrap
@@ -272,7 +272,7 @@ Page {
                                 }
                                 Label {
                                     Layout.fillWidth: true
-                                    text: page.shownMode === "authorizing" ? I18n.t("Permission to play in Spotify apps")
+                                    text: page.shownMode === "authorizing" ? I18n.t("Checking your sign-in")
                                         : page.shownMode === "connecting" ? I18n.t("Registering device “{0}”", page.deviceName)
                                         : Player.localState === "failed" ? I18n.t("Couldn't connect — click “Apply” in the settings below")
                                         : Player.localState === "connecting" ? I18n.t("Connecting…")
@@ -466,7 +466,7 @@ Page {
                     spacing: 0
 
                     DevRow {
-                        title: I18n.t("Name in Spotify Connect")
+                        title: I18n.t("Name")
                         description: I18n.t("How this computer appears on phones and speakers")
                         TextField {
                             id: nameField
@@ -504,7 +504,7 @@ Page {
                     RowDivider { }
                     DevRow {
                         title: I18n.t("Normalize volume")
-                        description: I18n.t("Spotify normalization: quiet and loud tracks play at an even level")
+                        description: I18n.t("Volume normalization: quiet and loud tracks play at an even level")
                         Switch { checked: Settings.normalisation; onToggled: c => Settings.normalisation = c }
                     }
                     RowDivider { }

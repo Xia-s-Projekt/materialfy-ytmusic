@@ -132,8 +132,8 @@ ColumnLayout {
             Layout.rightMargin: 12
             horizontalAlignment: Text.AlignHCenter
             text: content.signedIn
-                  ? I18n.t("Open Spotify on a phone or speaker and it will show up here. Or start playing music on this computer.")
-                  : I18n.t("Spotify Connect devices will appear here after you sign in.")
+                  ? I18n.t("Open YouTube Music on a phone or speaker and it will show up here. Or start playing music on this computer.")
+                  : I18n.t("Devices will appear here after you sign in.")
             type: "bodySmall"
             color: Theme.fgSurfaceVariant
             wrapMode: Text.WordWrap
@@ -221,7 +221,7 @@ ColumnLayout {
         Icon { Layout.alignment: Qt.AlignTop; name: "info"; size: 16; color: Theme.fgSurfaceVariant }
         Label {
             Layout.fillWidth: true
-            text: I18n.t("Google Cast speakers only appear here once the Spotify app has already turned them on")
+            text: I18n.t("Google Cast speakers only appear here once the YouTube Music app has already turned them on")
             type: "bodySmall"
             color: Theme.fgSurfaceVariant
             wrapMode: Text.WordWrap

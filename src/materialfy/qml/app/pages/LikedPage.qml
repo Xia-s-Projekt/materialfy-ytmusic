@@ -29,7 +29,7 @@ TrackListPage {
         icon: "favorite"
         shape: "clover4"
         title: I18n.t("Sign in to see your Liked Songs")
-        text: I18n.t("Your saved tracks will sync from your Spotify account")
+        text: I18n.t("Your saved tracks will sync from your YouTube Music account")
         actionText: I18n.t("Sign in")
         actionIcon: "login"
         onAction: parent.router.reset("account")

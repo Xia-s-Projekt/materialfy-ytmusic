@@ -277,7 +277,7 @@ TrackListPage {
                 Icon { Layout.alignment: Qt.AlignTop; name: "group"; size: 20; color: Theme.primary }
                 Label {
                     Layout.fillWidth: true
-                    text: I18n.t("Collaborators can only be changed in the Spotify app. Here you can see who added what.")
+                    text: I18n.t("Collaborators can only be changed in the YouTube Music app. Here you can see who added what.")
                     type: "bodySmall"
                     color: Theme.fgSurfaceVariant
                     wrapMode: Text.WordWrap

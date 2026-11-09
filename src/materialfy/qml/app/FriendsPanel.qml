@@ -132,7 +132,7 @@ SmoothFlickable {
                 Layout.leftMargin: 16
                 Layout.rightMargin: 16
                 horizontalAlignment: Text.AlignHCenter
-                text: I18n.t("No friend activity — follow friends in Spotify to see them here")
+                text: I18n.t("No shared activity yet")
                 type: "bodyMedium"
                 color: Theme.fgSurfaceVariant
                 wrapMode: Text.WordWrap

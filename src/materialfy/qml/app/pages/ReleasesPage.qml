@@ -124,7 +124,7 @@ Page {
                 Label { Layout.fillWidth: true; text: I18n.t("Release Radar wasn't found"); type: "titleMedium"; weight: 600 }
                 Label {
                     Layout.fillWidth: true
-                    text: I18n.t("Spotify builds it on Fridays for people who listen to enough music. If it's in your Spotify, save it to your library and it will show up here.")
+                    text: I18n.t("YouTube Music builds it for people who listen to enough music. If it's in your library, it will show up here.")
                     type: "bodyMedium"
                     color: Theme.fgSurfaceVariant
                     wrapMode: Text.WordWrap

@@ -360,7 +360,7 @@ Page {
                             x: 10
                             y: 8
                             width: parent.width - 20
-                            text: I18n.t("Personal playlists and mixes from Spotify’s “Made For You” page — read through your account session")
+                            text: I18n.t("Personal playlists and mixes from YouTube Music — read through your signed-in account")
                             type: "bodySmall"
                             color: Theme.fgInverseSurface
                             wrapMode: Text.WordWrap

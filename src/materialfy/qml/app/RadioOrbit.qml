@@ -224,8 +224,8 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             horizontalAlignment: caption.align
-                            text: !root.signedIn ? I18n.t("Sign in to Spotify")
-                                : root.locked ? (root.premium ? I18n.t("Connect playback on this computer") : I18n.t("Spotify radio requires Premium"))
+                            text: !root.signedIn ? I18n.t("Sign in to YouTube Music")
+                                : root.locked ? (root.premium ? I18n.t("Connect playback on this computer") : I18n.t("Stations need a signed-in account"))
                                 : root.loading ? I18n.t("Building your station…")
                                 : root.current ? root.current.item.label ?? "" : I18n.t("Pick a track, artist or playlist")
                             type: root.locked || !root.signedIn || root.loading || !root.current ? "titleLarge" : "headlineSmall"
@@ -238,8 +238,8 @@ Item {
                             horizontalAlignment: caption.align
                             text: !root.signedIn ? I18n.t("Stations based on your tracks, artists and playlists will appear after you sign in.")
                                 : root.locked ? (root.premium
-                                    ? I18n.t("Spotify stations only come through a playback session (the Web API doesn't provide them). Separate browser sign-in, Spotify Premium required.")
-                                    : I18n.t("Stations come through a playback session, which is only available with Premium."))
+                                    ? I18n.t("Stations are available on this computer once you sign in.")
+                                    : I18n.t("Stations are available on this computer once you sign in."))
                                 : root.errorText !== "" ? root.errorText
                                 : root.loading ? I18n.t("50 tracks in one batch")
                                 : I18n.t("50 tracks · a fresh mix every time")
@@ -273,8 +273,8 @@ Item {
                             }
                             Button {
                                 visible: root.signedIn && root.locked
-                                text: root.premium ? I18n.t("Connect playback") : I18n.t("About Premium")
-                                icon: root.premium ? "login" : "workspace_premium"
+                                text: I18n.t("Connect playback")
+                                icon: "login"
                                 onClicked: root.connectRequested()
                             }
                             Button {

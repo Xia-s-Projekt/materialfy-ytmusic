@@ -536,11 +536,9 @@ Item {
                 }
                 Label {
                     width: parent.width
-                    text: root.signedIn ? (Auth.playbackState === "authorizing" ? I18n.t("Waiting for browser…")
-                                          : Auth.premium ? "Premium" : "Spotify Free")
-                        : Auth.state === "awaitingBrowser" ? I18n.t("Waiting for browser…")
+                    text: root.signedIn ? I18n.t("YouTube Music")
                         : Auth.state === "checking" || Auth.state === "connecting" ? I18n.t("Signing in…")
-                        : I18n.t("Spotify account")
+                        : I18n.t("YouTube Music account")
                     type: "bodySmall"
                     color: Theme.fgSurfaceVariant
                 }

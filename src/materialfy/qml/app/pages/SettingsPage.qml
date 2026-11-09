@@ -22,7 +22,7 @@ Page {
         { key: "lyrics", text: I18n.t("Lyrics"), icon: "lyrics" },
         { key: "reading", text: I18n.t("Reading"), icon: "visibility" },
         { key: "playback", text: I18n.t("Playback"), icon: "graphic_eq" },
-        { key: "connect", text: "Spotify Connect", icon: "speaker_group" },
+        { key: "connect", text: I18n.t("Devices"), icon: "devices" },
         { key: "network", text: I18n.t("Network"), icon: "lan" },
         { key: "storage", text: I18n.t("Storage"), icon: "database" },
         { key: "updates", text: I18n.t("Updates"), icon: "download" }
@@ -133,8 +133,8 @@ Page {
 
     readonly property var bitrates: [
         { value: 96, text: "96", hint: I18n.t("96 kbps — saves data") },
-        { value: 160, text: "160", hint: I18n.t("160 kbps — same as the regular Spotify app") },
-        { value: 320, text: "320", hint: I18n.t("320 kbps — the best quality Spotify serves. Lossless isn’t available") }
+        { value: 160, text: "160", hint: I18n.t("160 kbps — the quality the regular YouTube Music app uses") },
+        { value: 320, text: "320", hint: I18n.t("320 kbps — high quality on fast connections") }
     ]
 
     // ---- Прокрутка к разделам ----
@@ -247,7 +247,7 @@ Page {
     // ================= Аккаунт =================
     SettingsCard {
         id: accountCard
-        title: I18n.t("Spotify account")
+        title: I18n.t("YouTube Music account")
         icon: "account_circle"
 
         RowLayout {
@@ -275,7 +275,7 @@ Page {
                 spacing: 4
                 Label {
                     Layout.fillWidth: true
-                    text: page.signedIn ? (page.account.displayName || page.account.id || I18n.t("Spotify account")) : I18n.t("Not signed in")
+                    text: page.signedIn ? (page.account.displayName || page.account.id || I18n.t("YouTube Music account")) : I18n.t("Not signed in")
                     type: "headlineSmall"
                     weight: 600
                 }
@@ -283,8 +283,8 @@ Page {
                     Layout.fillWidth: true
                     visible: text !== ""
                     text: page.signedIn
-                          ? [page.account.uri ?? "", page.account.country ?? ""].filter(x => x).join("  ·  ")
-                          : I18n.t("Sign in to see your library and control playback")
+                          ? [page.account.email ?? "", page.account.country ?? ""].filter(x => x).join("  ·  ")
+                          : I18n.t("Sign in to see your library and play music")
                     type: "bodyMedium"
                     color: Theme.fgSurfaceVariant
                     wrapMode: Text.WordWrap
@@ -293,15 +293,14 @@ Page {
                 StatusChip {
                     visible: page.signedIn
                     Layout.topMargin: 4
-                    kind: Auth.premium ? "ok" : "neutral"
-                    icon: Auth.premium ? "workspace_premium" : ""
-                    text: Auth.premium ? "Premium" : "Free"
+                    kind: "ok"
+                    icon: "workspace_premium"
+                    text: I18n.t("Signed in")
                 }
             }
             Button {
                 visible: page.signedIn
                 Layout.alignment: Qt.AlignTop
-                // всегда с подписью: голая иконка «выйти» рядом с именем легко нажать, не поняв, что это
                 text: I18n.t("Sign out")
                 icon: "logout"
                 style: "outlined"
@@ -316,78 +315,45 @@ Page {
             }
         }
 
-        SettingsBanner {
-            kind: "error"
-            shown: page.signedIn && !Auth.premium
-            title: I18n.t("Playback requires Premium")
-            text: I18n.t("Spotify only allows listening in third-party apps with Premium. Without it, library, search and controlling other devices still work.")
-            actionText: I18n.t("Check again")
-            actionIcon: "refresh"
-            onAction: Auth.refreshProfile()
-        }
-        SettingsBanner {
-            kind: "info"
-            shown: page.signedIn && Auth.premium && Auth.playbackState === "none"
-            title: I18n.t("Playback on this computer isn’t allowed")
-            text: I18n.t("Signing in through a Spotify session plays audio here and lets your library bypass Web API limits. A browser window will open.")
-            actionText: I18n.t("Allow")
-            actionIcon: "open_in_new"
-            onAction: Auth.authorizePlayback()
-        }
-
-        // До входа — вход (Premium — через сессию); после — необязательный вход Web API общего ключа:
-        // запасной путь для разделов, которых нет в сессии, и единственный вход без Premium.
+        // Вход — только вставкой заголовков на странице аккаунта; плейбек — на этом компьютере.
         SettingRow {
             id: webRow
-            readonly property string ws: Auth.webState
-            title: page.signedIn ? I18n.t("Web API · optional") : I18n.t("Spotify sign-in")
-            description: !page.signedIn
-                         ? (Auth.state === "awaitingBrowser" ? I18n.t("Confirm sign-in in your browser")
-                            : Auth.state === "connecting" || Auth.state === "checking" ? I18n.t("Signing in…")
-                            : Auth.state === "error" ? (Auth.errorText || I18n.t("Sign-in failed"))
-                            : I18n.t("One sign-in with Spotify Premium: library and music right here. Without Premium, sign in via the Web API"))
-                         : ws === "ready" ? I18n.t("Connected: fallback for sections the Spotify session doesn’t cover")
-                         : ws === "authorizing" ? I18n.t("Confirm sign-in in your browser")
-                         : ws === "error" ? (Auth.errorText || I18n.t("Couldn’t connect the Web API"))
-                         : I18n.t("Not needed with Premium: almost everything goes through the session. Spotify rate-limits the shared key")
+            title: I18n.t("YouTube Music sign-in")
+            description: page.signedIn
+                         ? I18n.t("Signed in — library and playback on this computer are active")
+                         : Auth.state === "connecting" || Auth.state === "checking" ? I18n.t("Signing in…")
+                         : Auth.state === "error" ? (Auth.errorText || I18n.t("Sign-in failed"))
+                         : I18n.t("Open the Account page and paste your headers JSON — no files, no terminal")
             Row {
                 spacing: 8
                 StatusChip {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: page.signedIn && webRow.ws === "ready"
+                    visible: page.signedIn
                     kind: "ok"
                     text: I18n.t("Connected")
                 }
                 LoadingIndicator {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: page.signedIn && webRow.ws === "authorizing"
+                    visible: !page.signedIn && (Auth.state === "checking" || Auth.state === "connecting")
                     size: 28
                 }
                 Button {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: page.signedIn && (webRow.ws === "none" || webRow.ws === "error")
-                    text: I18n.t("Connect")
-                    icon: "open_in_new"
-                    style: "outlined"
-                    size: "xs"
-                    onClicked: Auth.startWebLogin()
-                }
-                Button {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: !page.signedIn
-                    text: Auth.state === "error" ? I18n.t("Retry") : I18n.t("Sign in")
-                    icon: "open_in_new"
+                    visible: !page.signedIn && Auth.state === "error"
+                    text: I18n.t("Retry")
+                    icon: "refresh"
                     style: "filled"
                     size: "xs"
-                    onClicked: Auth.state === "error" ? Auth.retry() : Auth.startLogin()
+                    onClicked: Auth.retry()
                 }
                 Button {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: !page.signedIn && Auth.state !== "awaitingBrowser" && Auth.state !== "connecting"
-                    text: I18n.t("Without Premium")
-                    style: "text"
+                    visible: !page.signedIn && Auth.state !== "error" && Auth.state !== "checking" && Auth.state !== "connecting"
+                    text: I18n.t("Sign in")
+                    icon: "login"
+                    style: "filled"
                     size: "xs"
-                    onClicked: Auth.startWebLogin()
+                    onClicked: page.router ? page.router.reset("account") : Auth.startLogin()
                 }
             }
         }
@@ -397,14 +363,11 @@ Page {
             readonly property string st: Auth.playbackState
             enabled: page.signedIn
             opacity: enabled ? 1 : 0.5
-            title: I18n.t("Spotify session and audio here")
-            description: !page.signedIn ? I18n.t("Turns on when you sign in with Spotify Premium")
-                         : st === "ready" ? I18n.t("Audio plays on this computer and the library goes through the session; it shows up in Spotify Connect")
-                         : st === "authorizing" ? I18n.t("Confirm permission in your browser")
-                         : st === "connecting" ? I18n.t("Connecting to Spotify…")
+            title: I18n.t("Playback on this computer")
+            description: !page.signedIn ? I18n.t("Turns on when you sign in")
+                         : st === "ready" ? I18n.t("Audio plays on this computer")
                          : st === "error" ? (Auth.playbackError || I18n.t("Couldn’t connect playback"))
-                         : st === "premiumRequired" || !Auth.premium ? I18n.t("Spotify Premium required: without it, only the library and remote control via the Web API")
-                         : I18n.t("Sign in through a Spotify session: audio here and a library without Web API limits")
+                         : I18n.t("Pick a track and it plays here")
             Row {
                 spacing: 8
                 StatusChip {
@@ -413,201 +376,6 @@ Page {
                     kind: "ok"
                     text: I18n.t("Connected")
                 }
-                StatusChip {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: page.signedIn && (playbackRow.st === "premiumRequired" || (!Auth.premium && playbackRow.st === "none"))
-                    kind: "warn"
-                    text: I18n.t("Premium required")
-                }
-                LoadingIndicator {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: playbackRow.st === "authorizing" || playbackRow.st === "connecting"
-                    size: 28
-                }
-                Button {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: playbackRow.st === "ready"
-                    // без Web API сессия — единственный вход: отключить её = выйти
-                    text: Auth.webState !== "ready" && Auth.personalState !== "ready" ? I18n.t("Sign out") : I18n.t("Disconnect")
-                    style: "text"
-                    size: "xs"
-                    onClicked: Auth.disablePlayback()
-                }
-                Button {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: playbackRow.st === "authorizing"
-                    text: I18n.t("Cancel")
-                    style: "text"
-                    size: "xs"
-                    onClicked: Auth.cancelLogin()
-                }
-                Button {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: Auth.premium && (playbackRow.st === "none" || playbackRow.st === "error")
-                    text: playbackRow.st === "error" ? I18n.t("Retry") : I18n.t("Allow")
-                    icon: "open_in_new"
-                    size: "xs"
-                    onClicked: Auth.authorizePlayback()
-                }
-            }
-        }
-
-        // общий Client ID упёрся в 429/квоту: что через сессию — работает, остальное ждёт
-        SettingsBanner {
-            kind: "info"
-            shown: page.signedIn && Settings.webApiLimit !== ""
-            title: I18n.t("Web API is rate-limited")
-            text: Settings.webApiLimit
-            actionText: Auth.personalState === "ready" ? "" : I18n.t("Own Client ID")
-            actionIcon: "key"
-            onAction: {
-                clientIdField.text = Auth.personalClientId
-                personalRow.editing = true
-                clientIdField.forceActiveFocus()
-            }
-        }
-
-        SettingRow {
-            id: personalRow
-            property bool editing: false
-            enabled: page.signedIn
-            opacity: enabled ? 1 : 0.5
-            title: I18n.t("Personal Spotify app")
-            description: Auth.personalState === "ready" ? I18n.t("Client ID {0} — requests go through your app", Auth.personalClientId)
-                         : Auth.personalState === "authorizing" ? I18n.t("Confirm access in your browser")
-                         : Auth.personalState === "error" ? I18n.t("Couldn’t connect your personal app")
-                         : I18n.t("Optional: your own Client ID from developer.spotify.com removes the shared request limits")
-            Row {
-                spacing: 8
-                StatusChip {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: Auth.personalState === "ready"
-                    kind: "ok"
-                    text: I18n.t("Configured")
-                }
-                LoadingIndicator {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: Auth.personalState === "authorizing"
-                    size: 28
-                }
-                Button {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: !personalRow.editing
-                    text: Auth.personalState === "ready" ? I18n.t("Edit") : I18n.t("Set up")
-                    icon: Auth.personalState === "ready" ? "" : "key"
-                    style: Auth.personalState === "ready" ? "text" : "outlined"
-                    size: "xs"
-                    onClicked: {
-                        clientIdField.text = Auth.personalClientId
-                        personalRow.editing = true
-                        clientIdField.forceActiveFocus()
-                    }
-                }
-            }
-        }
-        // форма Client ID раскрывается под строкой
-        Item {
-            id: personalForm
-            Layout.fillWidth: true
-            implicitHeight: personalRow.editing ? formCol.implicitHeight : 0
-            Behavior on implicitHeight { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
-            opacity: personalRow.editing ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsDefault } }
-            visible: implicitHeight > 0.5
-            clip: true
-
-            ColumnLayout {
-                id: formCol
-                width: parent.width
-                spacing: 12
-                TextField {
-                    id: clientIdField
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 480
-                    label: "Client ID"
-                    placeholderText: I18n.t("32 characters from the Spotify developer dashboard")
-                    leadingIcon: "key"
-                    onAccepted: saveClientId.clicked()
-                }
-                // redirect URI для настроек своего приложения: его вписывают в developer.spotify.com как есть
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 480
-                    implicitHeight: redirectRow.implicitHeight + 16
-                    radius: Theme.shape.medium
-                    color: Theme.surfaceContainerHighest
-                    RowLayout {
-                        id: redirectRow
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 4
-                        spacing: 8
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
-                            Label {
-                                Layout.fillWidth: true
-                                text: I18n.t("Redirect URI")
-                                type: "labelMedium"
-                                color: Theme.fgSurfaceVariant
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                text: Auth.personalRedirectUri
-                                type: "bodyLarge"
-                            }
-                        }
-                        IconButton {
-                            id: copyRedirect
-                            property bool done: false
-                            icon: done ? "check" : "content_copy"
-                            onClicked: {
-                                Auth.copyToClipboard(Auth.personalRedirectUri)
-                                done = true
-                                copiedTimer.restart()
-                            }
-                            Timer { id: copiedTimer; interval: 1600; onTriggered: copyRedirect.done = false }
-                        }
-                    }
-                }
-                Label {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 480
-                    text: I18n.t("Copy it into Redirect URIs of your app on developer.spotify.com exactly as shown, then paste the app's Client ID above.")
-                    type: "bodySmall"
-                    color: Theme.fgSurfaceVariant
-                    wrapMode: Text.WordWrap
-                    elide: Text.ElideNone
-                }
-                Row {
-                    spacing: 8
-                    Button {
-                        id: saveClientId
-                        text: I18n.t("Save")
-                        size: "xs"
-                        enabled: clientIdField.text.trim() !== ""
-                        onClicked: {
-                            Auth.setPersonalClientId(clientIdField.text.trim())
-                            personalRow.editing = false
-                        }
-                    }
-                    Button {
-                        visible: Auth.personalClientId !== ""
-                        text: I18n.t("Remove")
-                        style: "text"
-                        size: "xs"
-                        onClicked: {
-                            Auth.setPersonalClientId("")
-                            personalRow.editing = false
-                        }
-                    }
-                    Button {
-                        text: I18n.t("Cancel")
-                        style: "text"
-                        size: "xs"
-                        onClicked: personalRow.editing = false
-                    }
-                }
             }
         }
 
@@ -615,9 +383,9 @@ Page {
             Layout.fillWidth: true
             text: Auth.tokenStorage === "keyring"
                   ? (Qt.platform.os === "windows"
-                        ? I18n.t("Permissions are stored in Windows Credential Manager. “Sign out” removes all three; the cache stays.")
-                        : I18n.t("Permissions are stored in the system keychain. “Sign out” removes all three; the cache stays."))
-                  : I18n.t("Secret storage is unavailable: permissions last until the app closes. “Sign out” removes all three; the cache stays.")
+                        ? I18n.t("Your saved headers are stored in Windows Credential Manager. “Sign out” removes them; the cache stays.")
+                        : I18n.t("Your saved headers are stored in the system keychain. “Sign out” removes them; the cache stays."))
+                  : I18n.t("Secret storage is unavailable: your sign-in lasts until the app closes. “Sign out” removes the saved headers; the cache stays.")
             type: "bodySmall"
             color: Theme.fgSurfaceVariant
             wrapMode: Text.WordWrap
@@ -1416,7 +1184,7 @@ Page {
 
         SettingRow {
             title: I18n.t("Lyrics source label")
-            description: I18n.t("Shows the source badge (e.g. “Spotify · line by line”)")
+            description: I18n.t("Shows the source badge (e.g. “YouTube Music · line by line”)")
             Switch { checked: Settings.lyricsShowSource; onToggled: c => Settings.lyricsShowSource = c }
         }
 
@@ -1516,7 +1284,7 @@ Page {
         }
         SettingRow {
             title: I18n.t("DJ voice")
-            description: I18n.t("Spotify’s DJ talks between the songs it plays. Off: just the music")
+            description: I18n.t("DJ-style voice notes between songs. Off: just the music")
             Switch { checked: Settings.djVoice; onToggled: c => Settings.djVoice = c }
         }
         SettingRow {
@@ -1548,15 +1316,15 @@ Page {
         }
     }
 
-    // ================= Spotify Connect =================
+    // ================= Devices =================
     SettingsCard {
         id: connectCard
-        title: "Spotify Connect"
+        title: I18n.t("Devices")
         icon: "speaker_group"
 
         SettingRow {
             title: I18n.t("Device name")
-            description: I18n.t("How this computer appears in Spotify on your phone and other devices")
+            description: I18n.t("How this computer appears on your phone and other devices")
             TextField {
                 id: deviceNameField
                 width: page.compact ? 220 : 280
@@ -1595,7 +1363,7 @@ Page {
                         Layout.fillWidth: true
                         text: !page.signedIn ? I18n.t("Sign in to see devices")
                               : Devices.errorText !== "" ? Devices.errorText
-                              : I18n.t("From Spotify and your local network. “Transfer” moves playback to that device")
+                              : I18n.t("From YouTube Music and your local network. “Transfer” moves playback to that device")
                         type: "bodySmall"
                         color: Devices.errorText !== "" ? Theme.error : Theme.fgSurfaceVariant
                         wrapMode: Text.WordWrap
@@ -1631,7 +1399,7 @@ Page {
             Label {
                 visible: page.signedIn && !Devices.loading && Devices.devices.count === 0
                 Layout.fillWidth: true
-                text: I18n.t("No other devices found. Open Spotify on your phone or speaker and tap “Refresh”.")
+                text: I18n.t("No other devices found. Open YouTube Music on your phone or speaker and tap “Refresh”.")
                 type: "bodyMedium"
                 color: Theme.fgSurfaceVariant
                 wrapMode: Text.WordWrap
@@ -1799,7 +1567,7 @@ Page {
         SettingRow {
             visible: (Settings.proxyMode || "off") !== "off"
             title: I18n.t("Covers bypass the proxy")
-            description: I18n.t("Load covers and pictures directly: faster on a slow proxy and saves its traffic. Spotify sees your real address for these images")
+            description: I18n.t("Load covers and pictures directly: faster on a slow proxy and saves its traffic. The image server sees your real address for these images")
             Switch { checked: Settings.coversBypassProxy; onToggled: c => Settings.coversBypassProxy = c }
         }
 
@@ -1889,11 +1657,11 @@ Page {
         SettingRow {
             title: Updater.buildCommit !== "" ? I18n.t("Materialfy {0}", Updater.appVersion) + " · " + Updater.buildCommit
                                               : I18n.t("Materialfy {0}", Updater.appVersion)
-            description: I18n.t("An unofficial Spotify client in Material 3 Expressive style. Playback requires Spotify Premium; no lossless or offline downloads.")
+            description: I18n.t("An unofficial YouTube Music client in Material 3 Expressive style. Music plays locally on this computer.")
         }
         Label {
             Layout.fillWidth: true
-            text: I18n.t("Free software under GPL-3.0-or-later. Based on spotifast (crmne, MIT) and yamusic-md3 (yaskorinov, MIT); not affiliated with Spotify AB. Playback: librespot (MIT). Fonts: Google Sans (OFL), Material Symbols (Apache 2.0).")
+            text: I18n.t("Free software under GPL-3.0-or-later. Fork of Materialfy (spotifast, crmne, MIT); playback via ytmusicapi (MIT). Not affiliated with Spotify AB or YouTube/Google. Fonts: Google Sans (OFL), Material Symbols (Apache 2.0).")
             type: "bodySmall"
             color: Theme.fgSurfaceVariant
             wrapMode: Text.WordWrap

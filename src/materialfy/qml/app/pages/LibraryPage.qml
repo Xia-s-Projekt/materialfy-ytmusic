@@ -42,7 +42,7 @@ Item {
         { id: "added", text: I18n.t("Recently added") },
         { id: "alpha", text: I18n.t("Alphabetical") },
         { id: "author", text: I18n.t("Creator") },
-        { id: "spotify", text: I18n.t("Spotify order") }
+        { id: "ytmusic", text: I18n.t("YouTube Music order") }
     ]
     readonly property string sortText: (sorts.find(s => s.id === Settings.librarySort) ?? sorts[0]).text
 
@@ -52,7 +52,7 @@ Item {
         const out = []
         const m = page.model
         const q = page.query.trim().toLowerCase()
-        // папки в корне есть только в порядке Spotify; их дети — внутри папки. В других сортировках
+        // папки в корне есть только в порядке YouTube Music; их дети — внутри папки. В других сортировках
         // сервис отдаёт плоский список (folderId — для справки), и такие строки не прячем
         const folders = new Set()
         let liked = -1
@@ -204,8 +204,8 @@ Item {
             return [
                 { id: "open", text: I18n.t("Open folder"), icon: "folder_open" },
                 { separator: true },
-                { id: "rename", text: I18n.t("Rename — Spotify only"), icon: "edit", enabled: false },
-                { id: "move", text: I18n.t("Move — Spotify only"), icon: "folder", enabled: false }
+                { id: "rename", text: I18n.t("Rename — YouTube Music only"), icon: "edit", enabled: false },
+                { id: "move", text: I18n.t("Move — YouTube Music only"), icon: "folder", enabled: false }
             ]
         if (k === "liked")
             return [
@@ -313,7 +313,7 @@ Item {
                     const p = sortButton.mapToItem(sortMenu, 0, sortButton.height)
                     page._menuEntry = null
                     sortMenu.open(page.sorts.map(s => ({ id: s.id, text: s.text, checked: s.id === Settings.librarySort }))
-                        .concat([{ separator: true }, { id: "info", text: I18n.t("Order isn't saved to Spotify"), icon: "info", enabled: false }]), p)
+                        .concat([{ separator: true }, { id: "info", text: I18n.t("Order isn't saved to YouTube Music"), icon: "info", enabled: false }]), p)
                 }
             }
             ButtonGroup {
@@ -384,7 +384,7 @@ Item {
                     }
                     Icon { name: "chevron_right"; size: 20; color: Theme.fgSurfaceVariant }
                     Label { text: page.title; type: "titleLarge"; weight: 500 }
-                    ReadOnlyBadge { text: I18n.t("Spotify folder · read-only") }
+                    ReadOnlyBadge { text: I18n.t("YouTube Music folder · read-only") }
                     Item { Layout.fillWidth: true }
                 }
 
@@ -671,7 +671,7 @@ Item {
         visible: !page.signedIn
         icon: "library_music"
         title: I18n.t("Sign in to see your library")
-        text: I18n.t("Playlists, albums, artists and podcasts will load from your Spotify account")
+        text: I18n.t("Playlists, albums, artists and podcasts will load from your YouTube Music account")
         actionText: I18n.t("Sign in")
         actionIcon: "login"
         onAction: page.router.reset("account")

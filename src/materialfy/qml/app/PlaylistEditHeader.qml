@@ -34,7 +34,7 @@ ColumnLayout {
         }
         if (t !== (root.info.title ?? "")) {
             Library.renamePlaylist(root.playlistId, t)
-            root.notify(I18n.t("Name saved to Spotify"))
+            root.notify(I18n.t("Name saved"))
         }
     }
     function _commitDescription() {
@@ -226,7 +226,7 @@ ColumnLayout {
             height: 56
             spacing: 6
             Icon { name: "cloud_done"; size: 18; color: Theme.fgSurfaceVariant }
-            Label { text: I18n.t("Changes are saved to Spotify right away"); type: "bodySmall"; color: Theme.fgSurfaceVariant }
+            Label { text: I18n.t("Changes are saved right away"); type: "bodySmall"; color: Theme.fgSurfaceVariant }
         }
     }
 
@@ -236,7 +236,7 @@ ColumnLayout {
         nameFilters: [I18n.t("Images ({0})", "*.jpg *.jpeg *.png")]
         onAccepted: {
             Library.uploadCover(root.playlistId, selectedFile.toString())
-            root.notify(I18n.t("Cover: JPEG up to 256 KB — Spotify will apply it in a couple of minutes"))
+            root.notify(I18n.t("Cover uploaded"))
         }
     }
 }
