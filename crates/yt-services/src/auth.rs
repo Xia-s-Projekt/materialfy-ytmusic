@@ -123,6 +123,9 @@ impl AuthService {
             return;
         }
         let rt = self.rt.clone();
+        // Show progress immediately (QML `checking` view) — don't wait for the
+        // Python bridge round-trip, or the click looks dead.
+        let _ = snapshot.send(AuthSnapshot { state: AuthState::Waiting, has_headers: true, web_state: "none".into(), personal_state: "none".into(), ..Default::default() });
         rt.spawn(async move {
             match api.get_library_playlists(1).await {
                 Ok(_) => {
@@ -140,8 +143,18 @@ impl AuthService {
                     let _ = events.send(AuthEvent::SignedIn(account));
                     let _ = events.send(AuthEvent::PlaybackReady("this-computer".into()));
                 }
-                Err(_) => {
-                    let _ = snapshot.send(AuthSnapshot { web_state: "error".into(), personal_state: "error".into(), ..Default::default() });
+                Err(e) => {
+                    // Surface the failure in QML (`error` view) instead of
+                    // leaving it on `signedOut` — otherwise the click appears to do nothing.
+                    let (text, code) = match &e {
+                        YtError::Network(_) => (e.user_text(), "noResponse"),
+                        YtError::Remote(msg) if msg.contains("authentication") || msg.contains("Please provide authentication") => (e.user_text(), "expired"),
+                        YtError::Decode => (e.user_text(), "badJson"),
+                        YtError::NotSignedIn => (e.user_text(), "expired"),
+                        YtError::PythonMissing => (e.user_text(), "other"),
+                        YtError::Remote(_) => (e.user_text(), "other"),
+                    };
+                    let _ = snapshot.send(AuthSnapshot { state: AuthState::Failed, error_text: text, error_code: code.into(), web_state: "error".into(), personal_state: "error".into(), has_headers: true, ..Default::default() });
                 }
             }
         });
