@@ -129,7 +129,17 @@ impl AuthService {
         rt.spawn(async move {
             match api.get_library_playlists(1).await {
                 Ok(_) => {
-                    let account = Account { display_name: "YouTube Music".into(), product: "premium".into(), premium: true, ..Default::default() };
+                    // Real channel name/avatar (fallback to "YouTube Music" on any failure).
+                    let (name, avatar, channel_id) = match api.get_account().await {
+                        Ok(v) => (
+                            v.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            v.get("avatar").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                            v.get("channelId").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                        ),
+                        Err(_) => (String::new(), String::new(), String::new()),
+                    };
+                    let display_name = if name.trim().is_empty() { "YouTube Music".to_string() } else { name };
+                    let account = Account { id: channel_id.clone(), uri: channel_id.clone(), display_name, avatar, product: "premium".into(), premium: true, ..Default::default() };
                     let snap = AuthSnapshot {
                         state: AuthState::Ready,
                         playback: PlaybackAuthState::Authorized,

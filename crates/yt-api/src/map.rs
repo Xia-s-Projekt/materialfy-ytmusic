@@ -193,13 +193,22 @@ pub fn artist_info(v: &Value) -> m::ArtistInfo {
     }
 }
 
-/// get_home shelves → md3-model HomeShelf items (raw JSON values for QML).
+/// get_home shelves → md3-model HomeShelf items.
+///
+/// ytmusicapi returns raw parsed dicts (`videoId`, `thumbnails: [{url,width}]`,
+/// `duration_seconds`, `artists: [{name,browseId}]`) while QML TrackRow expects
+/// TrackItem JSON (`cover: "url"`, `durationMs`, `artists: "name, ..."`). Passing
+/// raw values through made every cover empty (blank tiles) and every duration 0.
+/// So map each entry through `track_item` and serialize the model struct.
 pub fn home_shelves(home: &[Value]) -> Vec<m::HomeShelf> {
     home.iter()
         .map(|row| {
             let contents = row.get("contents").cloned().unwrap_or(Value::Array(vec![]));
             let items = match contents {
-                Value::Array(list) => list.into_iter().map(|v| serde_json::to_value(&v).unwrap_or(Value::Null)).collect(),
+                Value::Array(list) => list
+                    .iter()
+                    .filter_map(|v| serde_json::to_value(track_item(v)).ok())
+                    .collect(),
                 _ => vec![],
             };
             m::HomeShelf {

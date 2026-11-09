@@ -50,6 +50,23 @@ def main() -> int:
             data = yt.get_home(limit=args.get("limit", 3))
         elif m == "get_library_playlists":
             data = yt.get_library_playlists(limit=args.get("limit", 25))
+        elif m == "get_account":
+            # Profile from the liked-songs playlist (LM): its author is the
+            # signed-in channel. Avatar comes from get_artist on that channel.
+            pl = yt.get_playlist("LM", limit=1)
+            author = pl.get("author") or {}
+            name = author.get("name") or ""
+            chid = author.get("id") or ""
+            avatar = ""
+            if chid:
+                try:
+                    info = yt.get_artist(chid)
+                    thumbs = info.get("thumbnails") or []
+                    if thumbs:
+                        avatar = thumbs[-1].get("url", "") if isinstance(thumbs[-1], dict) else ""
+                except Exception:
+                    avatar = ""
+            data = {"name": name, "avatar": avatar, "channelId": chid}
         elif m == "get_liked_songs":
             data = yt.get_liked_songs(limit=args.get("limit", 50))
         elif m == "get_library_songs":

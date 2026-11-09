@@ -202,6 +202,11 @@ impl YtClient {
         self.call("get_library_playlists", json!({"limit": limit})).await
     }
 
+    /// Signed-in channel profile: `{name, avatar, channelId}` (bridge `get_account`).
+    pub async fn get_account(&self) -> Result<Value> {
+        self.call("get_account", json!({})).await
+    }
+
     pub async fn get_liked_songs(&self, limit: u32) -> Result<Value> {
         self.call("get_liked_songs", json!({"limit": limit})).await
     }
