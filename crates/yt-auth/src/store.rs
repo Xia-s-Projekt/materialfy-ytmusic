@@ -26,8 +26,17 @@ impl HeadersAuth {
     ///
     /// Anything else is rejected with a human-readable error.
     pub fn normalize(pasted: &str) -> anyhow::Result<String> {
+        let trimmed = pasted.trim();
+        if trimmed.is_empty() {
+            anyhow::bail!("Nothing to save.");
+        }
+        // Not JSON at all: treat as a raw Cookie header string (what DevTools
+        // shows under Request Headers -> Cookie, or a plain `a=1; b=2` paste).
+        if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
+            return Self::normalize_cookie_string(trimmed.to_string());
+        }
         let v: serde_json::Value = serde_json::from_str(pasted)
-            .map_err(|_| anyhow::anyhow!("Not valid JSON. Paste either: (a) headers-auth JSON object with a cookie field from DevTools request headers, or (b) a cookie export JSON array with name/value entries (e.g. from the Cookie-Editor extension)."))?;
+            .map_err(|_| anyhow::anyhow!("Not valid JSON. Paste either: (a) headers-auth JSON object with a cookie field from DevTools request headers, (b) a cookie export JSON array with name/value entries (e.g. from the Cookie-Editor extension), or (c) a plain Cookie header string like `a=1; b=2` copied from DevTools Request Headers."))?;
         match &v {
             serde_json::Value::Object(o) => {
                 let cookie = o.get("cookie").or_else(|| o.get("Cookie")).and_then(|c| c.as_str());
@@ -72,6 +81,36 @@ impl HeadersAuth {
                 }
             }
             _ => anyhow::bail!("Expected a headers-auth JSON object or a cookie export array."),
+        }
+    }
+
+    /// Raw `Cookie: a=1; b=2` header string -> normalized `{"cookie":"a=1; b=2"}`.
+    /// An optional leading `Cookie:` prefix is stripped.
+    fn normalize_cookie_string(raw: String) -> anyhow::Result<String> {
+        let without_prefix = raw
+            .trim()
+            .strip_prefix("Cookie:")
+            .or_else(|| raw.trim().strip_prefix("cookie:"))
+            .unwrap_or(raw.trim());
+        let mut pairs: Vec<String> = Vec::new();
+        for part in without_prefix.split(';') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            match part.split_once('=') {
+                Some((name, _value)) if !name.trim().is_empty() => pairs.push(part.to_string()),
+                _ => anyhow::bail!("Not a valid Cookie header — expected `name=value; ...` pairs (or paste the headers-auth JSON / cookie export instead)."),
+            }
+        }
+        let cookie = pairs.join("; ");
+        if cookie.contains("__Secure-3PAPISID") || cookie.contains("__Secure-1PAPISID") {
+            let map = serde_json::json!({ "cookie": cookie });
+            Ok(map.to_string())
+        } else if cookie.is_empty() {
+            anyhow::bail!("Nothing to save.");
+        } else {
+            anyhow::bail!("Cookie string does not contain __Secure-3PAPISID — copy the full Cookie header from a music.youtube.com request in DevTools (or export cookies for that domain).");
         }
     }
 

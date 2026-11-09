@@ -49,4 +49,28 @@ mod tests {
         let pasted = r#"[{"name":"SID","value":"x","domain":".youtube.com"}]"#;
         assert!(HeadersAuth::normalize(pasted).is_err());
     }
+
+    #[test]
+    fn raw_cookie_string_normalizes_to_cookie_header() {
+        let pasted = "VISITOR_PRIVACY_METADATA=Cg==; __Secure-3PAPISID=abc123; SID=sid-val";
+        let normalized = HeadersAuth::normalize(pasted).expect("cookie string should normalize");
+        let v: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let cookie = v.get("cookie").and_then(|c| c.as_str()).unwrap();
+        assert!(cookie.contains("__Secure-3PAPISID=abc123"), "got: {cookie}");
+        assert!(cookie.contains("SID=sid-val"), "got: {cookie}");
+    }
+
+    #[test]
+    fn raw_cookie_string_with_prefix_normalizes() {
+        let pasted = "Cookie: SID=sid-val; __Secure-3PAPISID=abc123";
+        let normalized = HeadersAuth::normalize(pasted).expect("prefixed cookie should normalize");
+        let v: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        assert!(v.get("cookie").and_then(|c| c.as_str()).unwrap_or("").contains("__Secure-3PAPISID=abc123"));
+    }
+
+    #[test]
+    fn raw_cookie_string_without_papisid_is_rejected() {
+        let pasted = "SID=x; YSC=y";
+        assert!(HeadersAuth::normalize(pasted).is_err());
+    }
 }
