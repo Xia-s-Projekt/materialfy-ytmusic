@@ -781,11 +781,7 @@ fn play_current(
     });
 }
 
-async fn load_track(
-    client: &YtClient,
-    http: &reqwest::Client,
-    track: &TrackItem,
-) -> Result<(Vec<u8>, u32), String> {
+async fn get_song_url(client: &YtClient, track: &TrackItem) -> Result<(String, u32), String> {
     let song = client
         .get_song(&track.track_id)
         .await
@@ -793,19 +789,93 @@ async fn load_track(
             YtError::NotSignedIn => "Sign in to YouTube Music to play".to_string(),
             other => other.user_text(),
         })?;
-    let (url, bitrate) = super::stream::pick_audio_url(&song)
-        .ok_or_else(|| "No playable audio stream (sign-in or age restriction?)".to_string())?;
-    let response = http
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Stream download failed: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!("Stream download failed: HTTP {}", response.status()));
+    super::stream::pick_audio_url(&song)
+        .ok_or_else(|| "No playable audio stream (sign-in or age restriction?)".to_string())
+}
+
+async fn load_track(
+    client: &YtClient,
+    http: &reqwest::Client,
+    track: &TrackItem,
+) -> Result<(Vec<u8>, u32), String> {
+    // Primary: vendored yt-dlp downloads the full audio (manifest/fragment
+    // download + JS deciphering handled internally). Google Video caps plain
+    // `url` GETs at ~1 MiB per token on some networks, so direct URL
+    // fetching below is only the fallback.
+    {
+        let safe: String = track
+            .track_id
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .collect();
+        let out_path = std::env::temp_dir().join(format!("materialfy_{safe}.m4a"));
+        match client.download_audio(&track.track_id, &out_path).await {
+            Ok(p) => {
+                if let Ok(bytes) = std::fs::read(&p) {
+                    if !bytes.is_empty() {
+                        let _ = std::fs::remove_file(&p);
+                        return Ok((bytes, 0));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Stream download failed: {e}"))?;
-    Ok((bytes.to_vec(), bitrate))
+    // Fallback: anonymous ANDROID player returns plain `url` formats that
+    // Google actually serves. The signed-in WEB_REMIX get_song returns only
+    // `signatureCipher` formats, which 403 without JS signature deciphering.
+    let (url, bitrate) = match client.get_stream_url(&track.track_id).await {
+        Ok(v) => {
+            let u = v.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let b = v.get("bitrate").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+            if u.is_empty() {
+                // fall through to the legacy path
+                get_song_url(client, track).await?
+            } else {
+                (u, b)
+            }
+        }
+        Err(_) => get_song_url(client, track).await?,
+    };
+    // googlevideo URL tokens 403 on a plain GET (`curl -L url` -> 403),
+    // but bounded 1 MiB `Range` requests are served (206). Download the file
+    // as sequential 1 MiB windows; tolerate servers that ignore Range by
+    // accepting a 200 first chunk as the whole file.
+    const CHUNK: u64 = 1024 * 1024;
+    let mut out: Vec<u8> = Vec::new();
+    let mut offset: u64 = 0;
+    let mut done = false;
+    while !done {
+        let end = offset + CHUNK - 1;
+        let response = http
+            .get(&url)
+            .header("User-Agent", "Mozilla/5.0")
+            .header("Range", format!("bytes={offset}-{end}"))
+            .send()
+            .await
+            .map_err(|e| format!("Stream download failed: {e}"))?;
+        if !response.status().is_success() {
+            return Err(format!("Stream download failed: HTTP {}", response.status()));
+        }
+        let is_ok = response.status() == reqwest::StatusCode::OK;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| format!("Stream download failed: {e}"))?;
+        if bytes.is_empty() {
+            break;
+        }
+        let n = bytes.len() as u64;
+        out.extend_from_slice(&bytes);
+        offset += n;
+        if n < CHUNK {
+            done = true;
+        }
+        // a 200 on the first request means the server ignored Range and sent
+        // the whole file — the loop would otherwise re-append it.
+        if is_ok && offset > 0 {
+            done = true;
+        }
+    }
+    Ok((out, bitrate))
 }

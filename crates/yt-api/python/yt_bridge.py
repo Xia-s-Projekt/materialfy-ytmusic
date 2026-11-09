@@ -85,6 +85,72 @@ def main() -> int:
             data = yt.get_artist(args["channelId"])
         elif m == "get_song":
             data = yt.get_song(args["videoId"])
+        elif m == "get_stream_url":
+            # The signed-in WEB_REMIX request returns only signatureCipher formats,
+            # which need JS signature deciphering before Google will serve them
+            # (HTTP 403). The anonymous ANDROID player returns plain `url` formats
+            # directly, so resolve the playback URL that way.
+            import requests
+            vid = args["videoId"]
+            payload = {
+                "context": {
+                    "client": {
+                        "clientName": "ANDROID",
+                        "clientVersion": "20.10.38",
+                        "hl": "en",
+                        "gl": "US",
+                        "androidSdkVersion": 34,
+                        "osVersion": "14",
+                        "deviceMake": "Google",
+                        "deviceModel": "Pixel 9",
+                    }
+                },
+                "videoId": vid,
+                "playbackContext": {"contentPlaybackContext": {"signatureTimestamp": "20000"}},
+                "contentCheckOk": True,
+                "racyCheckOk": True,
+            }
+            r = requests.post(
+                "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+                json=payload,
+                timeout=25,
+            )
+            if r.status_code != 200:
+                raise RuntimeError(f"player request failed: HTTP {r.status_code}")
+            sd = (r.json().get("streamingData") or {})
+            best = None
+            for f in sd.get("adaptiveFormats") or []:
+                mt = f.get("mimeType") or ""
+                if not mt.startswith("audio/"):
+                    continue
+                url = f.get("url") or ""
+                if not url:
+                    continue
+                usable = mt.startswith("audio/mp4")
+                bitrate = f.get("bitrate") or 0
+                if best is None or (usable, bitrate) > (best[0], best[1]):
+                    best = (usable, bitrate, url)
+            if best is None:
+                raise RuntimeError("No playable audio stream (sign-in or age restriction?)")
+            data = {"url": best[2], "bitrate": best[1]}
+        elif m == "download_audio":
+            # Google Video caps plain `url` downloads at ~1 MiB per token for
+            # this egress, so hand the byte fetch to yt-dlp (vendored, latest)
+            # which handles manifest/fragment/ABR download properly.
+            import yt_dlp
+            vid = args["videoId"]
+            out = args.get("output") or f"/tmp/yt_{vid}.m4a"
+            os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+            opts = {
+                "outtmpl": out,
+                "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([f"https://www.youtube.com/watch?v={vid}"])
+            data = {"file": out}
         elif m == "get_watch_playlist":
             data = yt.get_watch_playlist(
                 videoId=args.get("videoId"),

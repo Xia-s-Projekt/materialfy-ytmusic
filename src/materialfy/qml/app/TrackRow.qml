@@ -383,8 +383,9 @@ Item {
         }
 
         Label {
-            Layout.preferredWidth: 44
-            text: root._time(root.durationMs)
+            visible: root.durationMs > 0
+            Layout.preferredWidth: root.durationMs > 0 ? 44 : 0
+            text: root.durationMs > 0 ? root._time(root.durationMs) : ""
             type: "bodyMedium"
             color: Theme.fgSurfaceVariant
             horizontalAlignment: Text.AlignRight

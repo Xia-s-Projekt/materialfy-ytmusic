@@ -142,7 +142,11 @@ impl YtClient {
         if let Some(proxy) = &self.http_proxy {
             cmd.env("HTTP_PROXY", proxy).env("HTTPS_PROXY", proxy);
         }
-        let timeout = Duration::from_secs(45);
+        let timeout = if method == "download_audio" {
+            Duration::from_secs(600)
+        } else {
+            Duration::from_secs(45)
+        };
         let output = tokio::time::timeout(timeout, cmd.output())
             .await
             .map_err(|_| YtError::Network("timed out".to_string()))?
@@ -242,6 +246,36 @@ impl YtClient {
 
     pub async fn get_song(&self, video_id: &str) -> Result<Value> {
         self.call("get_song", json!({"videoId": video_id})).await
+    }
+
+    /// Playback URL from the anonymous ANDROID player: `{url, bitrate}`.
+    /// Library/browse calls use the signed-in WEB_REMIX bridge, but that
+    /// response only carries `signatureCipher` formats (403 without JS
+    /// deciphering); the ANDROID player hands back plain `url` formats.
+    pub async fn get_stream_url(&self, video_id: &str) -> Result<Value> {
+        self.call("get_stream_url", json!({"videoId": video_id})).await
+    }
+
+    /// Download audio to `output` via vendored yt-dlp (bridge `download_audio`):
+    /// returns the file path. Google Video caps plain `url` GETs at ~1 MiB per
+    /// token on some networks, so yt-dlp handles manifest/fragment download.
+    pub async fn download_audio(&self, video_id: &str, output: &std::path::Path) -> Result<PathBuf> {
+        let v = self
+            .call(
+                "download_audio",
+                json!({"videoId": video_id, "output": output.to_string_lossy()}),
+            )
+            .await?;
+        let path = v
+            .get("file")
+            .and_then(Value::as_str)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| output.to_path_buf());
+        if path.is_file() {
+            Ok(path)
+        } else {
+            Err(YtError::Network("yt-dlp produced no audio file".to_string()))
+        }
     }
 
     pub async fn get_watch_playlist(
