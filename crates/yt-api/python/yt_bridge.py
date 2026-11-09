@@ -137,6 +137,8 @@ def main() -> int:
             # Google Video caps plain `url` downloads at ~1 MiB per token for
             # this egress, so hand the byte fetch to yt-dlp (vendored, latest)
             # which handles manifest/fragment/ABR download properly.
+            import io
+            import contextlib
             import yt_dlp
             vid = args["videoId"]
             out = args.get("output") or f"/tmp/yt_{vid}.m4a"
@@ -147,9 +149,13 @@ def main() -> int:
                 "quiet": True,
                 "no_warnings": True,
                 "noplaylist": True,
+                "noprogress": True,
+                "progress_hooks": [],
             }
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([f"https://www.youtube.com/watch?v={vid}"])
+            sink = io.StringIO()
+            with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ydl.download([f"https://www.youtube.com/watch?v={vid}"])
             data = {"file": out}
         elif m == "get_watch_playlist":
             data = yt.get_watch_playlist(
