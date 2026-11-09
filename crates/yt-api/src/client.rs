@@ -118,8 +118,12 @@ impl YtClient {
         let python = python_bin();
         let mut cmd = tokio::process::Command::new(&python);
         cmd.arg(&bridge).arg("--method").arg(method).arg("--args").arg(args.to_string());
+        // Only pass --headers once the file exists (post first sign-in);
+        // before that the bridge runs unauthenticated so browsing works.
         if let Some(h) = &self.headers {
-            cmd.arg("--headers").arg(h);
+            if h.is_file() {
+                cmd.arg("--headers").arg(h);
+            }
         }
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         // vendored ytmusicapi + deps: never touch the user's global pip

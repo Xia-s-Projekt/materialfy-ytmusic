@@ -126,7 +126,7 @@ impl Services {
     pub fn start(rt: &Handle, settings: Arc<SettingsStore>, options: ServicesOptions) -> anyhow::Result<Services> {
         let store = yt_auth::Store::new(mf_platform::dirs::state_dir());
         let headers = store.file_path();
-        let api = Arc::new(YtClient::new(store.has_auth().then_some(headers)));
+        let api = Arc::new(YtClient::new(Some(headers)));
         let config = PlayerConfig {
             cover_dir: mf_platform::dirs::cache_subdir("covers"),
             session_file: options.persist_session.then(mf_platform::dirs::session_file),

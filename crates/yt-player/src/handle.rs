@@ -521,19 +521,64 @@ async fn run(
                         play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                     }
-                    Command::PlayContext(context, _, _) => {
+                    Command::PlayContext(context, offset_uri, _) => {
                         state.context = context.clone();
-                        // context uri may be ytmusic:playlist:ID — convert to tracks via API
                         if let Some(uri) = &context.context_uri {
+                            let kind = yt_api::util::uri_kind(uri).unwrap_or("");
                             let id = uri.rsplit(':').next().unwrap_or("").to_string();
-                            if let Ok(v) = client.get_playlist(&id, 100).await {
-                                let tracks = playlist_tracks(&v);
-                                if !tracks.is_empty() {
-                                    set_queue(&mut state, tracks, 0);
+                            match kind {
+                                "track" | "episode" => {
+                                    let track = TrackItem { track_id: id.clone(), uri: uri.clone(), title: id, ..Default::default() };
+                                    set_queue(&mut state, vec![track], 0);
                                     state.position_ms = 0;
                                     play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                                 }
+                                "playlist" => {
+                                    if let Ok(v) = client.get_playlist(&id, 100).await {
+                                        let tracks = playlist_tracks(&v);
+                                        if !tracks.is_empty() {
+                                            set_queue(&mut state, tracks, 0);
+                                            state.position_ms = 0;
+                                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
+                                        }
+                                    }
+                                }
+                                "album" => {
+                                    if let Ok(v) = client.get_album(&id).await {
+                                        let (_info, tracks) = yt_api::map::album_page(&v);
+                                        if !tracks.is_empty() {
+                                            set_queue(&mut state, tracks, 0);
+                                            state.position_ms = 0;
+                                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
+                                        }
+                                    }
+                                }
+                                "artist" => {
+                                    if let Ok(v) = client.get_watch_playlist(None, Some(&format!("RDBC{id}")), false, 25).await {
+                                        let tracks = playlist_tracks(&v);
+                                        if !tracks.is_empty() {
+                                            set_queue(&mut state, tracks, 0);
+                                            state.position_ms = 0;
+                                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    if let Some(off) = offset_uri {
+                                        let off_id = off.rsplit(':').next().unwrap_or("").to_string();
+                                        let track = TrackItem { track_id: off_id.clone(), uri: off.clone(), title: off_id, ..Default::default() };
+                                        set_queue(&mut state, vec![track], 0);
+                                        state.position_ms = 0;
+                                        play_current(&mut state, &audio, &config, client.clone(), &load_tx);
+                                    }
+                                }
                             }
+                        } else if let Some(off) = &offset_uri {
+                            let off_id = off.rsplit(':').next().unwrap_or("").to_string();
+                            let track = TrackItem { track_id: off_id.clone(), uri: off.clone(), title: off_id, ..Default::default() };
+                            set_queue(&mut state, vec![track], 0);
+                            state.position_ms = 0;
+                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                         }
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                     }
