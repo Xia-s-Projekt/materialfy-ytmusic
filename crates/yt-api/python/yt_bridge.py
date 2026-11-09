@@ -4,12 +4,16 @@
 One-shot CLI: python3 yt_bridge.py --headers <headers.json> --method <m> --args '<json>'
 Prints a single JSON object: {"ok": true, "data": ...} or {"ok": false, "error": "..."}.
 
-Requires: pip install ytmusicapi  (https://github.com/sigma67/ytmusicapi, MIT)
+Self-contained: ytmusicapi is vendored next to this file in ./vendor
+(https://github.com/sigma67/ytmusicapi, MIT) — no `pip install` needed.
 Python >= 3.10.
 """
 import argparse
 import json
+import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
 
 
 def main() -> int:

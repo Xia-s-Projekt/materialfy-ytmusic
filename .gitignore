@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 dist/
+# vendored ytmusicapi IS committed (embedded, no pip needed) — only bytecode is ignored above
+# to refresh the vendor tree: pip install --target crates/yt-api/python/vendor "ytmusicapi==1.12.3"
 # исходное видео референса (чужой контент, 15 МБ); кадры и разбор лежат рядом
 docs/reference/*.mp4
 # кадры и обложки из чужого видео-референса — только локально (разбор — в DESIGN_NOTES.md)

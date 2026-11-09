@@ -126,6 +126,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "copyToClipboard"]
         fn copy_to_clipboard(self: &Auth, text: &QString);
+        /// Save pasted ytmusicapi headers-auth JSON and validate it (in-app login, no files).
+        /// Returns "" on success or an error message to show.
+        #[qinvokable]
+        #[cxx_name = "saveHeaders"]
+        fn save_headers(self: &Auth, json: &QString) -> QString;
     }
 
     impl cxx_qt::Threading for Auth {}
@@ -223,6 +228,14 @@ impl qobject::Auth {
 
     fn copy_to_clipboard(&self, text: &QString) {
         crate::qt::copy_to_clipboard(&text.to_string());
+    }
+
+    fn save_headers(&self, json: &QString) -> QString {
+        let json_str = json.to_string();
+        match ctx().services.auth.save_headers(&json_str) {
+            Ok(()) => QString::default(),
+            Err(e) => QString::from(e),
+        }
     }
 
     /// Снимок сервиса → свойства; сигнал — только для изменившихся групп.

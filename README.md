@@ -19,11 +19,14 @@ Python **ytmusicapi bridge** (`crates/yt-api/python/yt_bridge.py`):
 ## Quick start (YTMusic)
 
 ```bash
-pip install ytmusicapi
-# sign in: https://music.youtube.com → open DevTools → Application → copy browser headers
-# save them as ~/.ytmusic_headers_auth or headers_auth.json (see crates/yt-auth)
+# ytmusicapi is embedded in crates/yt-api/python/vendor/ — no `pip install` needed.
 cargo run -p materialfy
 ```
+
+Sign-in is in the app: open **Account**, paste your headers-auth JSON into the box there and
+tap **Save & sign in** (https://music.youtube.com → open DevTools → Application → copy the
+browser headers). The file fallback still works too: save them as `~/.ytmusic_headers_auth` or
+`headers_auth.json` (see `crates/yt-auth`).
 
 Audio output is currently stubbed (rodio/fastframe-sink conflict on this branch); the queue,
 `get_song` resolution, search, library and home mapping are wired. See [YTMUSIC.md](YTMUSIC.md)

@@ -268,7 +268,7 @@ Page {
 
                     Button {
                         visible: page.shown === "signedOut"
-                        text: I18n.t("Sign in with Spotify")
+                        text: I18n.t("Sign in with YouTube Music")
                         icon: "open_in_new"
                         size: "m"
                         onClicked: Auth.startLogin()
@@ -369,11 +369,81 @@ Page {
                     }
                 }
 
+                // Вход без файла: копируем JSON из ytmusicapi (шапка браузера музыка.youtube.com)
+                // и вставляем сюда; приложение проверяет и сохраняет само.
+                ColumnLayout {
+                    visible: page.shown === "signedOut" || page.shown === "error"
+                    Layout.fillWidth: true
+                    Layout.topMargin: 12
+                    Layout.maximumWidth: page.compact ? 560 : 640
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: I18n.t("Or paste your headers-auth JSON here — no files, no terminal.")
+                        type: "titleSmall"
+                        wrapMode: Text.WordWrap
+                        elide: Text.ElideNone
+                    }
+                    Rectangle {
+                        id: headersBox
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 120
+                        radius: Theme.shape.large
+                        color: Theme.surfaceContainerHighest
+                        border.width: headersEdit.activeFocus ? 2 : 0
+                        border.color: Theme.primary
+                        TextEdit {
+                            id: headersEdit
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            wrapMode: TextEdit.Wrap
+                            color: Theme.fgSurface
+                            selectionColor: Theme.primaryContainer
+                            selectedTextColor: Theme.fgPrimaryContainer
+                            font.family: Theme.fontFamilyMonospace ?? Theme.fontFamily
+                            font.pixelSize: Theme.type.bodyMedium.size
+                            placeholderText: "{\"authorization\": \"SAPISIDHASH ...\", \"cookie\": \"...\"}"
+                        }
+                    }
+                    Label {
+                        id: headersErrorLabel
+                        visible: text !== ""
+                        Layout.fillWidth: true
+                        text: ""
+                        type: "bodySmall"
+                        color: Theme.error
+                        wrapMode: Text.WordWrap
+                        elide: Text.ElideNone
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        Button {
+                            text: I18n.t("Save & sign in")
+                            icon: "login"
+                            size: "m"
+                            enabled: headersEdit.text.trim() !== ""
+                            onClicked: {
+                                const err = Auth.saveHeaders(headersEdit.text)
+                                headersErrorLabel.text = err
+                            }
+                        }
+                        Button {
+                            text: I18n.t("How to get the JSON")
+                            icon: "help"
+                            style: "text"
+                            onClicked: Qt.openUrlExternally("https://github.com/sigma67/ytmusicapi#setup")
+                        }
+                    }
+                }
+
                 Label {
                     visible: !page.compact && (page.shown === "signedOut" || page.shown === "error")
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 24
-                    text: I18n.t("Materialfy · not affiliated with Spotify AB")
+                    text: I18n.t("Materialfy YTMusic fork · embedded ytmusicapi, nothing to install")
                     type: "bodySmall"
                     color: Theme.fgSurfaceVariant
                 }

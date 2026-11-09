@@ -12,7 +12,7 @@ use tokio::io::AsyncReadExt;
 pub enum YtError {
     #[error("Sign in to YouTube Music first (headers file)")]
     NotSignedIn,
-    #[error("Python ytmusicapi is not installed (pip install ytmusicapi)")]
+    #[error("vendored ytmusicapi missing next to the bridge (Python 3 is required)")]
     PythonMissing,
     #[error("Cannot reach YouTube Music: {0}")]
     Network(String),
@@ -26,7 +26,7 @@ impl YtError {
     pub fn user_text(&self) -> String {
         match self {
             YtError::NotSignedIn => "Sign in to YouTube Music first".to_string(),
-            YtError::PythonMissing => "Install ytmusicapi (pip install ytmusicapi)".to_string(),
+            YtError::PythonMissing => "Embedded YouTube Music API is missing — reinstall the app".to_string(),
             YtError::Network(_) => "Can't reach YouTube Music — check your network".to_string(),
             YtError::Remote(message) => {
                 if message.contains("authentication")
@@ -67,6 +67,18 @@ fn bridge_path() -> PathBuf {
 
 fn python_bin() -> String {
     std::env::var("MATERIALFY_PYTHON").unwrap_or_else(|_| "python3".to_string())
+}
+
+/// Vendored dependency dir (`python/vendor` next to the bridge), so no
+/// `pip install` is needed: the app is fully self-contained on python3.
+fn vendor_dir() -> PathBuf {
+    if let Some(p) = std::env::var_os("MATERIALFY_YT_VENDOR") {
+        return PathBuf::from(p);
+    }
+    if let Some(parent) = bridge_path().parent() {
+        return parent.join("vendor");
+    }
+    PathBuf::from("crates/yt-api/python/vendor")
 }
 
 /// Minimal InnerTube entry point (also used by yt-player for stream URLs).
@@ -110,6 +122,19 @@ impl YtClient {
             cmd.arg("--headers").arg(h);
         }
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        // vendored ytmusicapi + deps: never touch the user's global pip
+        let vendor = vendor_dir();
+        if vendor.is_dir() {
+            let sep = std::path::MAIN_SEPARATOR;
+            let mut pypath = String::from(vendor.to_string_lossy());
+            if let Ok(existing) = std::env::var("PYTHONPATH") {
+                if !existing.is_empty() {
+                    pypath.push(sep);
+                    pypath.push_str(&existing);
+                }
+            }
+            cmd.env("PYTHONPATH", pypath);
+        }
         if let Some(proxy) = &self.http_proxy {
             cmd.env("HTTP_PROXY", proxy).env("HTTPS_PROXY", proxy);
         }

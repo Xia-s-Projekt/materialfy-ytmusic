@@ -170,6 +170,18 @@ if ! rust_ok; then
 fi
 say "$(rustc --version)"
 
+# --- Встроенный ytmusicapi (без pip) ----------------------------------------
+# YouTube Music API (sigma67/ytmusicapi) вендорен в репозиторий:
+# crates/yt-api/python/vendor. Если его вдруг нет (частичный клон) — поставим
+# --target туда же, чтобы всей системе pip не трогать.
+if [ ! -d "$DIR/crates/yt-api/python/vendor/ytmusicapi" ]; then
+    say "Installing embedded ytmusicapi into crates/yt-api/python/vendor (one time)"
+    python3 -m pip install --target "$DIR/crates/yt-api/python/vendor" "ytmusicapi==1.12.3" \
+        || fail "Could not install ytmusicapi: check that python3 -m pip works, then re-run ./install.sh"
+else
+    say "Embedded ytmusicapi already present (no pip needed)"
+fi
+
 # --- Сборка -----------------------------------------------------------------
 
 say "Building Materialfy (5-15 minutes the first time)"
@@ -198,9 +210,9 @@ Name=Materialfy
 GenericName=Music Player
 GenericName[ru]=Музыкальный плеер
 GenericName[pt_BR]=Reprodutor de música
-Comment=Spotify client in Material 3 Expressive style
-Comment[ru]=Клиент Spotify в стиле Material 3 Expressive
-Comment[pt_BR]=Cliente Spotify em Material 3 Expressive
+Comment=YouTube Music client in Material 3 Expressive style
+Comment[ru]=Клиент YouTube Music в стиле Material 3 Expressive
+Comment[pt_BR]=Cliente YouTube Music em Material 3 Expressive
 Exec=$BIN/$APP %U
 Icon=$APP
 Terminal=false
@@ -214,4 +226,4 @@ case ":$PATH_ORIG:" in
     *":$BIN:"*) ;;
     *) echo "    If the $APP command is not found, $BIN is not in PATH: run $BIN/$APP or use the menu." ;;
 esac
-echo "    On first launch, sign in to Spotify: the app opens a browser. Playback requires Premium."
+echo "    On first launch, sign in with YouTube Music: open the Account page in the app and paste your headers JSON (the app validates and saves it itself — no files, no pip)."

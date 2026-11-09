@@ -19,8 +19,10 @@ A native Innertube Rust rewrite would duplicate that work, so this fork uses a P
   `get_watch_playlist`, `get_lyrics`, `get_charts`, `rate_song`, `edit_song_library`,
   `create_playlist`, `edit_playlist`, `delete_playlist`, `add_playlist_items`,
   `edit_playlist_items`, `delete_playlist_items`.
-- Requires Python 3 and `pip install ytmusicapi`. Missing Python/sidecar surfaces as
-  `YtError::PythonMissing`.
+- Requires Python 3 only. `ytmusicapi` (+ deps) is **vendored** in
+  `crates/yt-api/python/vendor/` — no `pip install` needed; `./install.sh` skips the
+  `pip install --target` fallback when the vendor dir is already there. Missing
+  Python/sidecar surfaces as `YtError::PythonMissing`.
 
 ## Crate map
 
@@ -36,7 +38,10 @@ Old `sf-*` crates are kept in the workspace but `materialfy` now depends on `yt-
 ## Auth
 
 YouTube Music has no public OAuth client for desktop apps. `yt-auth` validates and stores
-browser headers-auth JSON:
+browser headers-auth JSON. In the app: open **Account**, paste the JSON into the box and
+tap **Save & sign in** — `Auth.saveHeaders` calls
+`AuthService::save_headers` (validates via `HeadersAuth::is_valid`, saves, then
+`start()` re-checks with a live API call). The file form still works:
 
 ```bash
 # https://music.youtube.com → DevTools → Network → copy request headers

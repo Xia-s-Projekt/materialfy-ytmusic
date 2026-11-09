@@ -160,7 +160,7 @@ page_data!(qobject::EpisodeData, EpisodePage);
 pub(crate) fn error_text(error: &ServiceError) -> String {
     match error {
         ServiceError::NotSignedIn | ServiceError::Api(YtError::NotSignedIn) => mf_i18n::t("Sign in to your account"),
-        ServiceError::Api(YtError::PythonMissing) => mf_i18n::t("Install ytmusicapi (pip install ytmusicapi)"),
+        ServiceError::Api(YtError::PythonMissing) => mf_i18n::t("Embedded YouTube Music API is missing — reinstall the app or run ./install.sh"),
         ServiceError::Api(YtError::Remote(message)) if message.contains("404") => mf_i18n::t("Not found on YouTube Music"),
         ServiceError::Api(YtError::Network(_)) => mf_i18n::t("No connection to YouTube Music"),
         ServiceError::Api(_) => mf_i18n::t("Couldn't load"),
