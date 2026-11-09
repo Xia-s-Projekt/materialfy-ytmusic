@@ -45,6 +45,31 @@ mod tests {
     }
 
     #[test]
+    fn cookie_only_inputs_gain_browser_auth_headers() {
+        // ytmusicapi picks BROWSER auth only when authorization contains SAPISIDHASH,
+        // and recomputes the real hash from __Secure-3PAPISID + origin per request.
+        for pasted in [
+            "SID=sid-val; __Secure-3PAPISID=abc123",
+            r#"[{"name":"__Secure-3PAPISID","value":"abc123","domain":".youtube.com"}]"#,
+            r#"{"cookie":"SID=sid-val; __Secure-3PAPISID=abc123"}"#,
+        ] {
+            let normalized = HeadersAuth::normalize(pasted).expect("should normalize");
+            let v: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+            let auth = v.get("authorization").and_then(|a| a.as_str()).unwrap_or("");
+            assert!(auth.contains("SAPISIDHASH"), "got auth: {auth} for {pasted}");
+            assert_eq!(v.get("origin").and_then(|o| o.as_str()), Some("https://music.youtube.com"));
+        }
+    }
+
+    #[test]
+    fn provided_authorization_is_preserved() {
+        let pasted = r#"{"cookie":"__Secure-3PAPISID=abc123","authorization":"SAPISIDHASH 123_deadbeef"}"#;
+        let normalized = HeadersAuth::normalize(pasted).expect("should normalize");
+        let v: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        assert_eq!(v.get("authorization").and_then(|a| a.as_str()), Some("SAPISIDHASH 123_deadbeef"));
+    }
+
+    #[test]
     fn cookie_export_without_papisid_is_rejected() {
         let pasted = r#"[{"name":"SID","value":"x","domain":".youtube.com"}]"#;
         assert!(HeadersAuth::normalize(pasted).is_err());

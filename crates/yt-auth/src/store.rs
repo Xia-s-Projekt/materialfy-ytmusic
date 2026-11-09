@@ -25,6 +25,20 @@ impl HeadersAuth {
     ///    joined into a `Cookie` header string.
     ///
     /// Anything else is rejected with a human-readable error.
+    /// ytmusicapi classifies auth as `BROWSER` only when the headers file
+    /// contains an `authorization` with `SAPISIDHASH`; cookie-only files are
+    /// misclassified as `OAUTH_CUSTOM_CLIENT` (oauth JSON error). It then
+    /// recomputes the real `SAPISIDHASH <ts>_<sha1>` from the
+    /// `__Secure-3PAPISID` cookie + `origin` on each request, so a
+    /// placeholder value here is enough to select the browser path.
+    fn browser_headers_json(cookie: String, authorization: Option<String>) -> String {
+        let mut map = serde_json::Map::new();
+        map.insert("cookie".into(), serde_json::Value::String(cookie));
+        map.insert("authorization".into(), serde_json::Value::String(authorization.unwrap_or_else(|| "SAPISIDHASH placeholder".to_string())));
+        map.insert("origin".into(), serde_json::Value::String("https://music.youtube.com".to_string()));
+        serde_json::to_string(&serde_json::Value::Object(map)).unwrap_or_default()
+    }
+
     pub fn normalize(pasted: &str) -> anyhow::Result<String> {
         let trimmed = pasted.trim();
         if trimmed.is_empty() {
@@ -44,14 +58,14 @@ impl HeadersAuth {
                 if cookie.is_none() && authorization.is_none() {
                     anyhow::bail!("Not a ytmusicapi headers file — expected JSON with \"cookie\" or \"authorization\" (or paste a cookie export array instead).");
                 }
-                let mut map = serde_json::Map::new();
-                if let Some(c) = cookie {
-                    map.insert("cookie".into(), serde_json::Value::String(c.to_string()));
+                // Preserve caller-supplied authorization (already a SAPISIDHASH).
+                // For cookie-only input synthesize a placeholder so ytmusicapi
+                // picks BROWSER auth instead of OAUTH_CUSTOM_CLIENT.
+                match (cookie, authorization) {
+                    (Some(c), a) => Ok(Self::browser_headers_json(c.to_string(), a.map(str::to_string))),
+                    (None, Some(a)) => Ok(Self::browser_headers_json(String::new(), Some(a.to_string()))),
+                    (None, None) => unreachable!(),
                 }
-                if let Some(a) = authorization {
-                    map.insert("authorization".into(), serde_json::Value::String(a.to_string()));
-                }
-                Ok(serde_json::to_string(&serde_json::Value::Object(map))?)
             }
             serde_json::Value::Array(items) => {
                 let mut cookie = String::new();
@@ -72,8 +86,7 @@ impl HeadersAuth {
                     }
                 }
                 if cookie.contains("__Secure-3PAPISID") || cookie.contains("__Secure-1PAPISID") {
-                    let map = serde_json::json!({ "cookie": cookie });
-                    Ok(map.to_string())
+                    Ok(Self::browser_headers_json(cookie, None))
                 } else if cookie.is_empty() {
                     anyhow::bail!("Cookie export is empty.");
                 } else {
@@ -105,8 +118,7 @@ impl HeadersAuth {
         }
         let cookie = pairs.join("; ");
         if cookie.contains("__Secure-3PAPISID") || cookie.contains("__Secure-1PAPISID") {
-            let map = serde_json::json!({ "cookie": cookie });
-            Ok(map.to_string())
+            Ok(Self::browser_headers_json(cookie, None))
         } else if cookie.is_empty() {
             anyhow::bail!("Nothing to save.");
         } else {
