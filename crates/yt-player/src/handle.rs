@@ -1,4 +1,4 @@
-//! PlayerHandle actor: queue + stream resolution (output stub).
+//! PlayerHandle actor: queue + stream resolution + local audio output.
 //! Simplified vs sf-player: local only, no Connect, no librespot session.
 
 use std::collections::VecDeque;
@@ -11,6 +11,7 @@ use tokio::sync::{broadcast, mpsc, watch};
 
 use yt_api::{YtClient, YtError};
 
+use super::audio::Audio;
 use super::{
     LocalPlayback, PlayerConfig, PlayerEvent, PlayerSnapshot, Repeat, Target, codec_label,
 };
@@ -69,6 +70,7 @@ struct State {
     shuffle: bool,
     repeat: Repeat,
     context: PlayContext,
+    load_seq: u64,
 }
 
 pub struct PlayerHandle {
@@ -340,9 +342,10 @@ async fn run(
         shuffle: false,
         repeat: Repeat::Off,
         context: PlayContext::default(),
+        load_seq: 0,
     };
-    let mut audio = Audio::new(config.volume);
-    let mut current_uri = String::new();
+    let audio = Audio::new(config.volume);
+    let (load_tx, mut load_rx) = mpsc::unbounded_channel::<LoadDone>();
     // simple position ticker
     let (tick_tx, mut tick_rx) = mpsc::unbounded_channel::<()>();
     tokio::spawn(async move {
@@ -364,7 +367,7 @@ async fn run(
         snap.shuffle = state.shuffle;
         snap.repeat = state.repeat;
         snap.context = state.context.clone();
-        snap.track = state.queue.get(state.index.unwrap_or(0)).map(|r| r.track.clone());
+        snap.track = row_at(state, state.index.unwrap_or(0)).map(|r| r.track.clone());
         snap.current_index = state.index.map(|i| i as i32).unwrap_or(-1);
         snap.manual_count = state.manual.len() as i32;
         snap.can_clear_queue = !state.manual.is_empty();
@@ -395,18 +398,18 @@ async fn run(
                 match msg {
                     Command::Shutdown => break,
                     Command::TogglePlay => {
-                        audio.toggle();
                         state.playing = !state.playing;
+                        audio.set_paused(!state.playing);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::StateChanged);
                     }
                     Command::Play => {
-                        audio.resume();
                         state.playing = true;
+                        audio.set_paused(false);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::StateChanged);
                     }
                     Command::Pause => {
-                        audio.pause();
                         state.playing = false;
+                        audio.set_paused(true);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::StateChanged);
                     }
                     Command::Stop => {
@@ -419,30 +422,30 @@ async fn run(
                         if let Some(next) = next_index(&state) {
                             state.index = Some(next);
                             state.position_ms = 0;
-                            play_current(&mut state, &mut audio, &config, client.clone()).await;
+                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                             emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                         }
                     }
                     Command::Previous => {
                         if state.position_ms > 3000 {
                             state.position_ms = 0;
-                            audio.seek(Duration::from_millis(0));
+                            audio.seek(0);
                         } else if let Some(prev) = prev_index(&state) {
                             state.index = Some(prev);
                             state.position_ms = 0;
-                            play_current(&mut state, &mut audio, &config, client.clone()).await;
+                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                             emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                         }
                     }
                     Command::SeekMs(ms) => {
                         state.position_ms = ms.max(0);
-                        audio.seek(Duration::from_millis(ms.max(0) as u64));
+                        audio.seek(ms.max(0));
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::PositionChanged);
                     }
                     Command::SeekRelative(delta) => {
                         let target = (state.position_ms + delta).max(0);
                         state.position_ms = target;
-                        audio.seek(Duration::from_millis(target as u64));
+                        audio.seek(target);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::PositionChanged);
                     }
                     Command::SetVolume(v) => {
@@ -474,7 +477,7 @@ async fn run(
                         state.context = context;
                         set_queue(&mut state, tracks, row);
                         state.position_ms = 0;
-                        play_current(&mut state, &mut audio, &config, client.clone()).await;
+                        play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                     }
                     Command::ShuffleFrom(tracks, context) => {
@@ -487,14 +490,14 @@ async fn run(
                         }
                         set_queue(&mut state, tracks, 0);
                         state.position_ms = 0;
-                        play_current(&mut state, &mut audio, &config, client.clone()).await;
+                        play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                     }
                     Command::PlayIndex(i) => {
                         if i < state.queue.len() + state.manual.len() {
                             state.index = Some(i);
                             state.position_ms = 0;
-                            play_current(&mut state, &mut audio, &config, client.clone()).await;
+                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                             emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                         }
                     }
@@ -503,7 +506,7 @@ async fn run(
                         if let Some(p) = pos {
                             state.index = Some(p);
                             state.position_ms = 0;
-                            play_current(&mut state, &mut audio, &config, client.clone()).await;
+                            play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                             emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                         }
                     }
@@ -515,7 +518,7 @@ async fn run(
                         }).collect();
                         set_queue(&mut state, tracks, index);
                         state.position_ms = 0;
-                        play_current(&mut state, &mut audio, &config, client.clone()).await;
+                        play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                     }
                     Command::PlayContext(context, _, _) => {
@@ -528,7 +531,7 @@ async fn run(
                                 if !tracks.is_empty() {
                                     set_queue(&mut state, tracks, 0);
                                     state.position_ms = 0;
-                                    play_current(&mut state, &mut audio, &config, client.clone()).await;
+                                    play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                                 }
                             }
                         }
@@ -539,7 +542,7 @@ async fn run(
                         let track = TrackItem { track_id: id.clone(), uri: uri.clone(), title: id, ..Default::default() };
                         set_queue(&mut state, vec![track], 0);
                         state.position_ms = 0;
-                        play_current(&mut state, &mut audio, &config, client.clone()).await;
+                        play_current(&mut state, &audio, &config, client.clone(), &load_tx);
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                     }
                     Command::AddToQueue(tracks) => {
@@ -574,33 +577,84 @@ async fn run(
                     }
                 }
             }
+            Some(done) = load_rx.recv() => {
+                if done.seq == state.load_seq {
+                    match done.result {
+                        Ok((bytes, bitrate)) => {
+                            state.snapshot.codec = codec_label((bitrate / 1000) as u16);
+                            audio.load(bytes);
+                            state.snapshot.buffering = false;
+                            state.playing = true;
+                            emit(&snapshot_tx, &events_tx, &state, PlayerEvent::StateChanged);
+                        }
+                        Err(message) => {
+                            state.snapshot.error_text = message;
+                            state.snapshot.buffering = false;
+                            state.playing = false;
+                            emit(&snapshot_tx, &events_tx, &state, PlayerEvent::ErrorChanged);
+                        }
+                    }
+                }
+            }
             _ = tick_rx.recv() => {
-                if state.playing {
-                    if state.duration_ms > 0 {
-                        state.position_ms += 500;
-                        if state.position_ms >= state.duration_ms {
-                            // natural end
-                            let ended = state.queue.get(state.index.unwrap_or(0)).map(|r| r.track.clone());
-                            if let Some(track) = ended {
-                                let _ = events_tx.send(PlayerEvent::TrackEnded(super::TrackEnded { track, context: state.context.clone(), played: 0.0, end: 0.0, natural: true, local: true }));
+                if let Some(message) = audio.take_error() {
+                    state.snapshot.error_text = message;
+                    state.snapshot.buffering = false;
+                    state.playing = false;
+                    emit(&snapshot_tx, &events_tx, &state, PlayerEvent::ErrorChanged);
+                } else if state.playing {
+                    if audio.take_ended() {
+                        state.position_ms = state.duration_ms;
+                        let ended = row_at(&state, state.index.unwrap_or(0)).map(|r| r.track.clone());
+                        if let Some(track) = ended {
+                            let _ = events_tx.send(PlayerEvent::TrackEnded(super::TrackEnded {
+                                track,
+                                context: state.context.clone(),
+                                played: state.position_ms as f64 / 1000.0,
+                                end: state.duration_ms as f64 / 1000.0,
+                                natural: true,
+                                local: true,
+                            }));
+                        }
+                        match state.repeat {
+                            Repeat::One => {
+                                state.position_ms = 0;
+                                play_current(&mut state, &audio, &config, client.clone(), &load_tx);
+                                emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
                             }
-                            match state.repeat {
-                                Repeat::One => { state.position_ms = 0; play_current(&mut state, &mut audio, &config, client.clone()).await; }
-                                _ => {
-                                    if let Some(next) = next_index(&state) {
-                                        state.index = Some(next);
-                                        state.position_ms = 0;
-                                        play_current(&mut state, &mut audio, &config, client.clone()).await;
-                                    } else {
-                                        state.playing = false;
-                                    }
+                            Repeat::All => {
+                                let total = state.queue.len() + state.manual.len();
+                                if total > 0 {
+                                    let next = state.index.map(|i| i + 1).filter(|i| *i < total).unwrap_or(0);
+                                    state.index = Some(next);
+                                    state.position_ms = 0;
+                                    play_current(&mut state, &audio, &config, client.clone(), &load_tx);
+                                    emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
+                                } else {
+                                    state.playing = false;
+                                }
+                            }
+                            Repeat::Off => {
+                                if let Some(next) = next_index(&state) {
+                                    state.index = Some(next);
+                                    state.position_ms = 0;
+                                    play_current(&mut state, &audio, &config, client.clone(), &load_tx);
+                                    emit(&snapshot_tx, &events_tx, &state, PlayerEvent::TrackChanged);
+                                } else {
+                                    state.playing = false;
+                                    audio.stop();
+                                    emit(&snapshot_tx, &events_tx, &state, PlayerEvent::StateChanged);
                                 }
                             }
                         }
+                    } else {
+                        let position = audio.position_ms();
+                        if position != state.position_ms {
+                            state.position_ms = position;
+                            emit(&snapshot_tx, &events_tx, &state, PlayerEvent::PositionChanged);
+                        }
                     }
-                    emit(&snapshot_tx, &events_tx, &state, PlayerEvent::PositionChanged);
                 }
-                let _ = &current_uri;
             }
         }
     }
@@ -639,76 +693,74 @@ fn playlist_tracks(v: &serde_json::Value) -> Vec<TrackItem> {
     out
 }
 
-async fn play_current(
+/// Row at a combined queue index (context rows first, then manual rows).
+fn row_at(state: &State, index: usize) -> Option<&QueueRow> {
+    state
+        .queue
+        .get(index)
+        .or_else(|| state.manual.get(index.saturating_sub(state.queue.len())))
+}
+
+/// A finished background load, tagged with the request it belongs to.
+struct LoadDone {
+    seq: u64,
+    result: Result<(Vec<u8>, u32), String>,
+}
+
+/// Start loading the current row: resolve the stream, download it, and hand
+/// the bytes to the audio thread. Network work stays off the actor loop.
+fn play_current(
     state: &mut State,
-    audio: &mut Audio,
+    audio: &Audio,
     config: &PlayerConfig,
     client: Arc<YtClient>,
+    load_tx: &mpsc::UnboundedSender<LoadDone>,
 ) {
-    let track = state.queue.get(state.index.unwrap_or(0)).map(|r| r.track.clone())
-        .or_else(|| state.manual.get(0).map(|r| r.track.clone()));
-    let Some(track) = track else { return };
+    let Some(track) = row_at(state, state.index.unwrap_or(0)).map(|r| r.track.clone()) else {
+        return;
+    };
     state.duration_ms = track.duration_ms;
     state.position_ms = 0;
-    // fetch stream URL
-    let video_id = track.track_id.clone();
-    match client.get_song(&video_id).await {
-        Ok(song) => {
-            if let Some((url, bitrate)) = super::stream::pick_audio_url(&song) {
-                state.snapshot.codec = codec_label((bitrate / 1000) as u16);
-                // download then play
-                match config.http.get(&url).send().await {
-                    Ok(resp) => {
-                        if let Ok(bytes) = resp.bytes().await {
-                            if let Err(e) = audio.load_bytes(bytes.to_vec()) {
-                                state.snapshot.error_text = format!("Audio decode failed: {e}");
-                            } else {
-                                state.playing = true;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        state.snapshot.error_text = format!("Stream download failed: {e}");
-                    }
-                }
-            } else {
-                state.snapshot.error_text = "No playable audio stream (sign-in or age restriction?)".to_string();
-            }
-        }
-        Err(YtError::NotSignedIn) => {
-            state.snapshot.error_text = "Sign in to YouTube Music to play".to_string();
-        }
-        Err(e) => {
-            state.snapshot.error_text = e.user_text();
-        }
-    }
+    state.snapshot.buffering = true;
+    state.snapshot.error_text.clear();
+    audio.stop();
+    audio.set_paused(false);
+    state.playing = true;
+    state.load_seq += 1;
+    let seq = state.load_seq;
+    let http = config.http.clone();
+    let load_tx = load_tx.clone();
+    tokio::spawn(async move {
+        let result = load_track(&client, &http, &track).await;
+        let _ = load_tx.send(LoadDone { seq, result });
+    });
 }
 
-// Audio output stub: stream URLs are resolved via get_song and bytes are
-// downloaded; actual device output is wired to fastframe-audio in follow-up
-// (rodio playback conflicts with fastframe's cpal 0.18/alsa). Queue/state
-// machine and position ticker still run so the UI is testable end-to-end.
-struct Audio {
-    duration: Duration,
-    started: Option<std::time::Instant>,
-    volume: f64,
-    data: Vec<u8>,
-}
-
-impl Audio {
-    fn new(volume: f64) -> Self {
-        Self { duration: Duration::ZERO, started: None, volume, data: Vec::new() }
+async fn load_track(
+    client: &YtClient,
+    http: &reqwest::Client,
+    track: &TrackItem,
+) -> Result<(Vec<u8>, u32), String> {
+    let song = client
+        .get_song(&track.track_id)
+        .await
+        .map_err(|e| match e {
+            YtError::NotSignedIn => "Sign in to YouTube Music to play".to_string(),
+            other => other.user_text(),
+        })?;
+    let (url, bitrate) = super::stream::pick_audio_url(&song)
+        .ok_or_else(|| "No playable audio stream (sign-in or age restriction?)".to_string())?;
+    let response = http
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Stream download failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("Stream download failed: HTTP {}", response.status()));
     }
-    fn load_bytes(&mut self, bytes: Vec<u8>) -> anyhow::Result<()> {
-        self.data = bytes;
-        self.started = Some(std::time::Instant::now());
-        // TODO(fastframe): decode via symphonia and hand samples to the mixer.
-        Ok(())
-    }
-    fn toggle(&mut self) {}
-    fn resume(&mut self) { self.started = Some(std::time::Instant::now()); }
-    fn pause(&mut self) {}
-    fn stop(&mut self) {}
-    fn seek(&mut self, _pos: Duration) {}
-    fn set_volume(&mut self, v: f64) { self.volume = v.clamp(0.0, 1.0); }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Stream download failed: {e}"))?;
+    Ok((bytes.to_vec(), bitrate))
 }

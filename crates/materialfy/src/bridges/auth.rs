@@ -239,13 +239,21 @@ impl qobject::Auth {
     }
 
     /// Снимок сервиса → свойства; сигнал — только для изменившихся групп.
+    /// QML знает «signedOut» | «checking» | «signedIn» | «error»; yt-services
+    /// говорит «idle» | «waiting» | «ready» | «failed» — переводим здесь.
     fn apply(mut self: Pin<&mut Self>, next: AuthSnapshot) {
         let prev = std::mem::replace(&mut self.as_mut().rust_mut().snapshot, next.clone());
         if prev == next {
             return;
         }
         if prev.state != next.state {
-            self.as_mut().rust_mut().state = QString::from(next.state.as_str());
+            let qml_state = match next.state {
+                yt_services::AuthState::Idle => "signedOut",
+                yt_services::AuthState::Waiting => "checking",
+                yt_services::AuthState::Ready => "signedIn",
+                yt_services::AuthState::Failed => "error",
+            };
+            self.as_mut().rust_mut().state = QString::from(qml_state);
             self.as_mut().state_changed();
         }
         if prev.error_text != next.error_text || prev.error_code != next.error_code {
@@ -265,7 +273,12 @@ impl qobject::Auth {
             || prev.playback_error_code != next.playback_error_code
         {
             let mut this = self.as_mut().rust_mut();
-            this.playback_state = QString::from(next.playback.as_str());
+            let qml_playback = match next.playback {
+                yt_services::PlaybackAuthState::Authorized => "ready",
+                yt_services::PlaybackAuthState::Authorizing => "connecting",
+                yt_services::PlaybackAuthState::Unavailable | yt_services::PlaybackAuthState::Failed => "unavailable",
+            };
+            this.playback_state = QString::from(qml_playback);
             this.playback_error = QString::from(next.playback_error.as_str());
             this.playback_error_code = QString::from(next.playback_error_code.as_str());
             self.as_mut().playback_changed();

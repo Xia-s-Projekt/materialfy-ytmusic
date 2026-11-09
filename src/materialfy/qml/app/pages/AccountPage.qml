@@ -4,10 +4,9 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Аккаунт. До входа — «Войти через Spotify» (Premium): один вход через сессию Spotify (PKCE в браузере,
-// ответ на 127.0.0.1:8898) открывает и медиатеку, и музыку на этом компьютере. «Без Premium» — вход
-// Web API (127.0.0.1:8989): медиатека, поиск и пульт, без звука здесь. Ждём браузер → подключаемся →
-// «Готово, {имя}». После входа — сводка аккаунта. Смена состояния — сквозное затухание.
+// Аккаунт. До входа — «Войти в YouTube Music»: вставляем заголовки браузера (headers-auth JSON)
+// в поле ниже — приложение само проверяет и сохраняет. После входа — сводка аккаунта.
+// Смена состояния — сквозное затухание.
 Page {
     id: page
 
@@ -62,16 +61,14 @@ Page {
     // подсказку выбираем по стабильному коду Auth.errorCode)
     function _errorHint(text) {
         const code = text !== "" ? (Auth.errorCode ?? "") : ""
-        if (code === "free" || text.indexOf("Free") >= 0)
-            return I18n.t("Without Premium you can sign in another way — through the Web API: you get your library, search and a remote for phones and speakers, but no music on this computer. Spotify sometimes limits these requests.")
+        if (code === "expired" || text.indexOf("expired") >= 0)
+            return I18n.t("Your copied headers have expired. Open music.youtube.com, copy the headers again and paste them here.")
         if (code === "cancelled")
-            return I18n.t("You pressed “Cancel” on the Spotify page. Try again — you can revoke the permission in your Spotify account settings.")
-        if (code === "portBusy")
-            return I18n.t("Close the program listening on this port, or restart your computer and sign in again.")
+            return I18n.t("The sign-in was cancelled. Copy the headers from music.youtube.com again and paste them here.")
         if (code === "noResponse")
-            return I18n.t("Check your internet connection. If Spotify is only reachable through a proxy, turn it on in network settings.")
-        if (code === "accountMismatch")
-            return I18n.t("Sign out of the extra account on accounts.spotify.com and sign in again.")
+            return I18n.t("Check your internet connection. If YouTube Music is only reachable through a proxy, turn it on in network settings.")
+        if (code === "badJson" || text.indexOf("JSON") >= 0)
+            return I18n.t("The pasted text is not valid headers JSON. Copy the browser request headers again from music.youtube.com.")
         return ""
     }
 
@@ -165,12 +162,12 @@ Page {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     text: ({
-                        checking: I18n.t("Connecting to Spotify…"),
-                        connecting: I18n.t("Connecting to Spotify…"),
+                        checking: I18n.t("Connecting to YouTube Music…"),
+                        connecting: I18n.t("Connecting to YouTube Music…"),
                         browser: I18n.t("Confirm sign-in in your browser"),
                         error: I18n.t("Couldn't sign in"),
                         welcome: page.displayName !== "" ? I18n.t("All set, {0}", page.displayName) : I18n.t("All set")
-                    })[page.shown] ?? I18n.t("Sign in through Spotify")
+                    })[page.shown] ?? I18n.t("Sign in to YouTube Music")
                     type: page.compact ? "headlineSmall" : "headlineMedium"
                     wrapMode: Text.WordWrap
                     elide: Text.ElideNone
@@ -182,15 +179,14 @@ Page {
                     visible: text !== ""
                     horizontalAlignment: Text.AlignHCenter
                     text: ({
-                        checking: I18n.t("Checking your saved session"),
-                        connecting: I18n.t("Checking your account and connecting to Spotify"),
-                        browser: page.compact ? I18n.t("Press “Accept” on accounts.spotify.com — this window comes back on its own.")
-                                              : I18n.t("We opened accounts.spotify.com. Press “Accept” there, and this window comes back on its own."),
+                        checking: I18n.t("Checking your saved sign-in"),
+                        connecting: I18n.t("Checking your account and connecting to YouTube Music"),
+                        browser: I18n.t("Paste the headers JSON below — the app validates and saves it itself."),
                         error: "",
                         welcome: page.playbackHere
-                                 ? I18n.t("Library, search, remote and music on this computer are ready.")
-                                 : I18n.t("Library, search and a remote for your devices are ready. Listening on this computer needs Spotify Premium.")
-                    })[page.shown] ?? (page.compact ? I18n.t("One sign-in with Spotify Premium — your library and music here. You enter your password only on the Spotify website.") : I18n.t("One sign-in with Spotify Premium opens your library and music on this computer. You sign in in the browser: the password is entered only on the Spotify website, Materialfy never sees it.") + " "
+                                 ? I18n.t("Library, search and music on this computer are ready.")
+                                 : I18n.t("Library and search are ready. Music on this computer starts when you play a track.")
+                    })[page.shown] ?? (page.compact ? I18n.t("Paste the headers from music.youtube.com below — the app validates and saves them itself.") : I18n.t("YouTube Music has no desktop OAuth: copy the request headers from music.youtube.com (DevTools → Network) and paste them below. The app validates and saves them itself — no files, no terminal.") + " "
                                        + (Qt.platform.os === "windows" ? I18n.t("Keys are stored in Windows Credential Manager.")
                                           : Qt.platform.os === "osx" ? I18n.t("Keys are stored in the macOS Keychain.")
                                           : I18n.t("Keys are stored in the system keychain.")))
@@ -222,7 +218,7 @@ Page {
                             spacing: 2
                             Label {
                                 Layout.fillWidth: true
-                                text: Auth.errorText !== "" ? Auth.errorText : I18n.t("Spotify didn't respond")
+                                text: Auth.errorText !== "" ? Auth.errorText : I18n.t("YouTube Music didn't respond")
                                 type: "titleSmall"
                                 color: Theme.fgErrorContainer
                                 wrapMode: Text.WordWrap
@@ -253,12 +249,6 @@ Page {
                     waitingText: page.shown === "browser" ? I18n.t("Waiting for confirmation…") : page.shown === "connecting" ? I18n.t("Signing in…") : ""
                 }
 
-                BrowserWaitRow {
-                    visible: page.shown === "browser" && !page.compact
-                    Layout.fillWidth: true
-                    Layout.topMargin: 4
-                }
-
                 // Действия
                 RowLayout {
                     visible: page.shown !== "checking" && page.shown !== "connecting"
@@ -274,20 +264,7 @@ Page {
                         onClicked: Auth.startLogin()
                     }
                     Button {
-                        visible: page.shown === "signedOut"
-                        text: I18n.t("Without Premium")
-                        style: "text"
-                        onClicked: Auth.startWebLogin()
-                    }
-                    Button {
-                        visible: page.shown === "error" && page.freeRefused
-                        text: I18n.t("Sign in without Premium")
-                        icon: "open_in_new"
-                        size: "m"
-                        onClicked: Auth.startWebLogin()
-                    }
-                    Button {
-                        visible: page.shown === "error" && !page.freeRefused
+                        visible: page.shown === "error"
                         text: I18n.t("Retry")
                         icon: "refresh"
                         size: "m"
@@ -300,71 +277,11 @@ Page {
                         style: "text"
                         onClicked: page._proxy()
                     }
-                    // в рейле — кнопки вместо карточки «Браузер не открылся?»
                     Button {
-                        visible: page.shown === "browser" && page.compact
-                        text: I18n.t("Open again")
-                        icon: "open_in_new"
-                        style: "tonal"
-                        onClicked: Auth.reopenBrowser()
-                    }
-                    Button {
-                        visible: page.shown === "browser" && page.compact
-                        text: I18n.t("Link")
-                        icon: "content_copy"
-                        style: "outlined"
-                        onClicked: Auth.copyAuthUrl()
-                    }
-                    // адрес ответа — чип рядом с «Отмена»
-                    Item {
-                        visible: page.shown === "browser" && !page.compact
-                        implicitWidth: addrRow.implicitWidth + 20
-                        implicitHeight: 40
-                        Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width
-                            height: 28
-                            radius: Theme.shape.small
-                            color: Theme.surfaceContainerHighest
-                            Row {
-                                id: addrRow
-                                anchors.centerIn: parent
-                                spacing: 6
-                                Icon { anchors.verticalCenter: parent.verticalCenter; name: "lock"; size: 16; color: Theme.fgSurfaceVariant }
-                                Label {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: I18n.t("The reply comes to 127.0.0.1:{0} · your computer", Auth.authPort > 0 ? Auth.authPort : 8898)
-                                    type: "labelMedium"
-                                    color: Theme.fgSurfaceVariant
-                                }
-                            }
-                        }
-                    }
-                    Button {
-                        visible: page.shown === "browser"
-                        text: I18n.t("Cancel")
-                        style: "text"
-                        onClicked: Auth.cancelLogin()
-                    }
-                    Button {
-                        visible: page.shown === "welcome" && page.playbackHere
+                        visible: page.shown === "welcome"
                         text: I18n.t("Get started")
                         icon: "arrow_forward"
                         size: "m"
-                        onClicked: page.router ? page.router.reset("home") : null
-                    }
-                    // вошли без Premium (Web API): звук здесь — отдельным входом через сессию, если Premium есть
-                    Button {
-                        visible: page.shown === "welcome" && !page.playbackHere && page.premium
-                        text: I18n.t("Next: listen here")
-                        icon: "speaker"
-                        size: "m"
-                        onClicked: page._go("playback")
-                    }
-                    Button {
-                        visible: page.shown === "welcome" && !page.playbackHere
-                        text: page.premium ? I18n.t("Later, remote only") : I18n.t("Next")
-                        style: "text"
                         onClicked: page.router ? page.router.reset("home") : null
                     }
                 }
@@ -489,7 +406,7 @@ Page {
                         Layout.alignment: Qt.AlignVCenter
                         spacing: 6
                         Label {
-                            text: I18n.t("Spotify account").toUpperCase()
+                            text: I18n.t("YouTube Music account").toUpperCase()
                             type: "labelLarge"
                             weight: 600
                             font.letterSpacing: 1.2
@@ -497,13 +414,13 @@ Page {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: page.displayName !== "" ? page.displayName : I18n.t("Spotify account")
+                            text: page.displayName !== "" ? page.displayName : I18n.t("YouTube Music account")
                             type: acc.narrow ? "headlineLarge" : "displayMedium"
                             weight: 700
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: [page.premium ? "Spotify Premium" : "Spotify Free", acc.country, page.account.email ?? ""].filter(x => x).join(" · ")
+                            text: [acc.country, page.account.email ?? ""].filter(x => x).join(" · ")
                             type: "bodyLarge"
                             color: Theme.fgSurfaceVariant
                         }
@@ -513,20 +430,14 @@ Page {
                             spacing: 8
                             Button { text: I18n.t("Playback"); icon: "speaker"; style: "tonal"; onClicked: page._go("playback") }
                             Button {
-                                visible: (page.account.id ?? "") !== ""
-                                text: I18n.t("Open in Spotify")
+                                text: I18n.t("Open in YouTube Music")
                                 icon: "open_in_new"
                                 style: "outlined"
-                                onClicked: Qt.openUrlExternally("https://open.spotify.com/user/" + page.account.id)
+                                onClicked: Qt.openUrlExternally("https://music.youtube.com")
                             }
                             Button { text: I18n.t("Sign out"); icon: "logout"; style: "outlined"; onClicked: Auth.signOut() }
                         }
                     }
-                }
-
-                PremiumNotice {
-                    visible: !page.premium && page.st === "signedIn"
-                    Layout.fillWidth: true
                 }
 
                 // Медиатека: счётчики, клик открывает раздел
@@ -560,10 +471,9 @@ Page {
                         InfoCard {
                             icon: Auth.playbackState === "ready" ? "computer" : "cast"
                             title: Auth.playbackState === "ready" ? I18n.t("Playing on this computer")
-                                 : Auth.playbackState === "premiumRequired" ? I18n.t("Remote only")
                                  : I18n.t("Playback here isn't set up")
-                            text: Auth.playbackState === "ready" ? I18n.t("Music plays here and this computer shows up in Spotify Connect.")
-                                : I18n.t("Control playback on your phone or speakers from here.")
+                            text: Auth.playbackState === "ready" ? I18n.t("Music plays on this computer.")
+                                : I18n.t("Pick a track and it plays here — no other devices needed.")
                             action: I18n.t("Playback")
                             onTriggered: page._go("playback")
                         }
@@ -572,9 +482,9 @@ Page {
                             title: Auth.tokenStorage === "keyring"
                                    ? (Qt.platform.os === "windows" ? I18n.t("Keys in Credential Manager") : I18n.t("Keys in the keychain"))
                                    : I18n.t("Sign-in")
-                            text: I18n.t("Signing out removes this computer's keys from storage. You can revoke the app's permissions on spotify.com under “Apps”.")
-                            action: I18n.t("Open spotify.com")
-                            onTriggered: Qt.openUrlExternally("https://www.spotify.com/account/apps/")
+                            text: I18n.t("Signing out removes this computer's saved headers from storage. To fully sign out everywhere, remove them in your Google account.")
+                            action: I18n.t("Open music.youtube.com")
+                            onTriggered: Qt.openUrlExternally("https://music.youtube.com")
                         }
                     }
                 }

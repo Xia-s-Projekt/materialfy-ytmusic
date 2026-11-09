@@ -1,13 +1,14 @@
 //! YouTube Music player without Qt, replacing librespot (sf-player).
 //!
 //! Playback: `ytmusicapi.get_song(videoId)` → `streamingData.adaptiveFormats`
-//! (audio-only, highest bitrate) → download to a temp file → `rodio` sink.
+//! (audio-only, AAC `audio/mp4` preferred) → download into memory → `rodio`.
 //! No Spotify Connect, no mDNS, no remote devices: this computer only.
 //!
-//! Opus in WebM/Opus (`audio/webm; codecs="opus"`) decodes in rodio 0.21 via
-//! symphonia; if a format cannot decode we surface `error_text` instead of
-//! silence (see README "What's missing").
+//! Symphonia (via rodio 0.23) decodes the AAC stream. Opus is not decoded by
+//! symphonia, so `stream::pick_audio_url` only falls back to it when no MP4
+//! stream exists; the failure then surfaces through `error_text`.
 
+pub mod audio;
 pub mod handle;
 pub mod stream;
 
@@ -20,7 +21,6 @@ pub struct PlayerSubscription {
 }
 
 use md3_model::{DeviceItem, PlayContext, QueueRow, TrackItem};
-use tokio::sync::{broadcast, watch};
 
 pub const REMOTE_POLL_ACTIVE_S: u64 = 4;
 pub const REMOTE_POLL_IDLE_S: u64 = 20;

@@ -1,6 +1,6 @@
 [package]
 name = "yt-player"
-description = "YouTube Music player: stream URLs via ytmusicapi get_song (output stub)"
+description = "YouTube Music player: stream URLs via ytmusicapi get_song, local output via rodio"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,3 +18,6 @@ futures.workspace = true
 reqwest.workspace = true
 tracing.workspace = true
 log.workspace = true
+# 0.23 is the first rodio on cpal 0.18, the same cpal fastframe-audio uses.
+# Symphonia (mp4/aac) decodes YouTube's `audio/mp4`; Opus is not supported.
+rodio = { version = "0.23", default-features = false, features = ["playback", "mp4"] }

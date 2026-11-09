@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Две карточки входа: 1 — вход в Spotify (медиатека, поиск, пульт), 2 — воспроизведение здесь. С Premium
-// оба выполняет один вход через сессию Spotify; вход без Premium (Web API) даёт только первый.
+// Две карточки входа: 1 — вход в YouTube Music (медиатека, поиск), 2 — воспроизведение здесь.
+// Один вход через заголовки открывает и то, и другое.
 // Активная — обводка primary 2 px, у выполненного номер морфится в «солнце» с галочкой;
 // шаг 2 до выполнения шага 1 — surfaceContainerLow. В узкой колонке карточки идут друг под другом.
 GridLayout {
@@ -129,10 +129,10 @@ GridLayout {
 
     StepCard {
         number: 1
-        title: I18n.t("Library and remote")
+        title: I18n.t("Library")
         // в сжатом виде — одна строка вместо описания и метки
-        text: root.compact ? (root.done1 ? I18n.t("Done") : root.waitingText !== "" ? root.waitingText : I18n.t("Playlists, search, remote"))
-                           : I18n.t("Playlists, Liked Songs, search, history and a remote for Spotify Connect — phone, speaker, TV.")
+        text: root.compact ? (root.done1 ? I18n.t("Done") : root.waitingText !== "" ? root.waitingText : I18n.t("Playlists, search"))
+                           : I18n.t("Playlists, Liked Songs, search and history.")
         tag: root.compact ? "" : root.done1 ? I18n.t("Done") : root.waitingText !== "" ? root.waitingText : I18n.t("One sign-in · now")
         tagIcon: root.done1 ? "check" : root.waitingText !== "" ? "schedule" : "login"
         isActive: root.active === 1 && !root.done1
@@ -142,10 +142,10 @@ GridLayout {
     StepCard {
         number: 2
         title: root.compact ? I18n.t("Listen here") : I18n.t("Listen on this computer")
-        text: root.compact ? (root.done2 ? I18n.t("Done") : I18n.t("Premium — same sign-in"))
-                           : I18n.t("If you have Spotify Premium, it turns on with the same sign-in: this computer becomes a Spotify Connect device.")
-        tag: root.compact ? "" : root.done2 ? I18n.t("Done") : I18n.t("Premium · same sign-in")
-        tagIcon: root.done2 ? "check" : "workspace_premium"
+        text: root.compact ? (root.done2 ? I18n.t("Done") : I18n.t("Same sign-in"))
+                           : I18n.t("The same sign-in turns on playback here: pick a track and it plays on this computer.")
+        tag: root.compact ? "" : root.done2 ? I18n.t("Done") : I18n.t("Same sign-in")
+        tagIcon: root.done2 ? "check" : "play_arrow"
         isActive: root.active === 2 && !root.done2
         done: root.done2
         later: !root.done1
