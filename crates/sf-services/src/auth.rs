@@ -1,8 +1,8 @@
-//! Вход (исполнитель «services-core»). Основной вход — сессия librespot: PKCE в браузере (:8898, Premium)
-//! → креды librespot → PlayerHandle::connect_local; аккаунт и профиль — из сессии, Web API не нужен.
-//! Web API (общий или личный Client ID, :8989) — необязательное ускорение и вход для Free; прокси; выход.
-//! Вошли = есть проверенный токен Web API ИЛИ вход воспроизведения (сохранённые креды librespot).
-//! Последовательность — spotifast/src/backend.rs (sign_in_source, on_account_checked, connect_engine,
+//! Sign-in (provider "services-core"). The main sign-in is the librespot session: PKCE in the browser (:8898, Premium)
+//! → librespot credentials → PlayerHandle::connect_local; the account and profile — from the session, Web API is not needed.
+//! Web API (shared or personal Client ID, :8989) — an optional speedup and sign-in for Free; proxy; logout.
+//! Signed in = there is a verified Web API token OR a playback sign-in (saved librespot credentials).
+//! The sequence — spotifast/src/backend.rs (sign_in_source, on_account_checked, connect_engine,
 //! restore_spotify_grants).
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
@@ -21,16 +21,16 @@ use mf_platform::{SettingKey, SettingValue, SettingsStore};
 
 use crate::lock;
 
-/// Состояние входа (Web API). as_str → Auth.state в QML.
+/// Sign-in state (Web API). as_str → Auth.state in QML.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AuthState {
-    /// восстановление сохранённого входа
+    /// restoring a saved sign-in
     #[default]
     Checking,
     SignedOut,
-    /// браузер открыт, ждём редирект на 127.0.0.1:8989
+    /// the browser is open, waiting for a redirect to 127.0.0.1:8989
     AwaitingBrowser,
-    /// код получен, обмен/проверка аккаунта
+    /// the code is received, exchange/account check
     Connecting,
     SignedIn,
     Error,
@@ -49,19 +49,19 @@ impl AuthState {
     }
 }
 
-/// Воспроизведение на этом ПК (второй грант + librespot). as_str → Auth.playbackState.
+/// Playback on this PC (a second grant + librespot). as_str → Auth.playbackState.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PlaybackAuthState {
-    /// не включено (Premium есть, разрешения нет)
+    /// not enabled (Premium is there, no permission)
     #[default]
     None,
-    /// браузер открыт, ждём редирект на 127.0.0.1:8898
+    /// the browser is open, waiting for a redirect to 127.0.0.1:8898
     Authorizing,
-    /// поднимается Engine
+    /// the Engine is coming up
     Connecting,
     Ready,
     Error,
-    /// аккаунт Free — движок не запускается (librespot 0.8 делает exit(1))
+    /// a Free account — the engine is not started (librespot 0.8 does exit(1))
     PremiumRequired,
 }
 
@@ -78,35 +78,35 @@ impl PlaybackAuthState {
     }
 }
 
-/// Снимок для моста Auth.
+/// Snapshot for the Auth bridge.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AuthSnapshot {
     pub state: AuthState,
-    /// по-русски: «Вход отменён в браузере», «Порт 8989 занят другой программой», …
+/// sign-in error text in the user's language (mf_i18n); the stable code is `error_code`
     pub error_text: String,
-    /// URL accounts.spotify.com/authorize текущего ожидания (Web API или playback), "" — нет
+/// the accounts.spotify.com/authorize URL of the current wait (Web API or playback), "" — none
     pub auth_url: String,
-    /// порт loopback текущего ожидания (8989 | 8898), 0 — нет
+/// the loopback port of the current wait (8989 | 8898), 0 — none
     pub auth_port: u16,
     pub playback: PlaybackAuthState,
     pub playback_error: String,
-    /// стабильный код error_text для подсказок в QML (текст переведён): "" | "free" | "cancelled" | "portBusy" |
+/// a stable error_text code for hints in QML (the text is translated): "" | "free" | "cancelled" | "portBusy" |
     /// "noResponse" | "accountMismatch" | "otherAccount" | "audioKey"
     pub error_code: String,
-    /// то же для playback_error
+/// the same for playback_error
     pub playback_error_code: String,
     pub account: Option<Account>,
     /// "keyring" | ""
     pub token_storage: String,
-    /// личный Client ID ("" — нет) и его состояние: "none" | "authorizing" | "ready" | "error"
+/// personal Client ID ("" — none) and its state: "none" | "authorizing" | "ready" | "error"
     pub personal_client_id: String,
     pub personal_state: String,
-    /// токен общего Web API (необязателен при входе через сессию): "none" | "authorizing" | "ready" | "error"
+/// the shared Web API token (optional when signing in through the session): "none" | "authorizing" | "ready" | "error"
     pub web_state: String,
-    /// применение прокси: "" | "applying" | "ok" | "error"
+/// proxy application: "" | "applying" | "ok" | "error"
     pub proxy_state: String,
     pub proxy_error: String,
-    /// параметры движка в настройках (glue::engine_config) отличаются от запущенного; сброс — в restart_engine
+/// the engine parameters in settings (glue::engine_config) differ from the running ones; the reset is in restart_engine
     pub engine_restart_pending: bool,
 }
 
@@ -114,13 +114,13 @@ pub struct AuthSnapshot {
 pub enum AuthEvent {
     SignedIn(Account),
     SignedOut,
-    /// локальное воспроизведение готово (device_id)
+/// local playback is ready (device_id)
     PlaybackReady(String),
-    /// вход есть, но аккаунт Free
+/// signed in, but the account is Free
     PremiumRequired,
 }
 
-/// Поля формы прокси (Settings → «Сеть»); пароль не сохраняется в настройках.
+/// Proxy form fields (Settings → "Network"); the password is not saved in settings.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProxyInput {
     /// "off" | "system" | "http" | "socks"
@@ -134,22 +134,22 @@ pub struct ProxyInput {
 const PREMIUM_NEEDED: &str = "Playing on this computer requires Spotify Premium";
 const OTHER_ACCOUNT: &str = "A different Spotify account was chosen in the browser — allow playback with the same account";
 const EXPIRED: &str = "Your Spotify sign-in has expired — sign in again";
-/// Вход через сессию librespot на Free: librespot такой аккаунт не обслуживает.
+/// Sign-in through the librespot session on Free: librespot does not serve such an account.
 const FREE_ACCOUNT: &str = "This is a Spotify Free account — Materialfy can only play music with Premium";
 const PORT_BUSY: &str = "Port {0} is in use by another program";
 const SIGN_IN_REFUSED: &str = "Sign-in was cancelled in the browser";
 const NO_RESPONSE: &str = "Spotify isn't responding — check your proxy";
 const ACCOUNT_MISMATCH: &str = "Permissions were granted to different Spotify accounts";
 const NETWORK_MISCONFIGURED: &str = "Network settings are invalid: {0}";
-/// librespot может зависнуть на рукопожатии; у движка свой срок (75 с) с понятным текстом — этот страхующий
+/// librespot can hang on the handshake; the engine has its own deadline (75 s) with a clear message — this one is the backstop
 const CONNECT_DEADLINE: Duration = Duration::from_secs(90);
-/// Чей токен воспроизведения: публичный профиль отдаётся и со scope streaming.
+/// /me: whose token it is (the public profile is also returned with the streaming scope).
 const ME_URL: &str = "https://api.spotify.com/v1/me";
-/// Движок упал сам (сон, сеть): повторы с сохранённым грантом, не больше этих за окно.
+/// The engine fell by itself (sleep, network): retries with the saved grant, no more than these per window.
 const ENGINE_RETRY_DELAYS: [Duration; 3] = [Duration::from_secs(5), Duration::from_secs(15), Duration::from_secs(60)];
 const ENGINE_RETRY_WINDOW: Duration = Duration::from_secs(600);
 
-/// Настройки, при смене которых движок надо перезапустить.
+/// Settings whose change requires restarting the engine.
 const ENGINE_KEYS: [SettingKey; 7] = [
     SettingKey::DeviceName,
     SettingKey::Bitrate,
@@ -160,7 +160,7 @@ const ENGINE_KEYS: [SettingKey; 7] = [
     SettingKey::AudioCacheMb,
 ];
 
-/// Отпечаток адреса прокси движка (с логином): заметить смену, не храня пароль в открытом виде.
+/// Fingerprint of the engine's proxy address (with login): to notice a change without storing the password in the open.
 fn proxy_fingerprint(proxy: &ProxyConfig) -> Option<u64> {
     use std::hash::{Hash, Hasher};
     proxy.librespot_url().map(|url| {
@@ -170,7 +170,7 @@ fn proxy_fingerprint(proxy: &ProxyConfig) -> Option<u64> {
     })
 }
 
-/// Чем запущенный движок отличается от настроек (без tap/eq/громкости/autoplay).
+/// How the running engine differs from the settings (without tap/eq/volume/autoplay).
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct EngineKey {
     device_name: String,
@@ -180,7 +180,7 @@ struct EngineKey {
     audio_device: Option<String>,
     audio_cache_dir: Option<PathBuf>,
     audio_cache_limit: Option<u64>,
-    /// отпечаток адреса прокси движка: в адресе может быть пароль, а ключ попадает в отладочный вывод
+    /// fingerprint of the engine's proxy address: the address may contain a password, and the key gets into debug output
     proxy: Option<u64>,
 }
 
@@ -209,33 +209,33 @@ enum Waiting {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Step {
     Restore,
-    /// вход через сессию librespot (Premium)
+    /// sign-in through the librespot session (Premium)
     Login,
-    /// вход через Web API (Free, «без Premium»)
+    /// sign-in through Web API (Free, "without Premium")
     WebLogin,
 }
 
 struct Inner {
     started: bool,
-    /// выход: поздние результаты старого входа отбрасываются
+    /// logout: late results of the old sign-in are discarded
     generation: u64,
-    /// текущее ожидание браузера
+    /// the current browser wait
     attempt: u64,
     waiting: Option<(Waiting, watch::Sender<bool>)>,
-    /// личный вход отложен до конца общего (порт 8989 один)
+    /// the personal sign-in is postponed until the shared one ends (port 8989 is one)
     personal_pending: bool,
     last_step: Step,
     web_tokens: [Option<Arc<WebTokens>>; 2],
     playback_grant: Option<Credentials>,
     engine_busy: bool,
-    /// поколение подключения движка (disable_playback отменяет идущее)
+    /// engine connection generation (disable_playback cancels the one in progress)
     engine_epoch: u64,
     engine_running: Option<EngineKey>,
-    /// автоповторы после падения движка и время последнего
+    /// auto-retries after the engine fell and the time of the last one
     engine_retries: usize,
     engine_retry_at: Option<Instant>,
     premium: Option<bool>,
-    /// карточка аккаунта уже из сессии librespot: профиль Web API её не заменяет, только дополняет
+    /// the account card is already from the librespot session: the Web API profile does not replace it, only supplements
     session_profile: bool,
     proxy: ProxyConfig,
 }
@@ -249,7 +249,7 @@ pub struct AuthService {
     store: sf_auth::Store,
     snapshot: watch::Sender<AuthSnapshot>,
     events: broadcast::Sender<AuthEvent>,
-    /// действующий прокси — для оболочки (QNetworkAccessManager картинок QML)
+    /// the active proxy — for the shell (QNetworkAccessManager of QML pictures)
     proxy: watch::Sender<ProxyConfig>,
     inner: Mutex<Inner>,
     me: Weak<AuthService>,
@@ -269,11 +269,11 @@ fn web_slot(source: ApiSource) -> Slot {
     }
 }
 
-/// Ошибка входа через браузер по-русски; None — вход отменён.
+/// The browser sign-in error in the user's language; None — the sign-in was cancelled.
 fn oauth_error_text(error: &anyhow::Error, port: u16) -> Option<String> {
     let text = format!("{error:#}");
     let lower = text.to_lowercase();
-    // oauth::CANCELLED и прочие ошибки sf-auth — непереведённый английский
+    // oauth::CANCELLED and the other sf-auth errors are untranslated English
     Some(if lower.contains("cancelled") {
         return None;
     } else if lower.contains("unable to listen") {
@@ -293,8 +293,8 @@ fn oauth_error_text(error: &anyhow::Error, port: u16) -> Option<String> {
     })
 }
 
-/// Стабильный код ошибки для QML: тексты уже переведены, сравнивать их там нельзя.
-/// Сравнение — с переводом на текущем языке (текст переведён тем же языком при записи в снимок).
+/// A stable error code for QML: the texts are already translated, they cannot be compared there.
+/// The comparison is with the translation in the current language (the text is translated in the same language when written to the snapshot).
 fn error_code(text: &str) -> &'static str {
     if text.is_empty() {
         return "";
@@ -319,7 +319,7 @@ fn error_code(text: &str) -> &'static str {
     }
 }
 
-/// Ошибка подключения librespot по-русски.
+/// The librespot connection error in the user's language.
 fn connect_error_text(text: &str) -> String {
     let lower = text.to_lowercase();
     if lower.contains("badcredentials") || lower.contains("bad credentials") {
@@ -339,7 +339,7 @@ fn premium_of(product: Option<&str>) -> Option<bool> {
     product.map(|product| product == "premium")
 }
 
-/// Прокси из применённых настроек (+ пароль из слота).
+/// The proxy from the applied settings (+ the password from the slot).
 pub(crate) fn settings_proxy(settings: &SettingsStore, password: Option<&ProxyPassword>) -> ProxyConfig {
     let mode = ProxyMode::from_setting(&settings.get_str(SettingKey::ProxyMode));
     let host = settings.get_str(SettingKey::ProxyHost);
@@ -366,7 +366,7 @@ impl AuthService {
         store: sf_auth::Store,
     ) -> Arc<Self> {
         let personal = settings.get_str(SettingKey::WebClientId).trim().to_owned();
-        // до start() входа нет: с --offline оболочка start() не зовёт, «Входим…» висеть не должно
+        // before start() there is no sign-in: with --offline the shell does not call start(), "Signing in…" must not hang
         let snapshot = AuthSnapshot {
             state: AuthState::SignedOut,
             token_storage: store.backend_name().to_owned(),
@@ -375,7 +375,7 @@ impl AuthService {
             web_state: "none".to_owned(),
             ..Default::default()
         };
-        // тот же прокси, что у HTTP-клиента из Services::start; пароль подставит restore()
+        // the same proxy as the HTTP client from Services::start; restore() will substitute the password
         let proxy = settings_proxy(&settings, None);
         let service = Arc::new_cyclic(|me| Self {
             rt,
@@ -492,7 +492,7 @@ impl AuthService {
         });
     }
 
-    /// Ошибка хранилища секретов: вход не запомнится (без Debug секретов).
+    /// Secret storage error: the sign-in will not be remembered (without Debug of secrets).
     fn storage_notice(&self) -> Arc<dyn Fn(StoreError) + Send + Sync> {
         let me = self.me.clone();
         Arc::new(move |error| {
@@ -526,9 +526,9 @@ impl AuthService {
         Some(kind)
     }
 
-    // --- вход ---------------------------------------------------------------------------------
+    // --- sign-in ---------------------------------------------------------------------------------
 
-    /// Восстановить сохранённые гранты (прокси → shared/personal → playback); нет — signedOut.
+    /// Restore the saved grants (proxy → shared/personal → playback); none — signedOut.
     pub fn start(&self) {
         {
             let mut inner = lock(&self.inner);
@@ -543,7 +543,7 @@ impl AuthService {
             s.error_text.clear();
         });
         if self.settings.get_bool(SettingKey::PlaybackAuthorized) {
-            // «Играть» до подключения движка ждёт его, а не просит выбрать устройство
+            // "Play" waits for it before the engine connects, and does not ask to choose a device
             self.player.expect_local(true);
         }
         self.spawn(|service| async move { service.restore().await });
@@ -575,7 +575,7 @@ impl AuthService {
         }
         let mut verifying = false;
         let mut playback_grant = false;
-        // сначала вход воспроизведения: с ним приложение открывается сразу, не дожидаясь Web API
+        // the playback sign-in first: with it the app opens at once, without waiting for Web API
         for slot in [Slot::Playback, Slot::Shared, Slot::Personal] {
             let lease = self.store.lease(slot);
             let loaded = lease.load().await;
@@ -602,7 +602,7 @@ impl AuthService {
                     let username = credentials.username.clone().filter(|name| !name.is_empty());
                     lock(&self.inner).playback_grant = Some(credentials);
                     if let Some(username) = username {
-                        // грант есть — воспроизведение разрешено (без него не будет и входа)
+                        // there is a grant — playback is allowed (without it there will be no sign-in either)
                         self.settings.set(SettingKey::PlaybackAuthorized, SettingValue::Bool(true));
                         self.player.expect_local(true);
                         self.api.set_session_account(Some(AccountId::new(username.clone())));
@@ -659,10 +659,10 @@ impl AuthService {
         }
     }
 
-    /// Проверить грант через GET /me; только после этого он пишется в хранилище.
-    /// Сохранённый грант при известном аккаунте (профиль прошлой проверки того же приложения или вход
-    /// воспроизведения) ставится сразу, а /me лишь подтверждает его в фоне: запуск не ждёт Web API, а
-    /// лимит частоты общего ключа (429) вход не ломает. Истёкший токен всплывёт на /me или первом запросе.
+    /// Check the grant through GET /me; only after that is it written to storage.
+    /// A saved grant with a known account (the profile of the last check of the same application or the playback
+    /// sign-in) is put in at once, and /me only confirms it in the background: the launch does not wait for Web API, and
+    /// the shared key's rate limit (429) does not break the sign-in. An expired token will surface on /me or the first request.
     async fn verify(self: Arc<Self>, source: ApiSource, token: StoredToken, lease: sf_auth::Lease, generation: u64) {
         let client_id = token.client_id.clone();
         let known = load_profile(source, &client_id)
@@ -780,7 +780,7 @@ impl AuthService {
         };
         let expired = matches!(error, ApiError::SignInExpired { .. });
         match source {
-            // вход через сессию остаётся: без Web API работает почти всё
+            // the sign-in through the session remains: without Web API almost everything works
             ApiSource::Shared if self.session_signed_in() => self.update(|s| {
                 s.web_state = if expired { "none" } else { "error" }.to_owned();
                 s.error_text = text;
@@ -818,7 +818,7 @@ impl AuthService {
         self.api.clear(source);
     }
 
-    /// Ошибка запроса любого сервиса: истёкший вход сбрасывает его грант.
+    /// Any service's request error: an expired sign-in resets its grant.
     pub fn note_api_error(&self, error: &ApiError) {
         let ApiError::SignInExpired { api_source } = error else { return };
         let source = *api_source;
@@ -846,7 +846,7 @@ impl AuthService {
         }
     }
 
-    /// PKCE Web API (общее или личное приложение), ожидание на :8989.
+    /// PKCE Web API (the shared or personal application), waiting on :8989.
     fn begin_web(&self, source: ApiSource) {
         let http = match self.http.client() {
             Ok(http) => http,
@@ -979,19 +979,19 @@ impl AuthService {
         });
     }
 
-    /// «Войти через Spotify» (Premium): один вход — сессия librespot (:8898), с ней и воспроизведение здесь.
+    /// "Sign in with Spotify" (Premium): one sign-in — the librespot session (:8898), with it playback here too.
     pub fn start_login(&self) {
         lock(&self.inner).started = true;
         self.authorize_playback();
     }
 
-    /// «Войти без Premium» / «Ускорить медиатеку»: PKCE общего приложения Web API, ожидание на :8989.
+    /// "Sign in without Premium" / "Speed up the library": PKCE of the shared Web API application, waiting on :8989.
     pub fn start_web_login(&self) {
         lock(&self.inner).started = true;
         self.begin_web(ApiSource::Shared);
     }
 
-    /// «Открыть снова» — тот же auth_url в браузере.
+    /// "Open again" — the same auth_url in the browser.
     pub fn reopen_browser(&self) {
         let url = self.snapshot.borrow().auth_url.clone();
         if !url.is_empty() {
@@ -999,7 +999,7 @@ impl AuthService {
         }
     }
 
-    /// Отменить ожидание браузера (Web API или playback).
+    /// Cancel the browser wait (Web API or playback).
     pub fn cancel_login(&self) {
         let waiting = {
             let inner = lock(&self.inner);
@@ -1035,7 +1035,7 @@ impl AuthService {
         }
     }
 
-    /// Выход: отзыв всех трёх слотов, останов движка, очистка шлюза; кэш не трогается.
+    /// Logout: revoke all three slots, stop the engine, clear the gateway; the cache is not touched.
     pub fn sign_out(&self) {
         self.cancel_waiting();
         {
@@ -1080,7 +1080,7 @@ impl AuthService {
         }
     }
 
-    /// Повтор после ошибки (= start или повтор последнего шага).
+    /// A retry after an error (= start or repeat the last step).
     pub fn retry(&self) {
         let snapshot = self.snapshot();
         if snapshot.state == AuthState::SignedIn {
@@ -1106,8 +1106,8 @@ impl AuthService {
         }
     }
 
-    /// Перечитать профиль (Premium мог появиться — «Проверить снова»): из сессии, если она есть, иначе
-    /// /me — только при уже вставшем Web API (не ждать его).
+    /// Re-read the profile (Premium may have appeared — "Check again"): from the session if there is one, otherwise
+    /// /me — only with the Web API already up (do not wait for it).
     pub fn refresh_profile(&self) {
         if self.player.session().is_some() {
             self.refresh_session_profile();
@@ -1132,9 +1132,9 @@ impl AuthService {
         });
     }
 
-    // --- воспроизведение на этом ПК ------------------------------------------------------------
+    // --- playback on this PC ------------------------------------------------------------
 
-    /// librespot 0.8 на Free делает exit(1): движок только для Premium (неизвестно — как раньше, пробуем).
+    /// librespot 0.8 on Free does exit(1): the engine only for Premium (unknown — as before, we try).
     fn on_account_checked(&self, premium: Option<bool>) {
         lock(&self.inner).premium = premium;
         if premium == Some(false) {
@@ -1165,7 +1165,7 @@ impl AuthService {
         self.resume_engine();
     }
 
-    /// Креды воспроизведения того же аккаунта, что и Web API; без Web API — любые (аккаунт задаёт сессия).
+    /// Playback credentials of the same account as Web API; without Web API — any (the session sets the account).
     fn account_matches(&self, credentials: &Credentials) -> bool {
         let Some(account) = self.api.web_account() else {
             return true;
@@ -1173,8 +1173,8 @@ impl AuthService {
         credentials.username.as_deref().filter(|name| !name.is_empty()).is_some_and(|name| account.as_str() == name)
     }
 
-    /// Поднять движок с сохранёнными кредами, если воспроизведение разрешено.
-    /// Аккаунт сохранённого входа воспроизведения (Credentials.username), если он есть.
+    /// Bring up the engine with the saved credentials if playback is allowed.
+    /// The account of the saved playback sign-in (Credentials.username), if there is one.
     fn playback_account(&self) -> Option<String> {
         lock(&self.inner)
             .playback_grant
@@ -1217,7 +1217,7 @@ impl AuthService {
             return;
         }
         if self.refuse_unsupported_proxy() {
-            // текст — копией: borrow() держит замок снимка, а session_login_failed в него пишет (взаимная блокировка)
+            // the text is a copy: borrow() holds the snapshot lock, and session_login_failed writes into it (a deadlock)
             let text = self.snapshot.borrow().playback_error.clone();
             self.session_login_failed(&text);
             return;
@@ -1292,7 +1292,7 @@ impl AuthService {
                 }
                 Ok(Err(error)) => {
                     tracing::warn!("engine failed to connect: {error:#}");
-                    // прежний движок (если был) host.connect уже остановил
+                    // the previous engine (if there was one) host.connect has already stopped
                     lock(&service.inner).engine_running = None;
                     let lower = error.to_lowercase();
                     let rejected = lower.contains("badcredentials") || lower.contains("bad credentials");
@@ -1327,7 +1327,7 @@ impl AuthService {
         });
     }
 
-    /// Состояние локального движка от плеера (переподключение, отказ).
+    /// The local engine's state from the player (reconnection, refusal).
     fn mirror_local(&self) {
         let local = self.player.local_playback();
         let running = lock(&self.inner).engine_running.is_some();
@@ -1336,7 +1336,7 @@ impl AuthService {
         }
         match local {
             LocalPlayback::Failed(text) => {
-                // перезапуск или переподключение не удались: движка больше нет, повтор — по сохранённому гранту
+                // the restart or reconnection failed: there is no engine anymore, the retry is by the saved grant
                 if !self.forget_engine() {
                     return;
                 }
@@ -1359,7 +1359,7 @@ impl AuthService {
         }
     }
 
-    /// Движок пропал не по нашей команде; false — идёт своё подключение, оно и разберётся.
+    /// The engine disappeared not by our command; false — our own connection is in progress, it will sort it out.
     fn forget_engine(&self) -> bool {
         let mut inner = lock(&self.inner);
         if inner.engine_busy {
@@ -1369,7 +1369,7 @@ impl AuthService {
         true
     }
 
-    /// Отложенный повтор подключения с сохранённым грантом (5/15/60 с, не больше трёх за 10 минут).
+    /// A postponed connection retry with the saved grant (5/15/60 s, no more than three per 10 minutes).
     fn schedule_engine_retry(&self) {
         let (delay, epoch, generation) = {
             let mut inner = lock(&self.inner);
@@ -1402,7 +1402,7 @@ impl AuthService {
         });
     }
 
-    /// Неудачный автоповтор — следующий, пока серия не исчерпана.
+    /// A failed auto-retry — the next one, until the series is exhausted.
     fn continue_engine_retries(&self) {
         let chained = {
             let inner = lock(&self.inner);
@@ -1413,7 +1413,7 @@ impl AuthService {
         }
     }
 
-    /// SOCKS5 или HTTP с паролем librespot не умеет: не запускать его мимо прокси.
+    /// SOCKS5 or HTTP with a password librespot cannot do: do not start it past the proxy.
     fn refuse_unsupported_proxy(&self) -> bool {
         let Some(text) = lock(&self.inner).proxy.engine_unsupported() else {
             return false;
@@ -1426,8 +1426,8 @@ impl AuthService {
         true
     }
 
-    /// Вход через сессию и «Разрешить воспроизведение»: PKCE с PLAYBACK_CLIENT_ID (:8898, всегда show_dialog)
-    /// → проверка Premium по токену → connect_local. Без входа Web API это и есть вход в приложение.
+    /// Sign-in through the session and "Allow playback": PKCE with PLAYBACK_CLIENT_ID (:8898, always show_dialog)
+    /// → Premium check by token → connect_local. Without the Web API sign-in this is the app sign-in.
     pub fn authorize_playback(&self) {
         let premium = lock(&self.inner).premium;
         if premium == Some(false) {
@@ -1442,7 +1442,7 @@ impl AuthService {
             return;
         }
         if self.refuse_unsupported_proxy() {
-            // текст — копией: borrow() держит замок снимка, а session_login_failed в него пишет (взаимная блокировка)
+            // the text is a copy: borrow() holds the snapshot lock, and session_login_failed writes into it (a deadlock)
             let text = self.snapshot.borrow().playback_error.clone();
             self.session_login_failed(&text);
             return;
@@ -1515,7 +1515,7 @@ impl AuthService {
             }
             match result {
                 Ok(token) => {
-                    // librespot на Free завершает процесс: тип аккаунта — до его запуска (spclient, не Web API)
+                    // librespot on Free terminates the process: the account type — before starting it (spclient, not Web API)
                     let product = session_profile::product_of_token(&http, &token.access_token).await;
                     if !service.current(generation) {
                         return;
@@ -1528,7 +1528,7 @@ impl AuthService {
                         service.on_free_session_login();
                         return;
                     }
-                    // вход Web API уже есть: токен другого аккаунта в движок не пускаем
+                    // the Web API sign-in is already there: another account's token is not let into the engine
                     if let Some(account) = &web
                         && let Some(owner) = token_owner(&http, &token.access_token).await
                         && owner != account.as_str()
@@ -1566,8 +1566,8 @@ impl AuthService {
         });
     }
 
-    /// Вход через сессию на Free: librespot не запускать. Вошли через Web API — «Только пульт»;
-    /// не вошли — ошибка входа с предложением войти без Premium (Web API).
+    /// Sign-in through the session on Free: do not start librespot. Signed in through Web API — "Remote only";
+    /// not signed in — a sign-in error offering to sign in without Premium (Web API).
     fn on_free_session_login(&self) {
         if self.snapshot.borrow().state == AuthState::SignedIn {
             self.on_account_checked(Some(false));
@@ -1582,7 +1582,7 @@ impl AuthService {
         });
     }
 
-    /// Вход через сессию не удался, а другого входа нет: ошибка на экране входа (выход — уже показан).
+    /// Sign-in through the session failed and there is no other sign-in: an error on the sign-in screen (logout is already shown).
     fn session_login_failed(&self, text: &str) {
         self.update(|s| {
             if !matches!(s.state, AuthState::SignedIn | AuthState::SignedOut) {
@@ -1592,12 +1592,12 @@ impl AuthService {
         });
     }
 
-    /// Вошли через сессию librespot или Web API.
+    /// Signed in through the librespot session or Web API.
     fn session_signed_in(&self) -> bool {
         self.api.session_account().is_some()
     }
 
-    /// Сессия librespot поднялась: её аккаунт — аккаунт приложения (вход без Web API), профиль — из неё.
+    /// The librespot session came up: its account — the app's account (sign-in without Web API), the profile — from it.
     fn on_session_up(&self) {
         let username = self
             .playback_account()
@@ -1611,7 +1611,7 @@ impl AuthService {
         self.refresh_session_profile();
     }
 
-    /// Spotify отозвал вход воспроизведения: без Web API это выход.
+    /// Spotify revoked the playback sign-in: without Web API that is a logout.
     fn on_session_lost(&self) {
         self.api.set_session_account(None);
         lock(&self.inner).session_profile = false;
@@ -1630,7 +1630,7 @@ impl AuthService {
         }
     }
 
-    /// Профиль из сессии librespot (имя, аватар, тип аккаунта, страна) — без Web API.
+    /// The profile from the librespot session (name, avatar, account type, country) — without Web API.
     fn refresh_session_profile(&self) {
         let Some(session) = self.player.session() else { return };
         let generation = self.generation();
@@ -1642,7 +1642,7 @@ impl AuthService {
             if service.api.session_account().is_some_and(|account| account.as_str() != user.id) {
                 return;
             }
-            // сессия librespot работает только с Premium
+            // the librespot session only works with Premium
             user.product.get_or_insert_with(|| "premium".to_owned());
             save_session_profile(&user);
             sf_player::engine::player::note_account_product(user.product.as_deref());
@@ -1651,8 +1651,8 @@ impl AuthService {
         });
     }
 
-    /// Вошли (Web API или сессия): состояние, карточка аккаунта, SignedIn при первом входе.
-    /// Карточку из сессии профиль Web API не заменяет, а лишь дополняет пустые поля.
+    /// Signed in (Web API or session): state, account card, SignedIn on the first sign-in.
+    /// The Web API profile does not replace the card from the session, it only fills the empty fields.
     fn show_signed_in(&self, account: Account, from_session: bool) {
         let (keep_session, waiting) = {
             let mut inner = lock(&self.inner);
@@ -1684,7 +1684,7 @@ impl AuthService {
         }
     }
 
-    /// Web API вошёл в другой аккаунт, чем уже открытый (сессия или другое приложение).
+    /// Web API signed into a different account than the one already open (the session or another application).
     fn on_other_web_account(&self, source: ApiSource) {
         let text = mf_i18n::t(ACCOUNT_MISMATCH);
         match source {
@@ -1699,7 +1699,7 @@ impl AuthService {
         }
     }
 
-    /// /me ответил для уже вставшего Web API: другой аккаунт — снять его, иначе обновить профиль и Premium.
+    /// /me answered for the already up Web API: a different account — remove it, otherwise update the profile and Premium.
     fn on_confirmed(&self, source: ApiSource, user: sf_api::models::User) {
         let installed = self.api.state(source).account().cloned();
         if user.id.is_empty() || installed.as_ref().is_some_and(|account| account.as_str() != user.id) {
@@ -1726,9 +1726,9 @@ impl AuthService {
         self.on_account_checked(premium_of(user.product.as_deref()));
     }
 
-    /// «Отключить»: остановить движок, удалить слот Playback, PlaybackAuthorized = false.
+    /// "Disable": stop the engine, remove the Playback slot, PlaybackAuthorized = false.
     pub fn disable_playback(&self) {
-        // без Web API вход воспроизведения — единственный вход: «Отключить» = выйти
+        // without Web API the playback sign-in is the only sign-in: "Disable" = log out
         if self.api.web_account().is_none() {
             self.sign_out();
             return;
@@ -1765,7 +1765,7 @@ impl AuthService {
         });
     }
 
-    /// Перезапустить движок с текущими настройками (glue::engine_config) — «Применить» в ApplyBar.
+    /// Restart the engine with the current settings (glue::engine_config) — "Apply" in ApplyBar.
     pub fn restart_engine(&self) {
         let (running, proxy) = {
             let inner = lock(&self.inner);
@@ -1804,9 +1804,9 @@ impl AuthService {
         self.update(|s| s.engine_restart_pending = pending);
     }
 
-    // --- личный Client ID и прокси --------------------------------------------------------------
+    // --- personal Client ID and proxy --------------------------------------------------------------
 
-    /// Личный Client ID: Some — PKCE личного приложения; None — удалить.
+    /// Personal Client ID: Some — PKCE of the personal application; None — delete.
     pub fn set_personal_client_id(&self, client_id: Option<String>) {
         let client_id = client_id.map(|id| id.trim().to_owned()).filter(|id| !id.is_empty());
         let waiting = lock(&self.inner).waiting.as_ref().map(|(kind, _)| *kind);
@@ -1860,9 +1860,9 @@ impl AuthService {
         }
     }
 
-    /// Применить прокси: проверить поля; только после успешной проверки записать ProxyMode/Host/Port/Username
-    /// в настройки (мост их только читает) и пароль в слот Proxy, заменить HTTP-клиент;
-    /// движок перезапускается, если HTTP-прокси для librespot изменился.
+    /// Apply the proxy: check the fields; only after a successful check write ProxyMode/Host/Port/Username
+    /// to settings (the bridge only reads them) and the password to the Proxy slot, replace the HTTP client;
+    /// the engine is restarted if the HTTP proxy for librespot changed.
     pub fn apply_proxy(&self, input: ProxyInput) {
         self.update(|s| {
             s.proxy_state = "applying".to_owned();
@@ -1955,7 +1955,7 @@ impl AuthService {
         self.account().map(|a| md3_model::AccountId::new(a.id))
     }
 
-    /// Шлюз Web API (общий для всех сервисов).
+    /// The Web API gateway (shared by all services).
     pub fn api(&self) -> Arc<ApiGateway> {
         self.api.clone()
     }
@@ -1972,12 +1972,12 @@ impl AuthService {
         self.events.subscribe()
     }
 
-    /// Действующий прокси (с паролем) — тот же, через который идут запросы к Web API.
+    /// The active proxy (with the password) — the same one the requests to Web API go through.
     pub fn proxy(&self) -> ProxyConfig {
         self.proxy.borrow().clone()
     }
 
-    /// Изменения действующего прокси: после restore() при входе и после каждого успешного apply_proxy.
+    /// Changes to the active proxy: after restore() at sign-in and after each successful apply_proxy.
     pub fn watch_proxy(&self) -> watch::Receiver<ProxyConfig> {
         self.proxy.subscribe()
     }
@@ -1991,7 +1991,7 @@ impl AuthService {
     }
 }
 
-/// id аккаунта, которому принадлежит токен (GET /v1/me); None — проверить не удалось.
+/// The id of the account the token belongs to (GET /v1/me); None — the check failed.
 async fn token_owner(http: &reqwest::Client, token: &str) -> Option<String> {
     let response = match http.get(ME_URL).bearer_auth(token).timeout(Duration::from_secs(15)).send().await {
         Ok(response) => response,
@@ -2013,7 +2013,7 @@ fn owner_id(body: &str) -> Option<String> {
 }
 
 
-/// Профиль последней удачной проверки входа (state/profile-<источник>.json), привязан к Client ID.
+/// The profile of the last successful sign-in check (state/profile-<source>.json), tied to the Client ID.
 #[derive(serde::Deserialize, serde::Serialize)]
 struct RememberedProfile {
     client_id: String,
@@ -2037,13 +2037,13 @@ fn read_profile(path: &std::path::Path) -> Option<RememberedProfile> {
     serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
 }
 
-/// Профиль последнего входа через сессию librespot (state/profile-session.json).
+/// The profile of the last sign-in through the librespot session (state/profile-session.json).
 fn session_profile_file() -> PathBuf {
     mf_platform::dirs::state_dir().join("profile-session.json")
 }
 
-/// Аккаунт сессии для карточки до ответа самой сессии: профиль прошлого входа этого аккаунта
-/// (сессия, затем Web API); нет — только id.
+/// The session account for the card before the session itself answers: the profile of this account's
+/// last sign-in (the session, then Web API); none — the id only.
 fn remembered_user(username: &str) -> sf_api::models::User {
     let paths = [session_profile_file(), profile_file(ApiSource::Shared), profile_file(ApiSource::Personal)];
     remembered_user_in(&paths, username)
@@ -2056,13 +2056,13 @@ fn remembered_user_in(paths: &[PathBuf], username: &str) -> sf_api::models::User
         .map(|remembered| remembered.user)
         .find(|user| user.id == username)
         .unwrap_or_else(|| sf_api::models::User { id: username.to_owned(), ..Default::default() });
-    // вход воспроизведения librespot выдаёт только Premium
+    // the librespot playback sign-in gives Premium only
     user.product.get_or_insert_with(|| "premium".to_owned());
     user
 }
 
-/// Свежая карточка аккаунта, пустые поля — из прежней карточки того же аккаунта. Имени нет (профиль
-/// не ответил) — имя и аватар прежние.
+/// A fresh account card, the empty fields — from the previous card of the same account. No name (the profile
+/// did not answer) — the name and avatar are the previous ones.
 fn merge_account(mut fresh: Account, current: Option<&Account>) -> Account {
     let Some(current) = current.filter(|current| current.id == fresh.id) else {
         return fresh;
@@ -2153,14 +2153,14 @@ mod tests {
     #[test]
     fn a_fresh_card_keeps_what_the_old_one_knew() {
         let old = Account { country: "IN".into(), product: "premium".into(), premium: true, ..account("me", "Fatyzzz", "face") };
-        // профиль сессии не ответил: имя = id — имя и аватар прежние, тип аккаунта тоже
+        // the session profile did not answer: name = id — the name and avatar are the previous ones, the account type too
         let bare = merge_account(account("me", "me", ""), Some(&old));
         assert_eq!((bare.display_name.as_str(), bare.avatar.as_str(), bare.country.as_str()), ("Fatyzzz", "face", "IN"));
         assert!(bare.premium);
-        // ответил: аватар сняли — так и показываем
+        // answered: the avatar was removed — that is how we show it
         let fresh = merge_account(account("me", "New", ""), Some(&old));
         assert_eq!((fresh.display_name.as_str(), fresh.avatar.as_str()), ("New", ""));
-        // другой аккаунт — ничего не переносится
+        // a different account — nothing is carried over
         let other = merge_account(account("you", "you", ""), Some(&old));
         assert_eq!((other.display_name.as_str(), other.country.as_str()), ("you", ""));
     }
@@ -2184,7 +2184,7 @@ mod tests {
         let remembered = remembered_user_in(&paths, "me");
         assert_eq!(remembered.display_name.as_deref(), Some("From session"));
         assert_eq!(remembered.product.as_deref(), Some("premium"), "a playback sign-in is Premium");
-        // чужой профиль не берётся: только id
+        // someone else's profile is not taken: the id only
         let stranger = remembered_user_in(&paths, "other");
         assert_eq!((stranger.id.as_str(), stranger.display_name.as_deref()), ("other", None));
         let _ = std::fs::remove_dir_all(&dir);

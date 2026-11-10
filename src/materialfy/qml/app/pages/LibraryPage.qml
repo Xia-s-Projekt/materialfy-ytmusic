@@ -4,10 +4,10 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Библиотека: разделы чипами (Плейлисты · Альбомы · Исполнители · Подкасты), у плейлистов — владелец
-// (Все · Мои · Подписки · Совместные); сетка или список (Settings.libraryView), сортировка
-// (Settings.librarySort), локальный фильтр, папки rootlist (только чтение), локальные закрепления.
-// Сетка виртуализирована: ListView из рядов по cols плиток; «Любимые треки» — первая плитка на две ячейки.
+// Library: sections as chips (Playlists - Albums - Artists - Podcasts), playlists have an owner
+// (All - Mine - Following - Collaborative); grid or list (Settings.libraryView), sorting
+// (Settings.librarySort), local filter, rootlist folders (read-only), local pins.
+// The grid is virtualized: a ListView of rows of cols tiles; "Liked tracks" is the first tile, two cells wide.
 Item {
     id: page
 
@@ -42,7 +42,7 @@ Item {
     ]
     readonly property string sortText: (sorts.find(s => s.id === Settings.librarySort) ?? sorts[0]).text
 
-    // ---- Элементы: модель → массив (фильтр по тексту, без «Любимых» — у них своя плитка) ----
+    // ---- Items: model -> array (text filter, without "Liked" — they have their own tile) ----
     property var entries: []
     function _rebuild() {
         const out = []
@@ -81,7 +81,7 @@ Item {
         function onPinsChanged() { page._rebuild() }
     }
 
-    // Появление плиток после смены раздела: каскад с задержкой 25 мс (не больше 12 шагов)
+    // Tiles appearing after a section change: a cascade with a 25 ms delay (no more than 12 steps)
     property bool _cascade: false
     function _animateIn() {
         if (Theme.reducedMotion === true)
@@ -91,9 +91,9 @@ Item {
     }
     Timer { id: cascadeOff; interval: 900; onTriggered: page._cascade = false }
 
-    // ---- Сетка: ячейка от 168, зазор 28 × 22, ряды по cols ----
-    // Остаток ширины делится между плитками (они растут), а не уходит в зазоры: иначе при 2–3 колонках
-    // между плитками зияли бы промежутки по 100+ px
+    // ---- Grid: cell from 168, gap 28 x 22, rows by cols ----
+    // The leftover width is divided among the tiles (they grow), rather than going into the gaps: otherwise with 2-3 columns
+    // there would be gaping 100+ px gaps between the tiles
     readonly property real minCell: 168
     readonly property real gapY: 28
     readonly property real innerWidth: list.width - 64
@@ -123,10 +123,10 @@ Item {
     }
     readonly property var listEntries: showLiked ? [{ kind: "liked", title: I18n.t("Liked Songs"),
         subtitle: I18n.t("Playlist") + " · " + I18n.n(likedCount, "{0} track", "{0} tracks"), uri: "" }].concat(entries) : entries
-    // всего «Любимых»: из строки kind "liked" (сервис знает общее число), иначе — сколько уже загружено
+    // the "Liked" total: from the kind "liked" row (the service knows the overall number), otherwise — how many are loaded
     property int likedTotal: -1
     readonly property int likedCount: likedTotal >= 0 ? likedTotal : Library.liked ? Library.liked.count : 0
-    // смена вида или раздела — список с начала
+    // changing the view or section — the list from the start
     onGridChanged: Qt.callLater(() => list.positionViewAtBeginning())
     onKindChanged: Qt.callLater(() => list.positionViewAtBeginning())
 
@@ -136,8 +136,8 @@ Item {
             w.notify(text, actionText ?? "", onAction ?? null)
     }
 
-    // ---- Действия ----
-    // Наведение на карточку: страница строится в фоне после паузы, клик открывает мгновенно.
+    // ---- Actions ----
+    // Hovering a card: the page is built in the background after a pause, a click opens it instantly.
     property var _prewarmedEntry: null
     function prewarmEntry(e) {
         if (!e || e.kind !== "playlist")
@@ -152,7 +152,7 @@ Item {
 
     function open(e) {
         const k = e.kind ?? ""
-        // DJ — не плейлист: у него нет страницы, плитка просто запускает его
+        // A DJ is not a playlist: it has no page, the tile simply starts it
         if (k === "dj")
             play(e)
         else if (k === "liked")
@@ -246,7 +246,7 @@ Item {
         }
     }
 
-    // ---- Кнопки в верхней панели: поиск по библиотеке, сортировка, сетка | список ----
+    // ---- Top bar buttons: library search, sorting, grid | list ----
     readonly property Component toolbar: signedIn ? toolbarComponent : null
     Component {
         id: toolbarComponent
@@ -306,7 +306,7 @@ Item {
         }
     }
 
-    // Сетка ↔ список: гаснет и проявляется заново
+    // Grid <-> list: fades out and appears anew
     function _switchView(v) {
         if (Settings.libraryView === v)
             return
@@ -333,8 +333,8 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         acceptedButtons: Qt.NoButton
         cacheBuffer: 800
-        // делегат — Loader со стабильным sourceComponent (меняется только при смене сетка/список),
-        // поэтому строки можно переиспользовать при прокрутке
+        // the delegate is a Loader with a stable sourceComponent (it changes only when grid/list switches),
+        // so rows can be reused when scrolling
         reuseItems: true
         spacing: page.grid ? page.gapY : 0
 
@@ -350,7 +350,7 @@ Item {
                 width: parent.width - 64
                 spacing: 12
 
-                // Разделы
+                // Sections
                 Flow {
                     visible: true
                     Layout.fillWidth: true
@@ -370,7 +370,7 @@ Item {
                         }
                     }
                 }
-                // Владелец (только плейлисты)
+                // Owner (playlists only)
                 Flow {
                     visible: page.kind === "playlists"
                     Layout.fillWidth: true
@@ -390,7 +390,7 @@ Item {
                     }
                 }
 
-                // Явная сортировка догружает страницы
+                // Explicit sorting loads more pages
                 Rectangle {
                     visible: Library.pagesTotal > 0 && Library.pagesLoaded < Library.pagesTotal
                     implicitWidth: loadRow.implicitWidth + 18
@@ -412,7 +412,7 @@ Item {
                     }
                 }
 
-                // Подсказки
+                // Tooltips
                 Rectangle {
                     visible: page.kind === "shows"
                     Layout.fillWidth: true
@@ -436,7 +436,7 @@ Item {
                     }
                 }
 
-                // Заголовки колонок списка
+                // List column headers
                 RowLayout {
                     visible: !page.grid && page.listEntries.length > 0
                     Layout.fillWidth: true
@@ -471,7 +471,7 @@ Item {
     }
     SmoothScroll { flickable: list; wheelStep: Settings.wheelStep }
 
-    // Ряд сетки: плитки по cols, равномерно по ширине
+    // Grid row: tiles by cols, evenly across the width
     Component {
         id: gridRow
         Item {
@@ -492,7 +492,7 @@ Item {
                         required property int index
                         readonly property int order: rowItem.rowIndex * page.cols + index
                         sourceComponent: modelData.liked ? likedTile : mediaTile
-                        // каскад появления: fade + сдвиг снизу 12 px
+                        // appearance cascade: fade + 12 px offset from below
                         opacity: 1
                         transform: Translate { id: shift; y: 0 }
                         Component.onCompleted: {
@@ -561,7 +561,7 @@ Item {
         }
     }
 
-    // ---- Загрузка, пусто, не вошли ----
+    // ---- Loading, empty, not signed in ----
     Grid {
         visible: page.signedIn && page.model !== null && page.model.loading === true && page.model.count === 0
         x: 32
@@ -580,7 +580,7 @@ Item {
         y: Math.max(140, (parent.height - implicitHeight) / 2)
         width: Math.min(parent.width - 64, 420)
         visible: page.signedIn && page.model !== null && page.model.loading !== true && page.entries.length === 0 && !page.showLiked
-        // не загрузилось (сессия не ответила, Web API под 429) — ошибка и «Повторить», а не «пусто»
+        // failed to load (the session did not answer, the Web API is rate-limited at 429) — an error and "Retry", not "empty"
         readonly property bool failed: Library.errorText !== "" && page.query.trim() === "" && page.owner === "all"
         readonly property var texts: failed
             ? ["cloud_off", I18n.t("Couldn’t load your library"), Library.errorText]
@@ -595,7 +595,7 @@ Item {
         icon: texts[0]
         title: texts[1]
         text: texts[2]
-        // ничего не нашлось — кнопка снимает то, что сузило список (поиск или фильтр владельца)
+        // nothing was found — the button removes whatever narrowed the list (search or the owner filter)
         actionText: failed ? I18n.t("Retry")
                   : page.query.trim() !== "" ? I18n.t("Clear search")
                   : page.owner !== "all" ? I18n.t("Show all")

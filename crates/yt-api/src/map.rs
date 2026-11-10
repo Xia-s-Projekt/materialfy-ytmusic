@@ -126,7 +126,7 @@ pub fn album_item(v: &Value) -> m::AlbumItem {
         cover: pick_thumbnail(&thumb, COVER_PX),
         cover_large: pick_thumbnail(&thumb, COVER_LARGE_PX),
         explicit: explicit_of(v),
-        // likeStatus альбома: LIKE — в библиотеке
+        // an album's likeStatus: LIKE — in the library
         saved: s(v, "likeStatus") == "LIKE",
     }
 }
@@ -147,7 +147,7 @@ pub fn artist_item(v: &Value) -> m::ArtistItem {
 
 /// Podcast (search, library subscriptions, podcast page header).
 pub fn show_item(v: &Value) -> m::ShowItem {
-    // browseId подкаста — «MPSP» + id плейлиста; get_podcast ждёт голый id.
+    // a podcast's browseId is "MPSP" + a playlist id; get_podcast expects a bare id.
     let id = s(v, "browseId")
         .if_empty(s(v, "podcastId"))
         .trim_start_matches("MPSP")
@@ -163,13 +163,13 @@ pub fn show_item(v: &Value) -> m::ShowItem {
         cover: pick_thumbnail(&thumb, COVER_PX),
         cover_large: pick_thumbnail(&thumb, COVER_LARGE_PX),
         total_episodes: v.get("episodeCount").and_then(Value::as_i64).unwrap_or(0),
-        // get_podcast отвечает saved; в поиске и библиотеке флага нет
+        // get_podcast answers with saved; in search and the library there is no flag
         saved: v.get("saved").and_then(Value::as_bool).unwrap_or(false),
         explicit: explicit_of(v),
     }
 }
 
-/// Выпуск подкаста (список подкаста, поиск, страница выпуска).
+/// A podcast episode (a podcast's list, search, an episode page).
 pub fn episode_item(v: &Value) -> m::EpisodeItem {
     let id = s(v, "videoId");
     let thumb = thumbs(v);
@@ -206,7 +206,7 @@ pub fn playlist_item(v: &Value) -> m::PlaylistItem {
         uri: if id.is_empty() { String::new() } else { format!("ytmusic:playlist:{id}") },
         title: s(v, "title"),
         description: s(v, "description"),
-        // get_library_playlists отдаёт count строкой («5»), get_playlist — trackCount числом
+        // get_library_playlists returns count as a string ("5"), get_playlist — trackCount as a number
         track_count: v.get("count").and_then(Value::as_i64)
             .or_else(|| v.get("count").and_then(Value::as_str).and_then(|c| c.parse().ok()))
             .unwrap_or(
@@ -215,7 +215,7 @@ pub fn playlist_item(v: &Value) -> m::PlaylistItem {
                 ),
             ),
         cover: pick_thumbnail(&thumb, COVER_PX),
-        // автор — строка (библиотека) или {name, id} (страница плейлиста)
+        // the author is a string (the library) or {name, id} (a playlist page)
         owner: s(v, "author").if_empty(s(author.unwrap_or(&Value::Null), "name")),
         owner_id: s(author.unwrap_or(&Value::Null), "id"),
         can_edit: v.get("owned").and_then(Value::as_bool).unwrap_or(false),
@@ -254,7 +254,7 @@ pub fn artist_info(v: &Value) -> m::ArtistInfo {
     }
 }
 
-/// Классифицировать одну запись полки главной по полям ytmusicapi:
+/// Classify a single home shelf entry by its ytmusicapi fields:
 /// videoType PODCAST → episode, videoId → track, playlistId → playlist,
 /// browseId MPREb_ → album, MPSP → show, UC → artist.
 fn home_item(v: &Value) -> Option<(String, serde_json::Value)> {
@@ -298,9 +298,9 @@ fn home_item(v: &Value) -> Option<(String, serde_json::Value)> {
     None
 }
 
-/// get_home shelves → md3-model HomeShelf items. Каждая запись полки clasificруется
-/// через `home_item` (трек / плейлист / альбом / исполнитель / подкаст / выпуск),
-/// а kind полки берётся из первой записи. Пустые полки пропускаются.
+/// get_home shelves → md3-model HomeShelf items. Each shelf entry is classified
+/// via `home_item` (track / playlist / album / artist / podcast / episode),
+/// and the shelf's kind is taken from the first entry. Empty shelves are skipped.
 pub fn home_shelves(home: &[Value]) -> Vec<m::HomeShelf> {
     home.iter()
         .filter_map(|row| {

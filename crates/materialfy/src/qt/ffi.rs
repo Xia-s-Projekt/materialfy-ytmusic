@@ -1,4 +1,4 @@
-// Привязки к cpp/mf_shell.h и cpp/winframe.h. Владелец — агент «shell»; мосты пользуются обёртками из crate::qt.
+// Bindings to cpp/mf_shell.h and cpp/winframe.h. Owner - the "shell" agent; the bridges use the wrappers from crate::qt.
 #[cxx_qt::bridge]
 pub mod ffi {
     unsafe extern "C++" {
@@ -66,7 +66,7 @@ pub mod ffi {
     extern "Rust" {
         /// QStyleHints::colorSchemeChanged (cpp/mf_shell.cpp, watch_color_scheme)
         fn system_dark_changed(dark: bool);
-        /// таймер GUI-потока (cpp/mf_shell.cpp, start_gui_heartbeat)
+        /// GUI thread timer (cpp/mf_shell.cpp, start_gui_heartbeat)
         fn gui_heartbeat();
     }
 }

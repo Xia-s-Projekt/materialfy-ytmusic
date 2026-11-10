@@ -1,4 +1,4 @@
-//! serde-модели Web API (перенос spotifast/src/api/models.rs без i18n).
+//! Web API serde models (ported from spotifast/src/api/models.rs, without i18n).
 //! Spotify Web API response shapes.
 //!
 //! Every field that Spotify may omit, null, or rename is optional or
@@ -246,7 +246,7 @@ impl Album {
             .map(|date| date.get(..4).unwrap_or(date))
     }
 
-    /// Подпись типа по-русски (md3_model::album_kind_label).
+    /// Album kind label in Russian (md3_model::album_kind_label).
     pub fn kind_label(&self) -> String {
         let kind = self.album_group.as_deref().or(self.album_type.as_deref()).unwrap_or("album");
         match kind {
@@ -649,7 +649,7 @@ pub struct FollowedArtists {
     pub artists: CursorPage<Artist>,
 }
 
-/// /browse/categories/{id}/playlists: страница плейлистов под ключом `playlists` (пустые места — null).
+/// /browse/categories/{id}/playlists: page of playlists under the `playlists` key (empty slots are null).
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 pub struct CategoryPlaylists {
     #[serde(default)]
@@ -865,7 +865,7 @@ mod tests {
         assert_eq!(dated("2024").year(), Some("2024"));
         // Shorter than a year, which `min` was there to hold.
         assert_eq!(dated("20").year(), Some("20"));
-        // четвёртый байт внутри символа: срез по `get` не паникует
+        // the fourth byte is inside a character: the slice via `get` does not panic
         assert_eq!(dated("\u{c791}\u{b144}").year(), Some("\u{c791}\u{b144}"));
         // No date at all is still no year.
         let json = r#"{"id":"a","name":"A","uri":"spotify:album:a"}"#;

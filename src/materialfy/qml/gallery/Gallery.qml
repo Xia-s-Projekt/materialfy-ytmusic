@@ -3,11 +3,11 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Галерея MD3-кита: все компоненты + управление темой. Картинку можно перетащить в окно — тема возьмёт цвет из неё.
+// MD3 kit gallery: all components + theme control. An image can be dragged into the window — the theme takes its color from it.
 Window {
     id: win
 
-    // демо-обложка — логотип из docs/brand
+    // demo cover — the logo from docs/brand
     readonly property url coversDir: Qt.resolvedUrl("../../../../docs/brand/")
     readonly property var covers: ["icon-512.png"]
     property int coverIndex: 0
@@ -15,8 +15,8 @@ Window {
     property real progress: 0.32
     property real scrollTo: 0
     property int startCover: 0
-    property bool perfLog: false        // --set perfLog=true: менять обложки по кругу и писать время кадров
-    property bool perfScroll: false     // --set perfScroll=true: вместо обложек — прокрутка вверх-вниз
+    property bool perfLog: false        // --set perfLog=true: cycle the covers and log frame times
+    property bool perfScroll: false     // --set perfScroll=true: scroll up and down instead of the covers
 
     Timer {
         interval: 1600
@@ -80,7 +80,7 @@ Window {
         anchors.margins: 8
         spacing: 8
 
-        // ---------------- Сайдбар ----------------
+        // ---------------- Sidebar ----------------
         ColumnLayout {
             Layout.preferredWidth: 260
             Layout.fillWidth: false
@@ -112,7 +112,7 @@ Window {
             Item { Layout.fillHeight: true }
         }
 
-        // ---------------- Контент ----------------
+        // ---------------- Content ----------------
         Surface {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -142,7 +142,7 @@ Window {
 
                     Label { text: "MD3 Expressive"; type: "displaySmall"; weight: 600 }
 
-                    // --- Поля ввода ---
+                    // --- Input fields ---
                     Flow {
                         Layout.fillWidth: true
                         spacing: 16
@@ -159,7 +159,7 @@ Window {
                         }
                     }
 
-                    // --- Плеер ---
+                    // --- Player ---
                     Surface {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 220
@@ -216,7 +216,7 @@ Window {
                         }
                     }
 
-                    // --- Кнопки ---
+                    // --- Buttons ---
                     Section { title: I18n.t("Buttons") }
                     Flow {
                         Layout.fillWidth: true
@@ -332,7 +332,7 @@ Window {
             }
         }
 
-        // ---------------- Панель темы ----------------
+        // ---------------- Theme panel ----------------
         Surface {
             Layout.preferredWidth: 300
             Layout.fillHeight: true

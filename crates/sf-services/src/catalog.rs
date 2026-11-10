@@ -1,5 +1,5 @@
-//! Каталог (исполнитель «services-core»): альбом, исполнитель, поиск (эвристика «лучшего»), шоу и выпуски.
-//! Без состояния, кроме кэша на 10 минут; маршрутизация общего/личного приложения — ApiGateway::client_for(Operation).
+//! Catalog (provider "services-core"): album, artist, search (the "best" heuristic), show and episodes.
+//! No state except a 10-minute cache; routing the shared/personal application — ApiGateway::client_for(Operation).
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -33,7 +33,7 @@ pub enum SearchKind {
 }
 
 impl SearchKind {
-    /// "all" | "tracks" | "albums" | "artists" | "playlists" | "shows" | "episodes"; иное → All
+    /// "all" | "tracks" | "albums" | "artists" | "playlists" | "shows" | "episodes"; anything else → All
     pub fn from_name(name: &str) -> Self {
         match name {
             "tracks" => Self::Tracks,
@@ -58,7 +58,7 @@ impl SearchKind {
         }
     }
 
-    /// Типы поиска Web API: каталог и плейлисты (плейлисты ищет только общее приложение).
+    /// Web API search types: catalog and playlists (only the shared app searches playlists).
     fn api_types(self) -> (Vec<&'static str>, bool) {
         match self {
             Self::All => (vec!["track", "artist", "album", "show", "episode"], true),
@@ -75,7 +75,7 @@ impl SearchKind {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AlbumPage {
     pub info: AlbumInfo,
-    /// все треки (длинные альбомы — постранично по 50)
+    /// all tracks (long albums — paginated by 50)
     pub tracks: Vec<TrackItem>,
 }
 
@@ -88,7 +88,7 @@ pub struct ArtistPage {
     pub albums: Vec<AlbumItem>,
     /// appears_on,compilation
     pub also_albums: Vec<AlbumItem>,
-    /// related-artists (может быть пусто — закрыто для новых приложений)
+    /// related-artists (may be empty — closed for new applications)
     pub similar: Vec<ArtistItem>,
 }
 
@@ -101,7 +101,7 @@ pub struct SearchResults {
     pub shows: Vec<ShowItem>,
     pub episodes: Vec<EpisodeItem>,
     pub totals: SearchTotals,
-    /// эвристика: исполнитель с совпадающим именем, иначе первый трек
+    /// heuristic: the artist with a matching name, otherwise the first track
     pub best: Option<SearchBest>,
 }
 
@@ -119,7 +119,7 @@ impl SearchResults {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ShowPage {
     pub info: ShowItem,
-    /// первая страница выпусков (новые сверху)
+    /// the first page of episodes (newest first)
     pub episodes: Vec<EpisodeItem>,
     pub total: i64,
 }
@@ -128,16 +128,16 @@ pub struct ShowPage {
 pub struct EpisodePage {
     pub info: EpisodeItem,
     pub show: ShowItem,
-    /// 2–3 соседних выпуска для «Ещё выпуски»
+    /// 2–3 neighboring episodes for "More episodes"
     pub more: Vec<EpisodeItem>,
 }
 
-/// Кэш страниц каталога.
+/// Catalog page cache.
 const FRESH: Duration = Duration::from_secs(10 * 60);
 const CACHE_KEPT: usize = 200;
-/// Альбом длиннее — режется (сборники по 1000 треков).
+/// A longer album is cut (compilations of 1000 tracks).
 const MAX_ALBUM_PAGES: u32 = 40;
-/// Страница выпусков шоу.
+/// Show episode page.
 const EPISODE_PAGE: u32 = 50;
 
 #[derive(Clone)]
@@ -153,19 +153,19 @@ pub struct CatalogService {
     auth: Arc<AuthService>,
     player: PlayerHandle,
     cache: Mutex<HashMap<String, (Instant, Cached)>>,
-    /// превью исполнителя по наведению — не больше двух загрузок сразу
+    /// artist preview on hover — no more than two loads at once
     artists: Semaphore,
 }
 
-/// Сколько необязательные запросы страницы (подписка, похожие) могут отстать от основного чтения:
-/// под 429 общее приложение отвечает минутами, а страница без них всё равно полезна.
+/// How much the page's optional requests (subscription, similar) may lag behind the main read:
+/// under 429 the shared app answers for minutes, and the page is useful without them anyway.
 const EXTRAS_GRACE: Duration = Duration::from_millis(1500);
-/// Сколько страница альбома вообще ждёт GraphQL-шлюз (прослушивания необязательны).
+/// How long the album page waits for the GraphQL gateway at all (the plays are optional).
 const GATEWAY_DEADLINE: Duration = Duration::from_secs(2);
-/// Окно «О треке»: срок каждого из запросов (сессия, шлюз, альбом) — что не успело, то не показано.
+/// The "About the track" window: each request's deadline (session, gateway, album) — what did not make it is not shown.
 const DETAILS_DEADLINE: Duration = Duration::from_secs(5);
 
-/// Ответ `main`; ответ `extras` — если успел вместе с ним или не позже `grace` после.
+/// The `main` answer; the `extras` answer — if it made it together with it or no later than `grace` after.
 async fn with_extras<M: Future, E: Future>(main: M, extras: E, grace: Duration) -> (M::Output, Option<E::Output>) {
     tokio::pin!(main, extras);
     tokio::select! {
@@ -175,7 +175,7 @@ async fn with_extras<M: Future, E: Future>(main: M, extras: E, grace: Duration) 
     }
 }
 
-/// Только разделы вида поиска `kind` (шлюз отвечает всеми сразу).
+/// Only the sections of search kind `kind` (the gateway answers with all at once).
 fn only(kind: SearchKind, mut results: models::SearchResults) -> models::SearchResults {
     let (types, playlists) = kind.api_types();
     let wanted = |name: &str| types.contains(&name);
@@ -200,7 +200,7 @@ fn only(kind: SearchKind, mut results: models::SearchResults) -> models::SearchR
     results
 }
 
-/// Раздел страницы, который не загрузился, остаётся пустым, а не роняет страницу.
+/// A page section that did not load stays empty instead of dropping the page.
 fn or_empty<T>(section: Result<Vec<T>, ApiError>, name: &str, id: &str) -> Vec<T> {
     section.unwrap_or_else(|error| {
         tracing::debug!("{name} ({id}): {error:#}");
@@ -208,7 +208,7 @@ fn or_empty<T>(section: Result<Vec<T>, ApiError>, name: &str, id: &str) -> Vec<T
     })
 }
 
-/// Перевод ошибки Web API в ошибку сервиса; NotSignedIn — отдельно.
+/// Translating a Web API error into a service error; NotSignedIn — separately.
 fn service_error(error: ApiError) -> ServiceError {
     match error {
         ApiError::NotSignedIn => ServiceError::NotSignedIn,
@@ -216,7 +216,7 @@ fn service_error(error: ApiError) -> ServiceError {
     }
 }
 
-/// Треки альбома приходят без вложенного альбома — вернуть его для обложек и ссылок.
+/// Album tracks come without the nested album — return it for the covers and links.
 fn with_album(mut tracks: Vec<Track>, album: &Album) -> Vec<Track> {
     let mut bare = album.clone();
     bare.tracks = None;
@@ -228,7 +228,7 @@ fn with_album(mut tracks: Vec<Track>, album: &Album) -> Vec<Track> {
     tracks
 }
 
-/// Собрать страницу альбома из ответов Web API.
+/// Assemble the album page from the Web API answers.
 pub fn album_page(album: &Album, tracks: Vec<Track>) -> AlbumPage {
     let tracks = with_album(tracks, album);
     known::remember_recordings(tracks.iter());
@@ -237,7 +237,7 @@ pub fn album_page(album: &Album, tracks: Vec<Track>) -> AlbumPage {
     AlbumPage { info: map::album_info(album, &tracks), tracks: items }
 }
 
-/// Страница исполнителя: похожие и популярное могут отсутствовать.
+/// Artist page: similar and popular may be absent.
 pub fn artist_page(
     artist: &Artist,
     followed: bool,
@@ -258,10 +258,10 @@ pub fn artist_page(
     }
 }
 
-/// Первым — последний релиз, остальные в том порядке, в каком их отдал Spotify: раздел «Альбомы и синглы»
-/// подписывает первую плитку, и она должна быть именно свежей. Дат нет — порядок не трогаем.
+/// First — the last release, the rest in the order Spotify gave them: the "Albums and singles"
+/// section labels the first tile, and it must be exactly the fresh one. There are no dates — the order is not touched.
 fn latest_release_first(albums: &[Album]) -> Vec<AlbumItem> {
-    // полная дата есть только здесь: у AlbumItem остаётся один год, и релизы одного года им не различить
+    // the full date is only here: AlbumItem keeps one year, and releases of one year cannot be told apart by it
     let newest = albums
         .iter()
         .enumerate()
@@ -278,7 +278,7 @@ fn latest_release_first(albums: &[Album]) -> Vec<AlbumItem> {
     mapped
 }
 
-/// Окно «О треке» из того, что успело прийти: метаданные сессии, ответ getTrack, страница альбома.
+/// The "About the track" window from what managed to arrive: session metadata, the getTrack answer, the album page.
 pub fn track_details(
     track_id: &str,
     track: Option<&Track>,
@@ -345,8 +345,8 @@ pub fn track_details(
     details
 }
 
-/// Лучший результат: исполнитель, чьё имя совпало с запросом (или треков нет), иначе первый трек, альбом,
-/// плейлист, шоу (ui/search.rs::all в spotifast).
+/// The best result: the artist whose name matched the query (or there are no tracks), otherwise the first track, album,
+/// playlist, show (ui/search.rs::all in spotifast).
 pub fn best_result(query: &str, results: &models::SearchResults) -> Option<SearchBest> {
     fn best<T: serde::Serialize>(kind: &str, item: T) -> Option<SearchBest> {
         match serde_json::to_value(item) {
@@ -375,7 +375,7 @@ pub fn best_result(query: &str, results: &models::SearchResults) -> Option<Searc
     first(&results.shows).and_then(|show| best("show", map::show_item(show)))
 }
 
-/// Ответ поиска Web API → результаты для QML.
+/// Web API search answer → results for QML.
 pub fn search_results(query: &str, results: &models::SearchResults, me: Option<&md3_model::AccountId>) -> SearchResults {
     let total = |page: Option<u32>| page.map(i64::from).unwrap_or(0);
     if let Some(page) = &results.tracks {
@@ -434,7 +434,7 @@ impl CatalogService {
         cache.insert(key, (Instant::now(), value));
     }
 
-    /// Забыть кэш (смена аккаунта, сохранение изменило «saved»).
+    /// Forget the cache (account change, saving changed "saved").
     pub fn forget(&self) {
         lock(&self.cache).clear();
     }
@@ -453,9 +453,9 @@ impl CatalogService {
         if let Some(Cached::Album(page)) = self.cached(&key) {
             return Ok(page);
         }
-        // Альбом и все его треки — из сессии librespot (без квоты Web API); Web API — запасной путь.
-        // Параллельно — GraphQL-шлюз (getAlbum: прослушивания треков, лейбл, правообладатели), который не
-        // держит страницу дольше GATEWAY_DEADLINE и EXTRAS_GRACE после чтения сессии.
+        // The album and all its tracks — from the librespot session (without the Web API quota); Web API — a fallback path.
+        // In parallel — the GraphQL gateway (getAlbum: track plays, label, copyright holders), which does not
+        // hold the page longer than GATEWAY_DEADLINE and EXTRAS_GRACE after the session read.
         let api = self.auth.api();
         let http = api.http();
         let session = route::account_session(&api, &self.player);
@@ -490,16 +490,16 @@ impl CatalogService {
         if let Some(overview) = &overview {
             album_overview::apply(&mut page, overview);
         }
-        // оборванный список не кэшируется: следующее открытие дочитает; без ответа шлюза — тоже
-        // (прослушивания появятся при следующем открытии)
+        // a truncated list is not cached: the next opening will read it to the end; without the gateway's answer — too
+        // (the plays will appear on the next opening)
         if complete && (overview.is_some() || session.is_none()) {
             self.store(key, Cached::Album(page.clone()));
         }
         Ok(page)
     }
 
-    /// Альбом через Web API. Обязателен только сам альбом с первой страницей треков: следующая страница,
-    /// которая не загрузилась (429, сеть), обрывает список, а не страницу; третье поле — список полон.
+    /// The album through Web API. Only the album itself with the first page of tracks is required: the next page,
+    /// which did not load (429, network), cuts the list, not the page; the third field — the list is full.
     async fn api_album(&self, album_id: &str) -> Result<(Album, Vec<Track>, bool), ServiceError> {
         let client = self.client(Operation::Catalog).await?;
         let album = client.album(album_id).await.map_err(|e| self.fail(e))?;
@@ -531,11 +531,11 @@ impl CatalogService {
         if let Some(Cached::Artist(page)) = self.cached(&key) {
             return Ok(page);
         }
-        // Страница — без квоты Web API (общее приложение подолгу отвечает 429, а исполнителю нужно пять
-        // запросов): метаданные сессии librespot (исполнитель, популярное, релизы) и параллельно GraphQL-шлюз
-        // (queryArtistOverview: подписчики, слушатели, подписка, похожие, биография, шапка), который не держит
-        // страницу дольше EXTRAS_GRACE. Web API — только запасной путь: вся страница, если не смогла сессия;
-        // подписка и похожие, если не ответил шлюз (тоже не дольше EXTRAS_GRACE).
+        // The page — without the Web API quota (the shared app answers 429 for a long time, and the artist needs five
+        // requests): librespot session metadata (artist, popular, releases) and in parallel the GraphQL gateway
+        // (queryArtistOverview: followers, listeners, subscription, similar, biography, header), which does not hold
+        // the page longer than EXTRAS_GRACE. Web API — only a fallback path: the whole page if the session could not;
+        // the subscription and similar if the gateway did not answer (also no longer than EXTRAS_GRACE).
         let api = self.auth.api();
         let session = route::account_session(&api, &self.player);
         let read = async {
@@ -551,7 +551,7 @@ impl CatalogService {
         let (read, overview) = with_extras(read, overview, EXTRAS_GRACE).await;
         let overview = overview.flatten();
         let uri = format!("spotify:artist:{artist_id}");
-        // похожих уже дала сессия — Web API за ними не ходит
+        // the session already gave the similar ones — Web API does not go for them
         let session_related = matches!(&read, Some(Ok(record)) if !record.related.is_empty());
         let main = async {
             match read {
@@ -580,8 +580,8 @@ impl CatalogService {
         Ok(page)
     }
 
-    /// Исполнитель через Web API. Обязателен только сам исполнитель: раздел, который не загрузился
-    /// (популярное закрыто для приложений в режиме разработки, 429, лимиты), остаётся пустым.
+    /// The artist through Web API. Only the artist itself is required: a section that did not load
+    /// (popular is closed for apps in development mode, 429, limits) stays empty.
     async fn api_artist(&self, artist_id: &str) -> Result<(Artist, Vec<Track>, Vec<Album>, Vec<Album>), ServiceError> {
         let catalog = self.client(Operation::Catalog).await?;
         let artist = catalog.artist(artist_id).await.map_err(|e| self.fail(e))?;
@@ -600,7 +600,7 @@ impl CatalogService {
         Ok((artist, popular, albums, also))
     }
 
-    /// Похожие исполнители (закрыто для новых приложений — тогда пусто).
+    /// Similar artists (closed for new applications — then empty).
     async fn related(&self, artist_id: &str) -> Vec<Artist> {
         let Ok(client) = self.auth.api().client_for(Operation::UnsupportedDevelopmentMode).await else {
             return Vec::new();
@@ -611,12 +611,12 @@ impl CatalogService {
         })
     }
 
-    /// Подписка на исполнителя (ошибка — «не подписан»).
+    /// Artist subscription (an error — "not subscribed").
     async fn followed(&self, uri: &str) -> bool {
         if uri.is_empty() {
             return false;
         }
-        // коллекция сессии, потом Web API с коротким сроком
+        // the session's collection, then Web API with a short deadline
         crate::data::collection_session::contains(&self.auth.api(), &self.player, &[uri.to_owned()])
             .await
             .ok()
@@ -630,7 +630,7 @@ impl CatalogService {
             return Ok(SearchResults::default());
         }
         let api = self.auth.api();
-        // Сначала — шлюз клиентов Spotify через сессию (все разделы одним запросом, без квоты Web API)
+        // First — the Spotify clients' gateway through the session (all sections in one request, without the Web API quota)
         if let Some(session) = route::account_session(&api, &self.player) {
             match pathfinder::search(&api.http(), &session, query).await {
                 Ok(results) => return Ok(self.searched(query, kind, only(kind, results))),
@@ -677,7 +677,7 @@ impl CatalogService {
         Ok(self.searched(query, kind, results))
     }
 
-    /// Ответ поиска → результаты для QML; «лучший» — только во «Всём».
+    /// Search answer → results for QML; the "best" — only in "All".
     fn searched(&self, query: &str, kind: SearchKind, results: models::SearchResults) -> SearchResults {
         let api = self.auth.api();
         if let Some(page) = &results.playlists {
@@ -696,7 +696,7 @@ impl CatalogService {
         if let Some(Cached::Show(page)) = self.cached(&key) {
             return Ok(page);
         }
-        // Шоу и первая страница выпусков — из сессии librespot (без квоты Web API); Web API — запасной путь.
+        // The show and the first page of episodes — from the librespot session (without the Web API quota); Web API — a fallback path.
         let (show, first) = match self.session_show(show_id, 0).await {
             Some(Ok(read)) => read,
             Some(Err(error)) => return Err(self.fail(error)),
@@ -720,7 +720,7 @@ impl CatalogService {
         Ok(page)
     }
 
-    /// Следующая страница выпусков (по 50).
+    /// The next page of episodes (by 50).
     pub async fn show_episodes(&self, show_id: &str, offset: u32) -> Result<Vec<EpisodeItem>, ServiceError> {
         let page = match self.session_show(show_id, offset).await {
             Some(Ok((_, page))) => page,
@@ -761,7 +761,7 @@ impl CatalogService {
         if let Some(Cached::Episode(page)) = self.cached(&key) {
             return Ok(page);
         }
-        // Выпуск, его шоу и соседи — из сессии librespot; Web API — запасной путь.
+        // The episode, its show and neighbors — from the librespot session; Web API — a fallback path.
         let (episode, show, more) = match self.session_episode(episode_id).await {
             Some(Ok(read)) => read,
             Some(Err(error)) => return Err(self.fail(error)),
@@ -774,7 +774,7 @@ impl CatalogService {
         Ok(page)
     }
 
-    /// Шапка шоу и страница выпусков с `offset` через сессию; None — сессии нет или она не смогла.
+    /// The show's header and the episode page with `offset` through the session; None — there is no session or it could not.
     async fn session_show(
         &self,
         show_id: &str,
@@ -785,7 +785,7 @@ impl CatalogService {
         route::session_read(podcast_session::show_page(&api.http(), &session, show_id, offset, EPISODE_PAGE)).await
     }
 
-    /// Выпуск, его шоу и соседние выпуски через сессию; None — сессии нет или она не смогла.
+    /// The episode, its show and neighboring episodes through the session; None — there is no session or it could not.
     async fn session_episode(
         &self,
         episode_id: &str,
@@ -795,7 +795,7 @@ impl CatalogService {
         route::session_read(podcast_session::episode_page(&api.http(), &session, episode_id)).await
     }
 
-    /// Выпуск через Web API; соседние выпуски, которые не загрузились, — пусто.
+    /// The episode through Web API; neighboring episodes that did not load — empty.
     async fn api_episode(
         &self,
         episode_id: &str,
@@ -822,7 +822,7 @@ impl CatalogService {
         if let Some(Cached::Track(item)) = self.cached(&key) {
             return Ok(item);
         }
-        // Трек — из метаданных сессии librespot; Web API — запасной путь.
+        // The track — from the librespot session metadata; Web API — a fallback path.
         let session = route::account_session(&self.auth.api(), &self.player);
         let read = match &session {
             Some(session) => route::session_read(session_reads::track_by_id(session, track_id)).await,
@@ -840,10 +840,10 @@ impl CatalogService {
         Ok(item)
     }
 
-    /// Всё, что известно о треке (окно «О треке»): метаданные сессии (номер, диск, ISRC, популярность),
-    /// GraphQL-шлюз (getTrack: прослушивания, дата, правообладатели) и страница альбома (лейбл; из кэша, если
-    /// альбом недавно открывали) — разом, каждый не дольше DETAILS_DEADLINE. `album_id` — подсказка из строки
-    /// трека (без неё альбом узнаётся из метаданных). Ошибка — только если не ответил никто.
+    /// Everything known about a track (the "About the track" window): session metadata (number, disc, ISRC, popularity),
+    /// the GraphQL gateway (getTrack: plays, date, copyright holders) and the album page (label; from the cache if the
+    /// album was opened recently) — at once, each no longer than DETAILS_DEADLINE. `album_id` — a hint from the track
+    /// row (without it the album is learned from the metadata). An error — only if nobody answered.
     pub async fn track_details(&self, track_id: &str, album_id: &str) -> Result<TrackDetails, ServiceError> {
         let api = self.auth.api();
         let http = api.http();
@@ -890,7 +890,7 @@ impl CatalogService {
         Ok(track_details(track_id, track.as_ref(), overview.as_ref(), page.as_ref()))
     }
 
-    /// Плеер, с которым создан каталог.
+    /// The player the catalog was created with.
     pub fn player(&self) -> &PlayerHandle {
         &self.player
     }
@@ -913,7 +913,7 @@ mod tests {
     #[test]
     fn search_kinds_split_catalog_and_playlists() {
         assert_eq!(SearchKind::from_name("shows"), SearchKind::Shows);
-        assert_eq!(SearchKind::from_name("что-то"), SearchKind::All);
+        assert_eq!(SearchKind::from_name("anything"), SearchKind::All);
         assert_eq!(SearchKind::Playlists.api_types(), (Vec::new(), true));
         assert_eq!(SearchKind::Tracks.api_types(), (vec!["track"], false));
     }
@@ -968,10 +968,10 @@ mod tests {
 
     #[test]
     fn albums_then_playlists_then_shows_fill_in() {
-        let album = Album { id: "a1".into(), name: "Альбом".into(), uri: "spotify:album:a1".into(), ..Default::default() };
+        let album = Album { id: "a1".into(), name: "Album".into(), uri: "spotify:album:a1".into(), ..Default::default() };
         let results = models::SearchResults { albums: page(vec![album]), ..Default::default() };
         assert_eq!(best_result("x", &results).unwrap().kind, "album");
-        let show = models::Show { id: "s1".into(), name: "Шоу".into(), uri: "spotify:show:s1".into(), ..Default::default() };
+        let show = models::Show { id: "s1".into(), name: "Show".into(), uri: "spotify:show:s1".into(), ..Default::default() };
         let results = models::SearchResults { shows: page(vec![show]), ..Default::default() };
         assert_eq!(best_result("x", &results).unwrap().kind, "show");
     }
@@ -980,7 +980,7 @@ mod tests {
     fn album_tracks_get_their_album_back_for_covers_and_totals() {
         let album = Album {
             id: "a1".into(),
-            name: "Альбом".into(),
+            name: "Album".into(),
             uri: "spotify:album:a1".into(),
             images: vec![models::Image { url: "big".into(), width: Some(640), height: Some(640) }],
             ..Default::default()
@@ -991,7 +991,7 @@ mod tests {
         second.duration_ms = 2000;
         let page = album_page(&album, vec![first, second]);
         assert_eq!(page.tracks.len(), 2);
-        assert!(page.tracks.iter().all(|row| row.album_id == "a1" && row.album == "Альбом"));
+        assert!(page.tracks.iter().all(|row| row.album_id == "a1" && row.album == "Album"));
         assert_eq!(page.info.duration_ms, 3000);
         assert_eq!(page.info.item.album_id, "a1");
     }
@@ -1028,7 +1028,7 @@ mod tests {
             release_date: Some(date.into()),
             ..Default::default()
         };
-        // Spotify отдаёт альбомы, потом синглы: свежий сингл стоит в конце списка
+        // Spotify gives albums, then singles: a fresh single stands at the end of the list
         let albums = [
             release("old-album", "2017-06-23"),
             release("album", "2022-11-05"),
@@ -1055,7 +1055,7 @@ mod tests {
 
     #[test]
     fn a_failed_section_leaves_the_artist_page_standing() {
-        // 403 у популярного (режим разработки), 429 у альбомов: страница всё равно собирается
+        // 403 for popular (development mode), 429 for albums: the page is assembled anyway
         let refused = ApiError::Status { status: 403, message: "Forbidden".into() };
         let popular: Vec<Track> = or_empty(Err(refused), "popular", "muse");
         let albums: Vec<Album> = or_empty(Err(ApiError::RateLimited), "albums", "muse");
@@ -1069,16 +1069,16 @@ mod tests {
     #[tokio::test]
     async fn slow_extras_do_not_hold_the_page() {
         let grace = Duration::from_millis(20);
-        // подписка/похожие висят (429 у общего приложения) — страница не ждёт их дольше grace
+        // subscription/similar hang (429 from the shared app) — the page does not wait for them longer than grace
         let (page, extras) = with_extras(async { "page" }, std::future::pending::<bool>(), grace).await;
         assert_eq!((page, extras), ("page", None));
-        // успевшие — попадают на страницу, даже если ответили позже основного чтения
+        // the ones that made it — get on the page, even if they answered later than the main read
         let late = async {
             tokio::time::sleep(Duration::from_millis(5)).await;
             true
         };
         assert_eq!(with_extras(async { "page" }, late, grace).await, ("page", Some(true)));
-        // основное чтение дольше — его ждём целиком
+        // the main read is longer — it is waited for entirely
         let slow = async {
             tokio::time::sleep(Duration::from_millis(40)).await;
             "page"

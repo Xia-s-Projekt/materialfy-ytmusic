@@ -6,47 +6,47 @@ import Md3
 import Materialfy.Core
 import "app"
 
-// Главное окно: сайдбар | контент (+ мини-плеер) | правая панель.
+// Main window: sidebar | content (+ mini player) | right panel.
 Window {
     id: win
 
-    property string startPage: "home"     // --set startPage=settings | artist:<id> (для разработки)
-    // --set autoPlay=<spotify uri> — включить контекст, как только поднялось воспроизведение; --set openNowPlaying=true —
-    // затем раскрыть «Сейчас играет» (для скриншотов документации)
+    property string startPage: "home"     // --set startPage=settings | artist:<id> (for development)
+    // --set autoPlay=<spotify uri> — start the context as soon as playback comes up; --set openNowPlaying=true —
+    // then open "Now playing" (for documentation screenshots)
     property string autoPlay: ""
     property bool openNowPlaying: false
     // --set browse=album:<id>,artist:<id>,back,home,panel,sidebar… — one step every 4 s once the session is up:
     // open a page, go back, switch a section, toggle the right panel or the sidebar (memory measurements)
     property string browse: ""
-    // --set floatingPlayer=island|taskbar|both|off — вместо настройки (снимки); --set islandState=idle|peek|compact|
-    // volume|announcement|expanded — вид островка; --set taskbarEmbed=false — виджет панели задач сразу поверх панели, без встраивания;
-    // --set floatingShot=<path.png> — снимок окна островка или виджета (и при --screenshot), --set taskbarTheme=dark|light
+    // --set floatingPlayer=island|taskbar|both|off — instead of the setting (shots); --set islandState=idle|peek|compact|
+    // volume|announcement|expanded — the island's look; --set taskbarEmbed=false — the taskbar widget right above the panel, without embedding;
+    // --set floatingShot=<path.png> — a shot of the island or widget window (also with --screenshot), --set taskbarTheme=dark|light
     property string floatingPlayer: ""
     property string islandState: ""
     property bool taskbarEmbed: true
     property string floatingShot: ""
     property string taskbarTheme: ""
 
-    // размер и положение — последние сохранённые (см. _restoreGeometry); окно показывается уже на месте
+    // size and position — the last saved ones (see _restoreGeometry); the window is shown already in place
     width: 1280
     height: 800
-    // Меньше обычной раскладки окно уходит в «компактную» (сайдбар — шторкой), ещё меньше — в мини-плеер
-    // мини-режим: обложка, название и «назад / слушать / вперёд» — уже не помещаются
+    // Below the normal layout the window goes "compact" (the sidebar becomes a sheet), smaller still — to the mini player
+    // mini mode: the cover, title and "back / play / next" no longer fit
     minimumWidth: 400
     minimumHeight: 120
     visible: false
     title: Player.hasTrack ? Player.title + " — " + Player.artist + " · Materialfy YTMusic" : "Materialfy YTMusic"
-    // «Поверх всех окон» (кнопка мини-плеера, меню трека); не запоминается между запусками
+    // "Always on top" (mini player button, track menu); not remembered between runs
     property bool pinnedOnTop: false
-    // закрепление — свойство мини-режима: окно, развёрнутое обратно, поверх всех не висит
+    // pinning is a property of mini mode: a window restored back is not always on top
     onLayoutModeChanged: if (layoutMode !== "mini") pinnedOnTop = false
-    // Кадры рисует процессор (программный рендер) — ставит mf_shell.cpp, watch_software_rendering
+    // Frames are drawn by the CPU (software rendering) — set by mf_shell.cpp, watch_software_rendering
     property bool softwareRendering: false
-    // Wayland: протокола «поверх всех окон» нет (GNOME, Weston флаг игнорируют), и окно не знает своих координат
+    // Wayland: there is no "always on top" protocol (GNOME and Weston ignore the flag), and the window does not know its coordinates
     readonly property bool wayland: Qt.platform.pluginName.indexOf("wayland") === 0
     readonly property bool canPin: !wayland
-    // Плеер вне окна (Settings → Окно → «Плеер поверх окон»): островок — Windows, macOS, X11 и KDE Wayland (там его ставит скрипт KWin: окно
-    // не может встать у края экрана само), панель задач — только Windows
+    // Player outside the window (Settings → Window → "Player above windows"): the island — Windows, macOS, X11 and KDE Wayland (there a KWin script places it: the window
+    // cannot sit at the screen edge by itself), the taskbar — Windows only
     readonly property string floatingMode: {
         const mode = floatingPlayer !== "" ? floatingPlayer : Settings.floatingPlayer
         if (mode === "both" && Qt.platform.os === "windows")
@@ -58,13 +58,13 @@ Window {
         return "off"
     }
     flags: Qt.Window | Qt.FramelessWindowHint | (pinnedOnTop ? Qt.WindowStaysOnTopHint : 0)
-    // Linux/macOS: окно прозрачное, фон и скруглённые углы рисует WindowFrame (альфа-канал окна
-    // включается цветом при создании, поэтому цвет не меняется по ходу работы)
+    // Linux/macOS: the window is transparent, the background and rounded corners are drawn by WindowFrame (the window's alpha channel
+    // is enabled by a color at creation, so the color does not change during operation)
     color: Qt.platform.os === "windows" ? Theme.surface : "transparent"
 
-    // Раскладка по размеру окна. Порог с гистерезисом: вход в режим — у порога, выход — на 24 px дальше,
-    // поэтому у границы режим не дёргается туда-обратно. Переключается сразу в обе стороны, прямо во время
-    // перетаскивания края: режим меняется лишь при пересечении порога, а не на каждом шаге.
+    // Layout by window size. A threshold with hysteresis: entering a mode at the threshold, leaving it 24 px further,
+    // so the mode does not flip back and forth at the boundary. It switches both ways at once, right during
+    // dragging the edge: the mode changes only when the threshold is crossed, not on every step.
     property string layoutMode: _modeFor(width, height, "")
     readonly property bool mini: layoutMode === "mini"
     function _modeFor(w, h, cur) {
@@ -79,12 +79,12 @@ Window {
         if (next !== layoutMode)
             layoutMode = next
     }
-    // размер и положение — из настроек; заодно разрывает привязку layoutMode (дальше — только _reevaluateMode)
+    // size and position — from settings; it also breaks the layoutMode binding (from there on — only _reevaluateMode)
     Component.onCompleted: _restoreGeometry()
     onWidthChanged: { _reevaluateMode(); if (_geoReady) geoSave.restart() }
     onHeightChanged: { _reevaluateMode(); if (_geoReady) geoSave.restart() }
 
-    // 0 — обычная сцена, 1 — мини-плеер; между ними — перекрёстное растворение с лёгким масштабом
+    // 0 — the normal scene, 1 — the mini player; between them — a cross-fade with a slight scale
     property real miniProgress: mini ? 1 : 0
     Behavior on miniProgress {
         NumberAnimation { duration: 320; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized }
@@ -100,16 +100,16 @@ Window {
 
     readonly property bool panelFits: width >= 1100
     readonly property bool panelShown: Settings.rightPanelOpen && panelFits && layoutMode === "full"
-    // Открытая правая панель забирает 340 px: в окне уже 1400 боковая панель сворачивается в рейку,
-    // иначе контенту остаётся меньше, чем в самом узком окне, и мини-плеер с «орбитой» в него не влезают
+    // An open right panel takes 340 px: in a window of 1400 or more the side panel collapses into a rail,
+    // otherwise the content is left with less than in the narrowest window, and the mini player with the "orbit" does not fit
     readonly property bool compactSidebar: Settings.sidebarCollapsed || width < 980 || (panelShown && width < 1400)
 
-    // Закрытие окна прячет его в трей (если это включено и трей в системе есть) — музыка играет дальше.
-    // Выход — из меню значка или Ctrl+Q.
+    // Closing the window hides it in the tray (if that is enabled and the system has a tray) — the music keeps playing.
+    // Quit — from the tray icon menu or Ctrl+Q.
     readonly property bool trayWanted: typeof materialfyTray !== "undefined" && materialfyTray && Settings.closeToTray
     readonly property bool trayReady: tray.object !== null && tray.object.available
 
-    // Из мини-плеера — обратно к обычному размеру (последний сохранённый, но не меньше обычной раскладки)
+    // From the mini player — back to the normal size (the last saved one, but no smaller than the normal layout)
     function expandFromMini() {
         if (visibility !== Window.Windowed)
             visibility = Window.Windowed
@@ -127,10 +127,10 @@ Window {
         requestActivate()
     }
 
-    // ---- Размер и положение окна между запусками ----
+    // ---- Window size and position between runs ----
     property bool _geoReady: false
     function _onSomeScreen(px, py, w) {
-        // хотя бы верх окна (полоса, за которую его можно перетащить) — на одном из мониторов
+        // at least the top of the window (the bar it can be dragged by) — on one of the monitors
         for (const s of Qt.application.screens) {
             if (px + w / 2 >= s.virtualX && px + w / 2 < s.virtualX + s.width && py >= s.virtualY && py + 24 < s.virtualY + s.height)
                 return true
@@ -138,14 +138,14 @@ Window {
         return false
     }
     function _restoreGeometry() {
-        // --size (снимки, отладка) важнее сохранённого
+        // --size (shots, debugging) beats the saved one
         const cliSize = Qt.application.arguments.some(a => a === "--size" || a.startsWith("--size="))
         if (!cliSize) {
             width = Math.max(minimumWidth, Settings.windowWidth)
             height = Math.max(minimumHeight, Settings.windowHeight)
         }
         if (wayland) {
-            // положение окна на Wayland выбирает композитор
+            // on Wayland the compositor chooses the window position
         } else if (!cliSize && Settings.windowX > -1000000 && _onSomeScreen(Settings.windowX, Settings.windowY, width)) {
             x = Settings.windowX
             y = Settings.windowY
@@ -167,13 +167,13 @@ Window {
             Settings.windowMaximized = true
             return
         }
-        // свёрнутое, на весь экран или спрятанное в трей — последнее обычное положение не трогаем
+        // minimized, fullscreen or hidden in the tray — the last normal position is left alone
         if (visibility !== Window.Windowed)
             return
         Settings.windowMaximized = false
         Settings.windowWidth = width
         Settings.windowHeight = height
-        if (!wayland) {      // там x/y всегда 0 — не затираем положение, сохранённое под X11
+        if (!wayland) {      // there x/y are always 0 — we do not overwrite the position saved under X11
             Settings.windowX = x
             Settings.windowY = y
         }
@@ -198,7 +198,7 @@ Window {
         active: win.trayWanted
         delegate: Platform.SystemTrayIcon {
             visible: true
-            // одноцветный значок под панель: Windows — тема панели задач, иначе — тема Qt; macOS — шаблон (mask)
+            // a solid color icon per panel: Windows — the taskbar theme, otherwise the Qt theme; macOS — a template (mask)
             readonly property bool darkPanel: Settings.systemTaskbarTheme !== ""
                 ? Settings.systemTaskbarTheme === "dark"
                 : Qt.styleHints.colorScheme !== Qt.ColorScheme.Light
@@ -211,7 +211,7 @@ Window {
                 if (reason === Platform.SystemTrayIcon.MiddleClick)
                     Player.togglePlay()
                 else if (reason === Platform.SystemTrayIcon.Context) {
-                    // на Windows меню трея — виджетное, к значку Qt его не привязывает: открываем сами у курсора
+                    // on Windows the tray menu is a widget, Qt does not attach it to the icon: we open it ourselves at the cursor
                     if (Qt.platform.os === "windows")
                         trayMenu.open()
                 } else
@@ -237,29 +237,29 @@ Window {
         }
     }
 
-    // Всё содержимое окна — источник снимка для шторки смены темы (ThemeWipe поверх, вне его)
+    // All window content — the source of the shot for the theme change curtain (ThemeWipe on top, outside it)
     Item {
         id: scene
         anchors.fill: parent
-        // в мини-плеере сцена не выгружается (страницы и прокрутка сохраняются), а только гаснет и не рисуется
+        // in the mini player the scene is not unloaded (pages and scroll are preserved), it only dims and stops drawing
         visible: win.miniProgress < 1
         enabled: !win.mini
-        // уходящая раскладка гаснет быстрее, чем проявляется новая
+        // the departing layout fades faster than the new one appears
         opacity: Math.max(0, 1 - win.miniProgress * 1.6)
         scale: Theme.reducedMotion ? 1 : 1 - 0.04 * win.miniProgress
         layer.enabled: win.miniProgress > 0 && win.miniProgress < 1
 
         Rectangle { anchors.fill: parent; color: Theme.surface }
 
-        // Атмосферный фон: размытая обложка за всем окном. Сайдбар лежит прямо на ней,
-        // панели контента полупрозрачны — там свечение слабее.
+        // Atmospheric background: a blurred cover behind the whole window. The sidebar lies right on it,
+        // the content panels are semi-transparent — the glow is weaker there.
         TrackBackdrop {
             id: ambient
             anchors.fill: parent
             visible: Settings.ambientBackground && Player.cover !== ""
             opacity: Theme.dark ? 0.3 : 0.35
             source: Player.cover
-            // зерно «стекла» под всем интерфейсом — лишнее
+            // "glass" grain under the whole interface is unnecessary
             mode: Settings.backdropMode === "glass" ? "gauss" : Settings.backdropMode
             flow: Settings.nowPlayingDrift
             followTheme: Settings.accentFromCover
@@ -283,7 +283,7 @@ Window {
                 onNewPlaylistRequested: newPlaylistDialog.open(null)
             }
 
-            // Контент
+            // Content
             Surface {
                 id: content
                 Layout.fillWidth: true
@@ -312,9 +312,9 @@ Window {
 
                     Router {
                         id: router
-                        // settings/releases/liked строятся один раз и живут: первый вход инкубирует
-                        // (600–1200 мс), все следующие мгновенны. Параметрические (плейлисты,
-                        // артисты) — LRU-слоты в keepAliveSlots.
+                        // settings/releases/liked are built once and live: the first entry incubates
+                        // (600–1200 ms), every later one is instant. Parameterized ones (playlists,
+                        // artists) — LRU slots in keepAliveSlots.
                         keepAlive: ["home", "settings", "releases", "liked"]
                         keepAliveSlots: 6
                         pages: ({
@@ -334,10 +334,10 @@ Window {
                             playback: Qt.resolvedUrl("app/pages/PlaybackSetupPage.qml")
                         })
                         anchors.fill: parent
-                        // startPage=artist:<id> (album:, playlist:, show:, episode:) — страница с параметром. Каталог
-                        // читается через сессию librespot, поэтому такая страница открывается, когда сессия поднялась
+                        // startPage=artist:<id> (album:, playlist:, show:, episode:) — a page with a parameter. The catalog
+                        // is read through the librespot session, so such a page opens once the session is up
                         Component.onCompleted: {
-                            Qt.callLater(router._prewarm)   // до любого return: работает и без deep-link
+                            Qt.callLater(router._prewarm)   // before any return: works without a deep link too
                             const [name, id] = win.startPage.split(":")
                             if (!id) {
                                 reset(name)
@@ -407,19 +407,19 @@ Window {
                 }
             }
 
-            // Правая панель
+            // Right panel
             Item {
                 Layout.fillHeight: true
                 Layout.preferredWidth: win.panelShown ? 340 : 0
-                Layout.leftMargin: win.panelShown ? 0 : -8   // убирает зазор RowLayout у закрытой панели
+                Layout.leftMargin: win.panelShown ? 0 : -8   // removes the RowLayout gap of a closed panel
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
                 Behavior on Layout.leftMargin { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
                 clip: true
 
-                // Создаётся при первом открытии: в закрытом виде она не нужна, а собирать её дорого.
-                // Закрытая не просто прозрачна, а скрыта: иначе её анимации (морфы пустой очереди, текст
-                // песни) крутятся за кадром и перерисовывают всё окно. (Скрыт Loader, а не место в RowLayout:
-                // невидимое место раскладка выкидывает вместе с промежутком, и страница стала бы шире.)
+                // Created on first open: it is not needed when closed, and building it is expensive.
+                // Closed is not just transparent, it is hidden: otherwise its animations (empty queue morphs, lyrics
+                // text) run off-screen and redraw the whole window. (The Loader is hidden, not its place in RowLayout:
+                // an invisible place is dropped by the layout along with the gap, and the page would become wider.)
                 Loader {
                     width: 340
                     height: parent.height
@@ -444,7 +444,7 @@ Window {
     Loader {
         id: miniMode
         anchors.fill: parent
-        // однажды созданный мини-плеер остаётся (без пересоздания при каждом сжатии), невидимый — не рисуется
+        // a once-created mini player stays (no recreation on every squeeze), invisible — not drawn
         active: win.mini || win._miniUsed
         visible: win.miniProgress > 0
         enabled: win.mini
@@ -457,13 +457,13 @@ Window {
         }
     }
 
-    // Смена цвета (и фона — он меняется под снимком) под новую обложку. Способ — из настроек;
-    // направление: вперёд по очереди — слева направо, назад — справа налево; волна идёт от обложки
+    // Color change (and of the background — it changes under the shot) for a new cover. The method — from settings;
+    // direction: forward in the queue — left to right, back — right to left; the wave travels from the cover
     ThemeWipe {
         id: themeWipe
         anchors.fill: parent
         source: win.mini && miniMode.item ? miniMode.item : scene
-        // reduced motion: без шторок и волн — только растворение
+        // reduced motion: no curtains or waves — a plain fade
         mode: Theme.reducedMotion ? "dissolve" : Settings.trackTransition
         originItem: win.mini && miniMode.item ? miniMode.item.coverItem
                   : nowPlaying.open ? nowPlaying.coverItem : miniPlayer.coverItem
@@ -471,8 +471,8 @@ Window {
         Component.onCompleted: Theme.wipe = themeWipe
     }
     Binding { target: Theme; property: "wipeDirection"; value: Player.direction }
-    // Уровень звука — полноэкранному плееру и мини-режиму («дыхание» обложки), полоскам островка и пульсу
-    // обложки в панели задач
+    // Volume level — to the fullscreen player and mini mode (cover "breathing"), the island bars and the pulse
+    // of the cover in the taskbar
     Binding {
         target: Player
         property: "levelsWanted"
@@ -480,7 +480,7 @@ Window {
             || (taskbarWindow.object !== null && taskbarWindow.object.wantsLevels)
     }
 
-    // ---- Плеер вне окна: живёт рядом с главным окном, и пока оно свёрнуто или в трее ----
+    // ---- Player outside the window: it lives beside the main window, and while it is minimized or in the tray ----
     function screenIndicesFromSetting(settingVal, screenCount) {
         if (!settingVal || settingVal === "" || settingVal === "0")
             return [0]
@@ -502,7 +502,7 @@ Window {
     readonly property var activeIslandScreens: {
         const screens = Qt.application.screens
         const count = screens ? screens.length : 1
-        // macOS: на всех экранах, а покажется только тот, где есть вырез (FloatingIsland.qml)
+        // macOS: on all screens, but only the one with a notch will show it (FloatingIsland.qml)
         return win.screenIndicesFromSetting(Qt.platform.os === "osx" ? "all" : Settings.floatingIslandScreens, count)
     }
 
@@ -512,8 +512,8 @@ Window {
         return win.screenIndicesFromSetting(Settings.taskbarScreens, count)
     }
 
-    // Снимок (--screenshot) снимает только главное окно — плеер вне окна там не нужен (кроме floatingShot).
-    // Островок живёт и без трека (тонкая полоска у края), виджет в панели задач — только с треком
+    // A shot (--screenshot) captures only the main window — the player outside the window is not needed there (except floatingShot).
+    // The island lives even without a track (a thin bar at the edge), the taskbar widget — only with a track
     readonly property bool _floatingAllowed: floatingShot !== "" || !Qt.application.arguments.some(a => a.startsWith("--screenshot"))
 
     Instantiator {
@@ -543,7 +543,7 @@ Window {
             embed: win.taskbarEmbed
             shotPath: win.floatingShot
             forcedTheme: win.taskbarTheme
-            // Explorer перезапустился и унёс окно с собой — создать заново (не из обработчика самого окна)
+            // Explorer restarted and carried the window away — recreate it (not from the window's own handler)
             onLost: taskbarRecreate.start()
         }
     }
@@ -560,15 +560,15 @@ Window {
         property: "lowPower"
         value: Settings.lowPowerMode === "on" || (Settings.lowPowerMode !== "off" && win.softwareRendering)
     }
-    // Окно не в фокусе (или свёрнуто) — декоративные анимации стоят
-    // закреплённый мини-плеер висит на виду поверх других окон — его анимации не замирают и без фокуса
+    // Window not focused (or minimized) — decorative animations stop
+    // a pinned mini player is on top of other windows — its animations do not freeze even without focus
     Binding {
         target: Theme; property: "calm"
         value: Settings.calmWhenInactive && (win.visibility === Window.Minimized
                || (!win.active && !(win.pinnedOnTop && win.layoutMode === "mini")))
     }
 
-    // Переходы к исполнителю / альбому / плейлисту — откуда угодно (строки треков, плееры)
+    // Navigation to artist / album / playlist — from anywhere (track rows, players)
     Connections {
         target: Catalog
         function onOpenRequested(name, props) {
@@ -578,7 +578,7 @@ Window {
             artistPreview.hide()
             if (nowPlaying.open)
                 nowPlaying.hide()
-            // поиск по ссылке при уже открытом поиске — тот же экран с новым запросом
+            // a link search with search already open — the same screen with a new query
             const page = router.currentItem
             if (name === "search" && router.currentName === "search" && page && page.showQuery)
                 page.showQuery(Catalog.searchQuery)
@@ -593,13 +593,13 @@ Window {
         }
         function onTrackMenuRequested(track, x, y, w, h) {
             artistPreview.hide()
-            // «Убрать из этого плейлиста» — только на странице своего плейлиста
+            // "Remove from this playlist" — only on your own playlist page
             const page = router.currentItem
             trackMenu.playlistId = !nowPlaying.open && router.currentName === "playlist" && page && page.canEdit ? page.playlistId : ""
             trackMenu.show(track, Qt.point(x, y), w > 0 && h > 0 ? Qt.size(w, h) : undefined)
         }
     }
-    // Короткие сообщения сервисов; «не ответил» приходит только от Player
+    // Short service messages; "did not respond" only ever comes from Player
     Connections {
         target: Library
         function onNotice(text) { snackbar.show(text) }
@@ -614,19 +614,19 @@ Window {
         ignoreUnknownSignals: true
         function onNotice(text) { snackbar.show(text) }
     }
-    // Snackbar для страниц: win.notify(текст[, действие, функция])
+    // Snackbar for pages: win.notify(text[, action, function])
     function notify(text, actionText, onAction) {
         snackbar.show(text, actionText ?? "", onAction ?? null)
     }
 
-    // «Радио по треку / исполнителю»: станция сразу играет, без перехода и без вопроса; сид выбран и на
-    // орбите главной, чтобы там было видно, что звучит. Пустой title — подпись подставит сервис.
+    // "Radio by track / artist": the station plays immediately, with no navigation and no question; the seed is selected and on the
+    // home page's orbit, so it is visible there what is playing. An empty title — the service supplies the label.
     function radioFrom(seedUri, title) {
         Radio.select(seedUri)
         Radio.playStation(seedUri, title)
     }
 
-    // Настройки на нужном разделе (меню островка и виджета панели задач)
+    // Settings on the right section (island and taskbar widget menu)
     function openSettings(section) {
         if (nowPlaying.open)
             nowPlaying.hide()
@@ -636,7 +636,7 @@ Window {
     }
 
     function trackMenuAction(id, track, item) {
-        // очередь, настройки и переходы живут в обычной раскладке
+        // the queue, settings and navigation live in the normal layout
         if (win.mini && (id === "queue" || id === "sound" || id === "removefromplaylist"))
             win.expandFromMini()
         if (id === "radio:track") {
@@ -728,7 +728,7 @@ Window {
         anchors.fill: parent
         z: 2200
     }
-    // Прошлый запуск упал или зависал (в crash.log новые записи) — предложить сообщить, один раз
+    // The last run crashed or hung (new entries in crash.log) — offer to report it, once
     Timer {
         interval: 2500
         running: CrashReport.pending
@@ -742,7 +742,7 @@ Window {
     }
 
     ResizeEdges { window: win }
-    // забирает всё содержимое окна к себе: фон окна и скругление углов (см. WindowFrame)
+    // takes all window content to itself: the window background and corner rounding (see WindowFrame)
     WindowFrame { window: win }
 
     Loader {
@@ -754,14 +754,14 @@ Window {
         sourceComponent: FpsOverlay {}
     }
 
-    // Навигация мышью «назад» и горячие клавиши
+    // Mouse "back" navigation and hotkeys
     TapHandler {
         acceptedButtons: Qt.BackButton
         onTapped: nowPlaying.open ? nowPlaying.hide() : router.back()
     }
     Shortcut { sequences: [StandardKey.Back, "Alt+Left"]; onActivated: nowPlaying.open ? nowPlaying.hide() : router.back() }
 
-    // Плеер (пробел не перехватывается, пока фокус в поле ввода)
+    // Player (space is not intercepted while focus is in an input field)
     Shortcut { sequence: "Space"; onActivated: Player.togglePlay() }
     Shortcut { sequences: ["Ctrl+Right", "Media Next"]; onActivated: Player.next() }
     Shortcut { sequences: ["Ctrl+Left", "Media Previous"]; onActivated: Player.previous() }
@@ -776,18 +776,18 @@ Window {
     Shortcut {
         sequences: [StandardKey.Find]
         onActivated: {
-            // в списке треков — сначала поиск по нему; повторное нажатие — общий поиск
+            // in the track list — search by it first; pressing again — a general search
             if (!nowPlaying.open && router.currentItem && router.currentItem.findInPage && router.currentItem.findInPage())
                 return
             if (nowPlaying.open)
                 nowPlaying.hide()
-            // Поиск уже открыт: дедуп reset не перестроит страницу и focus не случится сам — зовём явно.
+            // Search is already open: a dedup reset will not rebuild the page and focus will not happen on its own — we call it explicitly.
             if (router.currentName === "search" && router.currentItem && router.currentItem.focusSearch) {
                 router.currentItem.focusSearch()
                 return
             }
             router.reset("search")
-            // фокус берёт сама SearchPage в Component.onCompleted — при инкубации reset currentItem ещё старый
+            // SearchPage takes focus itself in Component.onCompleted — during incubation reset's currentItem is still the old one
         }
     }
     Shortcut { sequence: "Ctrl+,"; onActivated: router.reset("settings") }
@@ -795,7 +795,7 @@ Window {
     Shortcut { sequence: "Ctrl+B"; onActivated: Settings.sidebarCollapsed = !Settings.sidebarCollapsed }
     Shortcut { sequence: "Ctrl+L"; onActivated: { Settings.rightPanelTab = "lyrics"; Settings.rightPanelOpen = !Settings.rightPanelOpen } }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
-    // F11: на весь экран и обратно — к тому, каким окно было (развёрнутым или обычным)
+    // F11: fullscreen and back — to whatever the window was (maximized or normal)
     property bool _maximizedBeforeFullScreen: false
     Shortcut {
         sequence: "F11"

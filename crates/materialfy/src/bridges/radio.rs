@@ -1,4 +1,4 @@
-// Radio — зеркало WaveService (радио Spotify, бывшая «Моя волна»): свойства из снимка, сигнал — по группе.
+// Radio - a mirror of WaveService (Spotify radio, formerly "My Wave"): properties from the snapshot, a signal per group.
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -47,23 +47,23 @@ pub mod qobject {
         #[cxx_name = "errorChanged"]
         fn error_changed(self: Pin<&mut Radio>);
 
-        /// Большая кнопка: станция выбранного сида или пауза/продолжение.
+        /// The big button: the selected seed's station or pause/resume.
         #[qinvokable]
         fn play(self: &Radio);
-        /// Радио от сида: "artist:ID" | "track:ID" | "album:ID" | "playlist:ID" | spotify:…-URI.
+        /// Radio from a seed: "artist:ID" | "track:ID" | "album:ID" | "playlist:ID" | spotify:... URI.
         #[qinvokable]
         #[cxx_name = "playStation"]
         fn play_station(self: &Radio, seed: &QString, title: &QString);
-        /// Выбрать сид на орбите (без запуска).
+        /// Select a seed on the orb (without starting).
         #[qinvokable]
         fn select(self: &Radio, seed_uri: &QString);
-        /// Открыть станцию (треки без воспроизведения).
+        /// Open a station (tracks without playback).
         #[qinvokable]
         fn open(self: &Radio, seed_uri: &QString);
-        /// «Пересобрать» — новый микс.
+        /// "Rebuild" - a new mix.
         #[qinvokable]
         fn refresh(self: &Radio);
-        /// «Сохранить как плейлист».
+        /// "Save as playlist".
         #[qinvokable]
         fn save(self: &Radio);
     }
@@ -104,7 +104,7 @@ impl Default for RadioRust {
     }
 }
 
-/// Сид станции: плитки «Радио» на главной несут и URI станции (spotify:station:…) — он сводится к сиду.
+/// Station seed: the "Radio" tiles on the home screen also carry the station URI (spotify:station:...) - it reduces to a seed.
 fn seed_of(text: &QString) -> String {
     let text = text.to_string();
     yt_api::util::station_seed(&text).unwrap_or(text)

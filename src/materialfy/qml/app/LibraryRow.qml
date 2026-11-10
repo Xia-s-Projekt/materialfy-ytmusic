@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Строка библиотеки (вид «список»): обложка 48 (исполнитель — круг, папка — иконка, Любимые — градиент),
-// название + булавка / «только чтение», подпись, колонки «Автор», «Добавлено», «Слушали» (последняя
-// прячется в узком окне), ⋯ по наведению. entry — словарь LIBRARY_KEYS.
+// Library row (the "list" view): a 48 cover (artist — circle, folder — icon, Liked — gradient),
+// title + pin / "read only", subtitle, the "Owner", "Added", "Played" columns (the last one
+// hides in a narrow window), ⋯ on hover. entry is a LIBRARY_KEYS dictionary.
 Item {
     id: root
 
@@ -125,7 +125,7 @@ Item {
             text: root.ago(root.entry.playedAt)
             type: "bodyMedium"
             color: Theme.fgSurfaceVariant
-            // «На прошлой неделе» — в две строки, а не с многоточием
+            // "Last week" wraps to two lines instead of an ellipsis
             wrapMode: Text.WordWrap
             maximumLineCount: 2
         }

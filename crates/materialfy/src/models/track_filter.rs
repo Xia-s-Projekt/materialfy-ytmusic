@@ -1,7 +1,7 @@
-//! TrackFilter { source: модель; query: "текст" } (trackfilter.py): поиск внутри списка треков.
-//! Отдаёт те же роли, что модель треков, и годится для Player.playFrom: в очередь идёт найденное.
-//! Пустой запрос (active = false) — все треки источника как есть. Правила поиска — md3_model::trackfilter.
-//! Изменения источника (по rowsChanged) повторяются куском или перестановкой, чтобы список не терял прокрутку.
+//! TrackFilter { source: model; query: "text" } (trackfilter.py): search inside a track list.
+//! Returns the same roles as the track model, and works for Player.playFrom: what was found goes into the queue.
+//! An empty query (active = false) - all source tracks as they are. Search rules - md3_model::trackfilter.
+//! Source changes (via rowsChanged) are replayed as a chunk or a reorder, so the list does not lose its scroll.
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ pub mod qobject {
         type QList_i32 = cxx_qt_lib::QList<i32>;
     }
 
-    // База — тип из моста list_model (повторное объявление в "C++Qt" дублирует символы приведения)
+    // Base - the type from the list_model bridge (re-declaring it in "C++Qt" duplicates the cast symbols)
     unsafe extern "C++" {
         include!("materialfy/src/models/list_model.cxxqt.h");
         type QAbstractListModel = crate::models::list_model::qobject::QAbstractListModel;
@@ -140,14 +140,14 @@ pub mod qobject {
 cxx_qt::impl_transitive_cast!(qobject::TrackFilter, qobject::QAbstractListModel, cxx_qt::QObject);
 
 pub struct TrackFilterRust {
-    /// источник (DictListModel живёт до конца процесса — модели во владении синглтонов)
+    /// source (DictListModel lives until the process ends - the models are owned by singletons)
     model: *mut DictListModel,
     query: QString,
     words: Vec<String>,
-    /// строки поиска по трекам источника, пока он не менялся
+    /// search rows over the source tracks, while it has not changed
     hay: Option<Vec<String>>,
     rows: Vec<Row>,
-    /// подписки на rowsChanged и loadingChanged источника; снимаются при смене источника и удалении фильтра
+    /// subscriptions to the source's rowsChanged and loadingChanged; dropped when the source changes and the filter is deleted
     connection: Option<cxx_qt::QMetaObjectConnectionGuard>,
     loading_connection: Option<cxx_qt::QMetaObjectConnectionGuard>,
 }
@@ -166,11 +166,11 @@ impl Default for TrackFilterRust {
     }
 }
 
-/// Указатель на фильтр для обработчика сигнала источника (вызывается в GUI-потоке).
+/// Pointer to the filter for the source signal handler (called in the GUI thread).
 struct FilterPtr(*mut qobject::TrackFilter);
 
-// SAFETY: обработчик вызывается только в GUI-потоке (AutoConnection, объекты в одном потоке),
-// а соединение рвётся раньше, чем фильтр удаляется (guard в его полях).
+// SAFETY: the handler is called only in the GUI thread (AutoConnection, objects in one thread),
+// and the connection is broken before the filter is deleted (a guard in its fields).
 unsafe impl Send for FilterPtr {}
 
 impl FilterPtr {
@@ -180,12 +180,12 @@ impl FilterPtr {
 }
 
 impl qobject::TrackFilter {
-    /// Контекст источника (откуда треки) — для плеера.
+    /// Source context (where the tracks come from) - for the player.
     pub fn context(&self) -> PlayContext {
         unsafe { self.rust().model.as_ref() }.map(|m| m.context().clone()).unwrap_or_default()
     }
 
-    /// Найденные строки.
+    /// Found rows.
     pub fn rows(&self) -> &[Row] {
         &self.rust().rows
     }
@@ -205,7 +205,7 @@ impl qobject::TrackFilter {
         if model == self.rust().model {
             return;
         }
-        // старые соединения рвутся при замене guard
+        // old connections are broken when the guard is replaced
         let was_loading = self.loading();
         self.as_mut().rust_mut().connection = None;
         self.as_mut().rust_mut().loading_connection = None;
@@ -215,7 +215,7 @@ impl qobject::TrackFilter {
             let this = FilterPtr(unsafe { self.as_mut().get_unchecked_mut() } as *mut Self);
             let source = unsafe { Pin::new_unchecked(source) };
             let connection = source.on_rows_changed(move |source| {
-                // SAFETY: см. FilterPtr
+                // SAFETY: see FilterPtr
                 let filter = unsafe { Pin::new_unchecked(&mut *this.get()) };
                 filter.source_rows_changed(source.rows());
             });
@@ -223,7 +223,7 @@ impl qobject::TrackFilter {
             let this = FilterPtr(unsafe { self.as_mut().get_unchecked_mut() } as *mut Self);
             let source = unsafe { Pin::new_unchecked(&mut *model) };
             let connection = source.on_loading_changed(move |_| {
-                // SAFETY: см. FilterPtr
+                // SAFETY: see FilterPtr
                 unsafe { Pin::new_unchecked(&mut *this.get()) }.loading_changed();
             });
             self.as_mut().rust_mut().loading_connection = Some(connection);
@@ -256,7 +256,7 @@ impl qobject::TrackFilter {
         self.rust().rows.len() as i32
     }
 
-    /// loading источника (догрузка страниц)
+    /// source loading (page loading)
     fn loading(&self) -> bool {
         unsafe { self.rust().model.as_ref() }.is_some_and(|m| m.is_loading())
     }
@@ -285,7 +285,7 @@ impl qobject::TrackFilter {
         role_names_for(TRACK_KEYS)
     }
 
-    /// Строки источника. Время жизни не привязано к self: источник — отдельный объект.
+    /// Source rows. The lifetime is not tied to self: the source is a separate object.
     fn source_rows<'a>(&self) -> &'a [Row] {
         match unsafe { self.rust().model.as_ref() } {
             Some(model) => {
@@ -301,7 +301,7 @@ impl qobject::TrackFilter {
         self.refresh(items, false);
     }
 
-    /// _refresh из trackfilter.py.
+    /// _refresh from trackfilter.py.
     fn refresh(mut self: Pin<&mut Self>, items: &[Row], reset: bool) {
         let found: Vec<Row> = if self.rust().words.is_empty() {
             items.to_vec()
@@ -322,8 +322,8 @@ impl qobject::TrackFilter {
             self.reset_rows(found);
             return;
         }
-        // Источник изменился. Обычно это один кусок — догрузка, новый лайк в начале, снятый лайк:
-        // повторяем то же изменение.
+        // The source changed. Usually it is a single chunk - page loading, a new like at the start, a removed like:
+        // we replay the same change.
         let old = &self.rust().rows;
         let common = found.len().min(old.len());
         let mut head = 0;
@@ -341,7 +341,7 @@ impl qobject::TrackFilter {
         } else if head + tail == found.len() && old_len > found.len() {
             self.remove_rows(head, old_len - found.len());
         } else if found.len() == old_len && head < old_len {
-            // та же длина: перестановка одной строки (moveTracks) или замена строк на месте
+            // the same length: a single row reorder (moveTracks) or replacing rows in place
             let last = old_len - tail - 1;
             let (a, b) = (&old[head..=last], &found[head..=last]);
             let ptr_eq = |x: &[Row], y: &[Row]| x.iter().zip(y).all(|(p, q)| Arc::ptr_eq(p, q));
@@ -362,7 +362,7 @@ impl qobject::TrackFilter {
         }
     }
 
-    /// Строка from → to; `rows` — итоговые строки (уже переставленные).
+    /// Row from -> to; `rows` are the resulting rows (already reordered).
     fn move_row(mut self: Pin<&mut Self>, from: usize, to: usize, rows: Vec<Row>) {
         let child = if to > from { to + 1 } else { to };
         let parent = QModelIndex::default();
@@ -403,7 +403,7 @@ impl qobject::TrackFilter {
     }
 }
 
-/// Найденные строки и контекст источника, если `object` — TrackFilter.
+/// Found rows and the source context, if `object` is a TrackFilter.
 pub fn tracks_from_filter(object: &cxx_qt::QObject) -> Option<(Vec<TrackItem>, PlayContext)> {
     let filter = object.downcast::<qobject::TrackFilter>()?;
     let items = filter
@@ -412,7 +412,7 @@ pub fn tracks_from_filter(object: &cxx_qt::QObject) -> Option<(Vec<TrackItem>, P
         .filter_map(|row| serde_json::from_value(serde_json::Value::Object((**row).clone())).ok())
         .collect();
     let mut context = filter.context();
-    // найденное — не весь контекст: играть списком URI (queue.md), тип источника остаётся для Player.source
+    // the found rows are not the whole context: play as a URI list (queue.md), the source type stays for Player.source
     if filter.active() {
         context.context_uri = None;
     }

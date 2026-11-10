@@ -2,9 +2,9 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Значок устройства на обложке, пока играет другое устройство (пульт): круг primary с иконкой типа
-// и обводкой цветом подложки. Пропало — errorContainer, переносим сюда — computer на secondaryContainer.
-// Кладётся в угол обложки: anchors.right/bottom с отрицательным отступом.
+// Device badge on the cover while another device plays (remote): primary circle with a type icon
+// and an outline in the backdrop color. Gone — errorContainer, transferring here — computer on secondaryContainer.
+// Placed in the cover corner: anchors.right/bottom with a negative margin.
 Item {
     id: root
 
@@ -14,7 +14,7 @@ Item {
                                        && Devices.transferringTo === Devices.thisDeviceId
     readonly property bool shown: Player.hasTrack && (Player.remote === true || Player.deviceLost === true || movingHere)
 
-    // Иконка и подпись по Device.type (как device_icon в spotifast) — общие для всех экранов устройств
+    // Icon and label by Device.type (like device_icon in spotifast) — shared by all device screens
     component Info: QtObject {
         property string type
         readonly property string key: (type ?? "").toLowerCase().replace(/[_\s-]/g, "")

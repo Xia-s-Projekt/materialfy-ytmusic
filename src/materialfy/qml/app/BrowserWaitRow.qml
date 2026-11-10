@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// «Браузер не открылся?» — открыть ссылку ещё раз или скопировать её (адрес ответа — чип у «Отмена» на странице).
+// "Browser did not open?" — open the link again or copy it (the reply address is the chip next to "Cancel" on the page).
 ColumnLayout {
     id: root
 

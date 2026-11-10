@@ -1,6 +1,6 @@
 [package]
 name = "md3-model"
-description = "Нейтральные типы элементов для QML (трек, альбом, плейлист, устройство…), изменения списков, контекст воспроизведения"
+description = "Neutral item types for QML (track, album, playlist, device…), list changes, playback context"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

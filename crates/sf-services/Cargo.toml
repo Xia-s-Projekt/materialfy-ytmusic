@@ -1,6 +1,6 @@
 [package]
 name = "sf-services"
-description = "Сервисы приложения на tokio: вход, библиотека, каталог, радио, главная, тексты, устройства Connect, история"
+description = "Application services on tokio: sign-in, library, catalog, radio, home, lyrics, Connect devices, history"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

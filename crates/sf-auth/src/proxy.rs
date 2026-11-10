@@ -1,5 +1,5 @@
-//! Прокси (перенос ProxyMode/ProxyConfig/ManualProxy из spotifast/src/settings.rs).
-//! Настройки хранит mf-platform (ProxyMode/ProxyHost/ProxyPort/ProxyUsername), пароль — слот Proxy в credentials.
+//! Proxy (ported ProxyMode/ProxyConfig/ManualProxy from spotifast/src/settings.rs).
+//! The settings are kept by mf-platform (ProxyMode/ProxyHost/ProxyPort/ProxyUsername), the password — the Proxy slot in credentials.
 use serde::{Deserialize, Serialize};
 
 use crate::credentials::ProxyPassword;
@@ -7,9 +7,9 @@ use crate::credentials::ProxyPassword;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProxyMode {
-    /// без прокси, игнорируя переменные окружения и настройки ОС
+    /// no proxy, ignoring environment variables and OS settings
     Off,
-    /// переменные окружения и (Windows/macOS) системный прокси
+    /// environment variables and (Windows/macOS) the system proxy
     #[default]
     System,
     Http,
@@ -19,7 +19,7 @@ pub enum ProxyMode {
 impl ProxyMode {
     pub const ALL: [ProxyMode; 4] = [Self::Off, Self::System, Self::Http, Self::Socks];
 
-    /// Значение настройки: "off" | "system" | "http" | "socks".
+    /// The setting's value: "off" | "system" | "http" | "socks".
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Off => "off",
@@ -42,7 +42,7 @@ impl ProxyMode {
         matches!(self, Self::Http | Self::Socks)
     }
 
-    /// Подпись для интерфейса.
+    /// A label for the UI.
     pub fn label(self) -> String {
         match self {
             Self::Off => mf_i18n::t("No proxy"),
@@ -53,10 +53,10 @@ impl ProxyMode {
     }
 }
 
-/// Итоговая политика прокси для HTTP-клиента и librespot.
+/// The final proxy policy for the HTTP client and librespot.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ProxyConfig {
-    /// неверные сохранённые настройки блокируют запросы до исправления
+    /// invalid saved settings block requests until they are fixed
     Invalid(String),
     Off,
     #[default]
@@ -71,7 +71,7 @@ enum ManualKind {
     Socks,
 }
 
-/// HTTP или SOCKS5 адрес с логином. Debug без логина и пароля.
+/// An HTTP or SOCKS5 address with a username. Debug without the username and password.
 #[derive(Clone, PartialEq, Eq)]
 pub struct ManualProxy {
     pub(crate) endpoint: reqwest::Url,
@@ -86,7 +86,7 @@ impl std::fmt::Debug for ManualProxy {
 }
 
 impl ProxyConfig {
-    /// Из полей настроек; ошибка — текст по-русски («укажите хост», «порт — число от 1 до 65535»).
+    /// From the settings fields; the error text is in Russian ("specify a host", "the port is a number from 1 to 65535").
     pub fn from_parts(mode: ProxyMode, host: &str, port: &str, username: &str, password: &str) -> Result<Self, String> {
         match mode {
             ProxyMode::Off => Ok(Self::Off),
@@ -96,7 +96,7 @@ impl ProxyConfig {
         }
     }
 
-    /// Как `from_parts`, но ошибка становится `Invalid` (запросы блокируются до исправления).
+    /// Like `from_parts`, but the error becomes `Invalid` (requests are blocked until it is fixed).
     pub fn resolve(mode: ProxyMode, host: &str, port: &str, username: &str, password: &str) -> Self {
         Self::from_parts(mode, host, port, username, password).unwrap_or_else(Self::Invalid)
     }
@@ -125,8 +125,8 @@ impl ProxyConfig {
         }
     }
 
-    /// librespot понимает только HTTP CONNECT без логина: URL с учётными данными ему не отдаём
-    /// (он пишет его в лог и всё равно не отправляет авторизацию прокси).
+    /// librespot only understands HTTP CONNECT without a username: we do not hand it a URL with credentials
+    /// (it writes it to the log and still does not send proxy authorization).
     pub fn librespot_url(&self) -> Option<reqwest::Url> {
         match self {
             Self::Http(manual) => manual.librespot_url(),
@@ -135,8 +135,8 @@ impl ProxyConfig {
         }
     }
 
-    /// Выбранный вручную прокси, через который librespot пойти не может (SOCKS5): движок тогда не запускают,
-    /// чтобы он не ушёл к Spotify напрямую. Текст — для интерфейса.
+    /// A manually chosen proxy librespot cannot go through (SOCKS5): the engine is then not started,
+    /// so that it does not reach Spotify directly. The text is for the UI.
     pub fn engine_unsupported(&self) -> Option<String> {
         match self {
             Self::Socks(_) => Some(mf_i18n::t(ENGINE_NEEDS_HTTP)),
@@ -148,7 +148,7 @@ impl ProxyConfig {
 const ENGINE_NEEDS_HTTP: &str =
     "Playback on this computer only works through an HTTP proxy — over SOCKS5 audio would bypass the proxy";
 
-/// HTTP-прокси, который режим System отдал бы движку. Системный SOCKS движок не умеет.
+/// The HTTP proxy the System mode would hand to the engine. The engine cannot do system SOCKS.
 fn system_http_proxy() -> Option<reqwest::Url> {
     let matcher = hyper_util::client::proxy::matcher::Matcher::from_system();
     let dest = http::Uri::from_static("https://apresolve.spotify.com");
@@ -222,7 +222,7 @@ impl ManualProxy {
         let host = if host.contains(':') { format!("[{host}]") } else { host };
         let scheme = match kind {
             ManualKind::Http => "http",
-            // имена Spotify разрешает прокси: SOCKS не выдаёт DNS-запросы мимо него
+            // Spotify's names are resolved by the proxy: SOCKS does not issue DNS requests around it
             ManualKind::Socks => "socks5h",
         };
         let endpoint = reqwest::Url::parse(&format!("{scheme}://{host}:{port}"))
@@ -230,7 +230,7 @@ impl ManualProxy {
         Ok(Self { endpoint, username: username.to_string(), password: password.to_string() })
     }
 
-    /// Запись пароля для хранилища — привязана к хосту, порту и логину.
+    /// A password entry for the store — tied to the host, port and username.
     pub(crate) fn password_record(&self) -> Option<ProxyPassword> {
         if self.password.is_empty() {
             return None;
@@ -254,7 +254,7 @@ impl ManualProxy {
         true
     }
 
-    /// Учётные данные ставятся отдельно, чтобы ошибка сборки не могла показать пароль.
+    /// The credentials are set separately so a build error cannot show the password.
     pub fn reqwest_proxy(&self) -> Result<reqwest::Proxy, reqwest::Error> {
         let mut proxy = reqwest::Proxy::all(self.endpoint.clone())?;
         if !self.username.is_empty() || !self.password.is_empty() {
@@ -263,7 +263,7 @@ impl ManualProxy {
         Ok(proxy)
     }
 
-    /// Адрес для librespot, с логином: он уходит прокси в Proxy-Authorization (форк librespot). Не для логов.
+    /// The address for librespot, with a username: it goes to the proxy in Proxy-Authorization (a librespot fork). Not for logs.
     fn librespot_url(&self) -> Option<reqwest::Url> {
         let mut url = self.endpoint.clone();
         if !self.username.is_empty() {
@@ -273,7 +273,7 @@ impl ManualProxy {
         Some(url)
     }
 
-    /// Адрес без учётных данных — для логов.
+    /// The address without credentials — for logs.
     pub fn redacted(&self) -> reqwest::Url {
         self.endpoint.clone()
     }
@@ -282,12 +282,12 @@ impl ManualProxy {
         !self.password.is_empty()
     }
 
-    /// Хост без скобок IPv6 (для QNetworkProxy).
+    /// The host without IPv6 brackets (for QNetworkProxy).
     pub fn host(&self) -> &str {
         self.endpoint.host_str().unwrap_or_default().trim_start_matches('[').trim_end_matches(']')
     }
 
-    /// Порт; Url прячет стандартный (80 у http), поэтому с умолчанием схемы.
+    /// The port; Url hides the standard one (80 for http), hence the scheme default.
     pub fn port(&self) -> u16 {
         self.endpoint.port_or_known_default().unwrap_or_default()
     }
@@ -301,7 +301,7 @@ impl ManualProxy {
     }
 }
 
-/// Проверка сохранённого пароля: запись должна получаться из своих же полей.
+/// Checking a saved password: the entry must be derived from its own fields.
 pub(crate) fn password_is_valid(saved: &ProxyPassword) -> bool {
     ManualProxy::parse(ManualKind::Http, &saved.host, &saved.port.to_string(), &saved.username, &saved.password)
         .ok()
@@ -394,7 +394,7 @@ mod tests {
         assert_eq!(proxy.username, "alice/name");
         assert_eq!(proxy.password, " secret/with spaces ");
         assert!(proxy.reqwest_proxy().is_ok());
-        // движку логин нужен (Proxy-Authorization), поэтому он в его адресе — но не в Debug
+        // the engine needs the username (Proxy-Authorization), so it is in its address — but not in Debug
         let engine = ProxyConfig::Http(proxy.clone()).librespot_url().unwrap();
         assert_eq!(engine.username(), "alice%2Fname");
         assert!(ProxyConfig::Http(proxy.clone()).engine_unsupported().is_none());
@@ -438,7 +438,7 @@ mod tests {
     fn endpoint_parts_for_the_shell_keep_the_default_port() {
         let v6 = manual(ManualKind::Socks, "[::1]", "1080", "u", "p").unwrap();
         assert_eq!((v6.host(), v6.port(), v6.username(), v6.password()), ("::1", 1080, "u", "p"));
-        // http://host:80 — Url прячет порт, но пароль всё равно сохраняется и восстанавливается
+        // http://host:80 — Url hides the port, but the password is still saved and restored
         let http = manual(ManualKind::Http, "proxy.example", "80", "user", "secret").unwrap();
         assert_eq!(http.port(), 80);
         let record = http.password_record().expect("password record");

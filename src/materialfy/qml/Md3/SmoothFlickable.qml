@@ -1,6 +1,6 @@
 import QtQuick
 
-// Flickable с плавной прокруткой колесом (см. SmoothScroll) для десктопа.
+// Flickable with smooth wheel scrolling (see SmoothScroll) for the desktop.
 Flickable {
     id: root
 
@@ -20,6 +20,6 @@ Flickable {
     SmoothScroll {
         id: scroll
         flickable: root
-        parent: root   // не в contentItem: индикатор не должен прокручиваться вместе с содержимым
+        parent: root   // not in contentItem: the indicator must not scroll with the content
     }
 }

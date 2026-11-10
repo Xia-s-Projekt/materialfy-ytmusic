@@ -1,14 +1,14 @@
 import QtQuick
 
-// Медленное вращение фигуры-рамки у MorphImage (target), пока spinning. Остановившись, рамка
-// доворачивается до ближайшей четверти оборота — квадрат не должен встать криво.
-// Отдельный объект, а не часть MorphImage: обложек в списках сотни, а крутятся одна-две.
+// Slow rotation of the frame shape on a MorphImage (target) while spinning. On stopping, the frame
+// turns to the nearest quarter turn — the square must not end up crooked.
+// A separate object, not part of MorphImage: there are hundreds of covers in lists, but only one or two spin.
 TickAnimation {
     id: root
 
     property Item target
     property bool spinning: false
-    property real speed: 8                 // градусов в секунду
+    property real speed: 8                 // degrees per second
 
     running: spinning && target !== null && target.visible && !Theme.quiet && !Theme.reducedMotion
     onTriggered: target.maskRotation = (target.maskRotation + frameTime * speed) % 360

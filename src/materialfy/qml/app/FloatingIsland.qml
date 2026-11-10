@@ -3,19 +3,19 @@ import QtQuick.Effects
 import Md3
 import Materialfy.Core
 
-// Островок («динамический вырез»): отдельное окно поверх всех у верхнего края экрана. Чёрный (как железо)
-// или цветной (тон обложки). Верх прямой — островок растёт из кромки экрана; на Mac с вырезом его верх —
-// сам вырез, по бокам вогнутые «плечи». Состояния (макет docs/design/50-dynamic-island.html):
-//   idle         — ничего не играет: тонкая полоска 120 × 5 у кромки (на Mac — ничего, вырез и есть полоска).
-//                  Курсор упёрся в верхний край над ней (на Mac — навели на вырез) — выезжает peek
-//   peek         — 260 × 44: «Ничего не играет», клик открывает Materialfy
-//   compact      — 164 × 36: обложка слева, полоски уровня (или пауза) справа
-//   volume       — 240 × 36: колесо или ↑ ↓ — проценты по центру, уровень на обложке
-//   announcement — 360 × 52 на 2,5 с при смене трека: обложка, название и исполнитель со шторкой
-//   expanded     — 400 × 158 при наведении: обложка, кнопки, волна прогресса, «назад / пуск / дальше»
-// Наведение — опросом курсора (WindowShell.cursorIn), а не HoverHandler: окно с маской и без фокуса Qt
-// узнаёт о мыши поздно, а полоску в покое курсор только задевает у самого края. Клавиши без фокуса
-// (← → треки, ↑ ↓ громкость, пробел) — пока курсор над островком (cpp/floating.cpp).
+// The island ("dynamic notch"): a separate always-on-top window at the top edge of the screen. Black (like the
+// hardware) or colored (cover-art hue). The top is straight — the island grows out of the screen edge; on a Mac with a notch its top —
+// is the notch itself, with concave "shoulders" on the sides. States (mockup docs/design/50-dynamic-island.html):
+//   idle         — nothing playing: a thin 120 × 5 bar at the edge (on Mac — nothing, the notch is the bar).
+//                  The cursor is pushed against the top edge above it (on Mac — the notch is hovered) — peek slides out
+//   peek         — 260 × 44: "Nothing is playing", a click opens Materialfy
+//   compact      — 164 × 36: cover on the left, level bars (or pause) on the right
+//   volume       — 240 × 36: wheel or ↑ ↓ — percentages in the center, level on the cover
+//   announcement — 360 × 52 for 2.5 s on track change: cover, title and artist with a wipe
+//   expanded     — 400 × 158 on hover: cover, buttons, progress wave, "previous / play / next"
+// Hover is detected by polling the cursor (WindowShell.cursorIn), not HoverHandler: a masked, focusless Qt window
+// learns about the mouse late, and at rest the cursor only grazes the bar at the very edge. Keys without focus
+// (← → tracks, ↑ ↓ volume, space) — work while the cursor is over the island (cpp/floating.cpp).
 Window {
     id: root
 
@@ -31,8 +31,8 @@ Window {
         onTriggered: root.contentItem.grabToImage(result => result.saveToFile(root.shotPath))
     }
 
-    // Вырез экрана Mac (ставит WindowShell.makeToolWindow, cpp/floating_mac.mm): там ничего не видно,
-    // содержимое раскрытого островка — под ним. Без выреза — 0
+    // Mac screen notch (set by WindowShell.makeToolWindow, cpp/floating_mac.mm): nothing is visible there,
+    // the expanded island's body sits under it. Without a notch — 0
     property int notchW: 0
     property int notchH: 0
     readonly property bool mac: notchH > 0
@@ -42,23 +42,23 @@ Window {
     readonly property bool wantsLevels: visible && mode !== "idle" && mode !== "peek" && Player.playing
         && Player.isLocal === true && !Theme.lowPower
 
-    // ---- Цвета: чёрный (как железо) или цветной (тон обложки) ----
-    readonly property bool colorMode: Settings.floatingPlayerStyle === "color" && !mac  // на Mac тело сливается с вырезом
-    // цветной: размытая обложка под тёмным стеклом (текст светлый) или, пока обложки нет, тональный контейнер
+    // ---- Colors: black (like the hardware) or colored (cover-art hue) ----
+    readonly property bool colorMode: Settings.floatingPlayerStyle === "color" && !mac  // on Mac the body blends into the notch
+    // colored: blurred cover under dark glass (light text) or, while there is no cover, a tonal container
     readonly property bool _onCover: colorMode && Player.cover !== ""
     readonly property color body: colorMode ? Theme.primaryContainer : "#000000"
     readonly property color ink: colorMode && !_onCover ? Theme.fgPrimaryContainer : "#ffffff"
     readonly property color inkDim: Qt.alpha(ink, 0.72)
-    // на чёрном — «фиксированный» акцент MD3: он одинаково светлый в светлой и тёмной теме приложения
+    // on black — the MD3 "fixed" accent: it is equally light in the app's light and dark themes
     readonly property color accent: colorMode ? ink : Theme.primaryFixedDim
 
-    // ---- Состояние ----
-    property bool _open: false          // раскрыт наведением
-    property bool _peek: false          // в покое выехал по курсору у края
-    property bool _wings: false         // Mac: курсор у выреза — по бокам от него выехали крылья с кнопками
+    // ---- State ----
+    property bool _open: false          // expanded by hover
+    property bool _peek: false          // at rest, slid out under the cursor at the edge
+    property bool _wings: false         // Mac: cursor at the notch — wings with buttons slid out beside it
     property bool _announce: false
     property bool _vol: false
-    property bool _keys: false          // подсказка с клавишами под раскрытым островком
+    property bool _keys: false          // key hint under the expanded island
 
     readonly property string mode: forcedState !== "" ? forcedState
         : !Player.hasTrack ? (_peek ? "peek" : "idle")
@@ -66,23 +66,23 @@ Window {
         : _wings ? "wings"
         : _announce ? "announcement"
         : _vol ? "volume"
-        : mac ? "idle"                  // Mac: в покое — только вырез, островок — по наведению
+        : mac ? "idle"                  // Mac: at rest only the notch, the island — on hover
         : "compact"
 
-    // край экрана: top / bottom / left / right / free (на Mac — всегда top, островок в вырезе)
+    // screen edge: top / bottom / left / right / free (on Mac — always top, the island in the notch)
     readonly property string edge: Qt.platform.os === "osx" ? "top" : Settings.floatingEdge
     readonly property bool vertical: edge === "left" || edge === "right"
     readonly property bool free: edge === "free"
-    // у края тянется только вдоль него, свободный — куда угодно
+    // at an edge it can only be dragged along it, free — anywhere
     readonly property bool _moveX: !vertical
     readonly property bool _moveY: vertical || free
 
     readonly property int expandedH: notchH + 158
     readonly property int wingW: 106
-    // Сбоку (left / right) островок вертикальный: прямой стороной к краю, растёт внутрь экрана; текст не повёрнут
+    // On the side (left / right) the island is vertical: straight side toward the edge, growing into the screen; text is not rotated
     readonly property int sideW: 216
     readonly property int sideH: 220
-    readonly property int sideBaseH: 112   // выше этого — уже раскрытие (island.t)
+    readonly property int sideBaseH: 112   // above this it is already an expansion (island.t)
     readonly property int targetW: vertical ? (mode === "expanded" || mode === "announcement" ? sideW
             : mode === "peek" ? 200
             : mode === "volume" ? 48
@@ -108,27 +108,27 @@ Window {
         : mac && mode === "compact" ? notchH
         : notchH + 36
 
-    // окно — по раскрытому островку своего края и подсказке клавиш под ним (сбоку островок посередине окна)
+    // window — sized to the expanded island of its edge and the key hint under it (on the side the island is centered in the window)
     width: vertical ? Math.max(sideW + 24, keysPopover.width + 16) : Math.max(400, notchW + 2 * wingW) + 2 * ear + 32
-    height: vertical ? sideH + 2 * 52 : expandedH + 56 // запас на подсказку клавиш под островком
+    height: vertical ? sideH + 2 * 52 : expandedH + 56 // room for the key hint under the island
     color: "transparent"
-    // KDE Wayland: окно ставит скрипт KWin и находит его по заголовку (cpp: crates/mf-platform/src/kwin.rs)
+    // KDE Wayland: a KWin script places the window and finds it by title (cpp: crates/mf-platform/src/kwin.rs)
     readonly property bool kwin: Qt.platform.pluginName.indexOf("wayland") === 0 && WindowShell.kwinAvailable()
     readonly property string kwinTitle: "Materialfy Island " + screenIndex
     title: kwin ? kwinTitle : "Materialfy"
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
     transientParent: null
-    // x и y — от целевого экрана, а не от screen: macOS сам переводит окно на экран, где лежат его координаты
+    // x and y are relative to the target screen, not screen: macOS itself moves the window to the screen where its coordinates lie
     readonly property var _screen: targetScreen || (mainWindow ? mainWindow.screen : null)
     screen: _screen
-    // У края — сдвиг от его середины (floatingOffsetX), свободный — место на экране (floatingFreeX / Y); то и другое
-    // задаётся в настройках и перетаскиванием, за край экрана не уезжает
+    // At an edge — an offset from its middle (floatingOffsetX), free — a position on screen (floatingFreeX / Y); both
+    // are set in settings and by dragging, and it does not leave the screen edge
     readonly property int _maxOffset: _screen ? Math.max(0, Math.round(((vertical ? _screen.height - height : _screen.width - width)) / 2)) : 0
     readonly property int offsetX: mac ? 0 : Math.max(-_maxOffset, Math.min(_maxOffset, Settings.floatingOffsetX))
     function _free(v, fallback, max) { return v === -1000000 ? fallback : Math.max(0, Math.min(max, v)) }
     readonly property int _freeX: _screen ? _free(Settings.floatingFreeX, Math.round((_screen.width - width) / 2), Math.max(0, _screen.width - width)) : 0
     readonly property int _freeY: _screen ? _free(Settings.floatingFreeY, 0, Math.max(0, _screen.height - height)) : 0
-    // пока тащат (Windows, X11) — окно там, куда его довели (_dragX / _dragY)
+    // while dragging (Windows, X11) — the window is where it was dragged to (_dragX / _dragY)
     property bool _dragging: false
     property real _dragX: 0
     property real _dragY: 0
@@ -147,13 +147,13 @@ Window {
 
     property bool _ready: false
     property bool _fullscreen: false
-    // macOS: островок — только в вырезе экрана; экран без выреза его не показывает
-    // KDE Wayland: окно свёрнуто — клиент этого не видит, прячет скрипт KWin. Окно приложения впереди на этом экране — островок дублирует плеер и перекрывает окно, прячем (не на Mac: там островок — вырез)
+    // macOS: the island only lives in the screen notch; a screen without a notch does not show it
+    // KDE Wayland: the window is minimized — the client cannot see that, the KWin script hides it. If the app window is in front on this screen the island duplicates the player and covers the window, so hide it (not on Mac: there the island is the notch)
     readonly property bool _appOnScreen: !mac && !kwin && shotPath === "" && forcedState === "" && !!mainWindow && mainWindow.active
         && mainWindow.screen.name === _screen.name
     visible: _ready && !_appOnScreen && (!_fullscreen || shotPath !== "") && (Qt.platform.os !== "osx" || mac)
 
-    // x, y, ширина и высота меняются пачкой при создании: скрипт KWin грузим один раз, а не на каждое изменение
+    // x, y, width and height change in a batch at creation: the KWin script is loaded once, not on every change
     Timer {
         id: kwinTimer
         interval: 100
@@ -175,8 +175,8 @@ Window {
         function onFloatingEdgeChanged() { root._relocate() }
     }
 
-    // Сменили край: свернуться, забыть наведение и тянущееся перетаскивание, новая маска и место. На KDE Wayland окно
-    // переставит скрипт KWin чуть позже — пока не встало, островок не показываем (не мелькает на старом месте)
+    // Edge changed: collapse, forget the hover and the drag, new mask and position. On KDE Wayland the window
+    // is moved by the KWin script a bit later — until it has settled, the island is not shown (no flicker at the old spot)
     property bool _settling: false
     Timer { id: settle; interval: 300; onTriggered: root._settling = false }
     function _relocate() {
@@ -192,13 +192,13 @@ Window {
             _settling = true
             settle.restart()
         }
-        // новый край — сразу в новом размере, без перетекания из старого
+        // new edge — immediately at the new size, no crossfade from the old one
         Qt.callLater(() => { widthAnim.complete(); heightAnim.complete(); _applyMask() })
         _kwinPlace()
     }
 
-    // Отпустили окно (x, y — его левый верхний угол на рабочем столе): у края запоминаем сдвиг вдоль него, свободный —
-    // место на экране. Скрипт KWin возвращает окно на место, даже если настройка не изменилась (прижимает к краю)
+    // Released the window (x, y — its top-left corner on the desktop): at an edge we remember the offset along it, free —
+    // the position on screen. The KWin script puts the window back in place even if the setting did not change (pins it to the edge)
     function _drop(x, y) {
         if (!_screen)
             return
@@ -213,8 +213,8 @@ Window {
         }
         _kwinPlace()
     }
-    // KDE Wayland: окно тащит сам KWin (startSystemMove), его скрипт сообщает, где отпустили. Ответа нет (скрипт не
-    // загрузился) — через 30 с перестаём ждать
+    // KDE Wayland: KWin itself drags the window (startSystemMove), its script reports where it was released. No reply (the script
+    // failed to load) — after 30 s we stop waiting
     property bool _moving: false
     Timer { id: moveWait; interval: 30000; onTriggered: root._moving = false }
     Connections {
@@ -236,12 +236,12 @@ Window {
         _ready = true
     }
     Component.onDestruction: { WindowShell.keyHook(root, false); if (kwin) WindowShell.kwinRelease(kwinTitle) }
-    // Qt сбрасывает уровень окна при показе (macOS): снова над строкой меню
+    // Qt resets the window level on show (macOS): above the menu bar again
     onVisibleChanged: if (!visible) { _collapse(); WindowShell.keyHook(root, false) } else if (Qt.platform.os === "osx") WindowShell.makeToolWindow(root)
 
-    // ---- Курсор: опрос 10 раз в секунду ----
-    // В покое — полоса у самой кромки над полоской (курсор «упёрся» в край), на Mac — вырез; иначе — сам островок.
-    // Зажата кнопка мыши (тащат окно к краю, выделяют) — не раскрываемся.
+    // ---- Cursor: polled 10 times per second ----
+    // At rest — a strip right at the edge above the bar (the cursor is "pushed" against the edge), on Mac — the notch; otherwise the island itself.
+    // A mouse button held down (dragging the window toward the edge, selecting) — do not expand.
     property int _dwell: 0
     readonly property int shrinkMs: 220
     readonly property var growCurve: [0.38, 1.21, 0.22, 1.0, 1.0, 1.0]
@@ -249,13 +249,13 @@ Window {
     property bool _inside: false
     on_InsideChanged: WindowShell.keyHook(root, _inside && mode !== "idle")
     Timer {
-        // раскрыт — чаще: уход курсора ловим за ~40 мс, а не за 100
+        // expanded — more often: the cursor leaving is caught in ~40 ms, not 100
         interval: root._open || root._peek || root._wings ? 40 : 100
         repeat: true
         running: root.visible && root.forcedState === ""
         onTriggered: {
             const idle = root.mode === "idle"
-            // в покое у края — полоса 320 × 3 вдоль кромки экрана, свободный — сама полоска
+            // at rest at an edge — a 320 × 3 strip along the screen edge, free — the bar itself
             const edgeZone = idle && !root.mac && !root.free
             const zw = idle && root.mac ? root.notchW + 20 : edgeZone ? (root.vertical ? 3 : 320) : island.width
             const zh = idle && root.mac ? root.notchH : edgeZone ? (root.vertical ? 320 : 3) : island.height
@@ -266,7 +266,7 @@ Window {
             root._inside = hit > 0 || busy
             if (hit === 1 && !busy) {
                 root._dwell += 1
-                // ~100–200 мс у края или над островком: случайный пролёт мыши к вкладкам браузера не раскрывает
+                // ~100–200 ms at the edge or over the island: a random mouse flyby toward browser tabs does not expand
                 if (root._dwell >= (idle ? 2 : 1))
                     root._hover()
             } else if (hit === 0 && !busy) {
@@ -278,10 +278,10 @@ Window {
                 leave.stop()
         }
     }
-    // Короткая пауза — прощает выскочивший на пару пикселей курсор, но не держит островок открытым
+    // A short pause forgives a cursor that jumped out by a couple of pixels but does not keep the island open
     Timer { id: leave; interval: 120; onTriggered: root._collapse() }
 
-    // Наведение: на Mac — крылья у выреза (панель — по клику), иначе — сразу раскрытие
+    // Hover: on Mac — wings at the notch (panel — on click), otherwise — immediate expansion
     function _hover() {
         if (!mac || !Player.hasTrack || _open)
             return _expand()
@@ -299,7 +299,7 @@ Window {
             return
         _open = true
         _announce = false
-        // подсказка с клавишами — первые три раскрытия
+        // key hint — the first three expansions
         if (Settings.floatingKeyHints < 3) {
             Settings.floatingKeyHints = Settings.floatingKeyHints + 1
             _keys = true
@@ -316,8 +316,8 @@ Window {
     Timer { id: announceEnd; interval: 2500; onTriggered: root._announce = false }
     Timer { id: volTimer; interval: 1200; onTriggered: root._vol = false }
 
-    // Приложение на весь экран или развёрнутое окно на мониторе островка — прячемся по настройкам (Windows; раз в 1,5 с).
-    // На KDE Wayland это делает скрипт KWin (kwin.rs)
+    // Full-screen app or a maximized window on the island's monitor — we hide per settings (Windows; every 1.5 s).
+    // On KDE Wayland the KWin script does that (kwin.rs)
     Timer {
         interval: 1500
         repeat: true
@@ -327,7 +327,7 @@ Window {
             || (Settings.floatingHideMaximized && WindowShell.maximizedOn(root))
     }
 
-    // ---- Смена трека: баннер, шторка текста, «танец» обложки ----
+    // ---- Track change: banner, text wipe, cover "dance" ----
     property string _lastUri: Player.uri
     property string _prevTitle: Player.title
     property string _prevArtist: Player.artist
@@ -358,7 +358,7 @@ Window {
         }
     }
 
-    // ---- Клавиши без фокуса и колесо ----
+    // ---- Keys without focus and the wheel ----
     function floatingKey(code) {
         switch (Number(code)) {
         case 1: Player.previous(); break
@@ -380,7 +380,7 @@ Window {
         expVolume.show()
     }
 
-    // ---- Маска окна: ровно фигура островка; сторона у кромки экрана прямая (скругление за краем окна отрезано) ----
+    // ---- Window mask: exactly the island's shape; the side at the screen edge is straight (rounding beyond the window edge is cut off) ----
     readonly property string _maskKey: [Math.round(island.x), Math.round(island.y), Math.round(island.width), Math.round(island.height),
         Math.round(island.radius), keysPopover.visible, mode === "idle", edge, width, height].join()
     on_MaskKeyChanged: Qt.callLater(_applyMask)
@@ -391,7 +391,7 @@ Window {
         let h = island.height
         let r = Math.round(island.radius)
         if (keysPopover.visible) {
-            // с подсказкой — прямоугольник вокруг островка и неё
+            // with the hint — a rectangle around the island and it
             const x2 = Math.max(x + w, keysPopover.x + keysPopover.width)
             const y2 = Math.max(y + h, keysPopover.y + keysPopover.height)
             x = Math.min(x, keysPopover.x)
@@ -413,8 +413,8 @@ Window {
         WindowShell.setMaskRounded(root, Math.floor(x), Math.floor(y), Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)), r)
     }
 
-    // ================= Тело островка =================
-    // Островок и его фон — источник снимка для шторки смены темы (окно постоянного размера: снимок не тянется)
+    // ================= Island body =================
+    // The island and its background are the snapshot source for the theme-change wipe (fixed-size window: the snapshot is not stretched)
     Item {
         id: stage
         anchors.fill: parent
@@ -422,8 +422,8 @@ Window {
 
         Item {
             id: island
-            // прижат к краю окна, к которому окно прижато на экране. Не anchors: при смене края якоря снимаются и
-            // ставятся не разом, и островок оставался растянутым до следующего наведения
+            // pinned to the window edge that the window is pinned to on screen. Not anchors: when the edge changes the anchors are removed and
+            // set not all at once, and the island stayed stretched until the next hover
             x: root.edge === "left" ? 0 : root.edge === "right" ? parent.width - width : Math.round((parent.width - width) / 2)
             y: root.edge === "bottom" ? parent.height - height : root.vertical ? Math.round((parent.height - height) / 2) : 0
             width: root.targetW
@@ -433,16 +433,16 @@ Window {
                 : root.mode === "announcement" || root.mode === "peek" ? 22
                 : root.mode === "wings" ? 14
                 : 18
-            // скруглены только углы не у кромки экрана; свободный — все
+            // only the corners away from the screen edge are rounded; free — all of them
             readonly property real radiusTL: root.edge === "top" || root.edge === "left" ? 0 : radius
             readonly property real radiusTR: root.edge === "top" || root.edge === "right" ? 0 : radius
             readonly property real radiusBL: root.edge === "bottom" || root.edge === "left" ? 0 : radius
             readonly property real radiusBR: root.edge === "bottom" || root.edge === "right" ? 0 : radius
-            // 0 — компактный, 1 — раскрытый: по нему слои переливаются друг в друга
+            // 0 — compact, 1 — expanded: the layers morph into each other along it
             readonly property real t: root.vertical ? Math.max(0, Math.min(1, (height - root.sideBaseH) / (root.sideH - root.sideBaseH)))
                 : Math.max(0, Math.min(1, (height - root.notchH - 36) / (root.expandedH - root.notchH - 36)))
 
-            // Раскрытие — пружина; сворачивание — быстрое и без отскока: убрал мышь — островок сразу уходит
+            // Expanding — a spring; collapsing — fast and without bounce: mouse away — the island leaves at once
             Behavior on width {
                 id: widthMotion
                 enabled: root.motion
@@ -474,12 +474,12 @@ Window {
                 antialiasing: true
                 clip: true
                 color: root.mode === "idle" ? (root.colorMode ? Theme.primary : "#101114") : root.body
-                // Mac: в покое чёрное тело сливается с вырезом — крылья видно, как они в него уезжают
+                // Mac: at rest the black body blends into the notch — the wings are visible as they slide into it
                 border.width: root.mode === "idle" && !root.mac ? 1 : 0
                 border.color: Qt.rgba(1, 1, 1, 0.28)
 
-                // Цветной: обложка размыта под тёмным стеклом и «плавает», пока играет (настройки фона плеера). clip режет
-                // по прямоугольнику — по фигуре островка обрезает маска
+                // Colored: the cover is blurred under dark glass and "floats" while playing (player background settings). clip cuts
+                // by the rectangle — the mask trims to the island's shape
                 Item {
                     id: coverFill
                     anchors.fill: parent
@@ -491,7 +491,7 @@ Window {
                         maskThresholdMin: 0.5
                         maskSpreadAtMin: 1.0
                     }
-                    // с двойным буфером: без провала в цвет, пока грузится новая обложка
+                    // double-buffered: no color drop-out while the new cover loads
                     TrackBackdrop {
                         anchors.fill: parent
                         source: Player.cover
@@ -499,7 +499,7 @@ Window {
                         blur: Settings.nowPlayingBlur
                         flow: Settings.nowPlayingDrift
                         running: root.mode !== "idle" && root.motion && Player.playing
-                        // меняется вместе с цветами — под шторкой islandWipe, как фон окна приложения
+                        // changes together with the colors — under the islandWipe wipe, like the app window background
                         followTheme: Settings.accentFromCover
                     }
                     Rectangle {
@@ -519,7 +519,7 @@ Window {
                 }
             }
 
-            // «Плечи»: вогнутые скругления у кромки экрана рядом с вырезом (Mac)
+            // "Shoulders": concave roundings at the screen edge next to the notch (Mac)
             component Ear: Item {
                 id: earItem
                 property bool mirrored: false
@@ -550,14 +550,14 @@ Window {
                     root.nudgeVolume(touchpad ? event.pixelDelta.y / 600 : event.angleDelta.y / 120 * 0.05)
                 }
             }
-            // Тянем островок: у края — вдоль него, свободный — куда угодно; окно идёт за курсором сразу. KDE Wayland: окно
-            // само себя не двигает — тащит KWin (startSystemMove), его скрипт держит ось (kwin.rs). Иначе двигаем сами,
-            // как TopBar: курсор сдвинулся от точки захвата — сдвигаем окно на столько же
+            // Dragging the island: at an edge — along it, free — anywhere; the window follows the cursor immediately. KDE Wayland: the window
+            // does not move itself — KWin drags it (startSystemMove), its script holds the axis (kwin.rs). Otherwise we move it ourselves,
+            // like TopBar: the cursor moved from the grab point — the window moves by the same amount
             DragHandler {
                 id: slide
                 target: null
                 acceptedButtons: Qt.LeftButton
-                // на Wayland без KDE окно себя не двигает, тащить нечем
+                // on Wayland without KDE the window does not move itself, there is nothing to drag with
                 enabled: !root.mac && root._screen !== null && (root.kwin || Qt.platform.pluginName.indexOf("wayland") !== 0)
                 onActiveChanged: {
                     if (active && root.kwin) {
@@ -590,7 +590,7 @@ Window {
                     if (root.mode === "peek")
                         WindowShell.raiseMain()
                     else if (root.mode === "wings") {
-                        // клик по самому вырезу; кнопки на крыльях — свои
+                        // a click on the notch itself; the buttons on the wings have their own handlers
                         if (point.position.x > root.wingW && point.position.x < island.width - root.wingW)
                             root._expand()
                     } else if (root.mode !== "expanded")
@@ -602,7 +602,7 @@ Window {
                 onTapped: point => islandMenu.openAt(island.mapToItem(root.contentItem, point.position.x, point.position.y))
             }
 
-            // ================= Компактный слой: compact / volume / announcement / peek =================
+            // ================= Compact layer: compact / volume / announcement / peek =================
             Item {
                 id: compactLayer
                 x: 0
@@ -612,7 +612,7 @@ Window {
                 visible: root.mode !== "idle" && root.mode !== "wings" && island.t < 0.7
                 opacity: Math.max(0, 1 - island.t * 1.6)
 
-                // обложка слева, сбоку — сверху (в покое — значок приложения)
+                // cover on the left, on the side — at the top (at rest — the app icon)
                 Item {
                     id: cmpCover
                     x: root.vertical ? Math.round((parent.width - width) / 2) : root.mode === "announcement" || root.mode === "peek" ? 10 : 9
@@ -654,7 +654,7 @@ Window {
                     }
                 }
 
-                // баннер смены трека и peek: две строки текста (сбоку — под обложкой, по центру)
+                // track-change banner and peek: two lines of text (on the side — under the cover, centered)
                 Item {
                     id: textBox
                     x: root.vertical ? 12 : cmpCover.x + cmpCover.width + 10
@@ -691,7 +691,7 @@ Window {
                     }
                 }
 
-                // громкость: проценты по центру (сбоку узко — без значка, уровень и так на обложке)
+                // volume: percentages in the center (on the side it is narrow — no icon, the level is on the cover anyway)
                 Row {
                     anchors.centerIn: parent
                     visible: root.mode === "volume"
@@ -714,7 +714,7 @@ Window {
                     }
                 }
 
-                // полоски уровня справа (сбоку — снизу), на паузе — значок паузы
+                // level bars on the right (on the side — at the bottom), on pause — the pause icon
                 Item {
                     id: cmpBars
                     x: root.vertical ? Math.round((parent.width - width) / 2) : parent.width - width - 12
@@ -736,11 +736,11 @@ Window {
                     }
                 }
 
-                // шторка: старое название уезжает за лучом от обложки
+                // wipe: the old title leaves behind the beam from the cover
                 AnnouncementCurtain {
                     id: curtain
                     anchors.fill: parent
-                    // старое название — справа от обложки; сбоку текст под ней, хватает сдвига текста
+                    // the old title — to the right of the cover; on the side the text is under it, shifting the text is enough
                     visible: root.mode === "announcement" && running && !root.vertical
                     cmpCover: cmpCover
                     motion: root.motion
@@ -751,7 +751,7 @@ Window {
                 }
             }
 
-            // ================= Крылья у выреза (Mac): слева обложка и лайк, справа управление =================
+            // ================= Wings at the notch (Mac): cover and like on the left, controls on the right =================
             Item {
                 id: wingsLayer
                 anchors.fill: parent
@@ -810,7 +810,7 @@ Window {
                 }
             }
 
-            // ================= Раскрытый слой =================
+            // ================= Expanded layer =================
             Item {
                 id: expLayer
                 anchors.fill: parent
@@ -819,7 +819,7 @@ Window {
                 clip: true
                 readonly property int topY: root.notchH + 14
 
-                // сбоку: обложка по центру, кнопки по бокам от неё, текст под ней
+                // on the side: cover in the center, buttons on either side of it, text under it
                 Item {
                     id: headerRow
                     x: root.vertical ? 12 : 18
@@ -887,7 +887,7 @@ Window {
                         TapHandler { onTapped: WindowShell.raiseMain() }
                     }
 
-                    // сбоку кнопки расходятся по обе стороны обложки: промежуток — её ширина
+                    // on the side the buttons spread to either side of the cover: the gap is its width
                     Row {
                         id: sideButtons
                         x: root.vertical ? Math.round((parent.width - width) / 2) : parent.width - width
@@ -896,7 +896,7 @@ Window {
                         IslandBtn {
                             readonly property string trackId: Player.track && Player.track.trackId ? String(Player.track.trackId) : ""
                             readonly property bool liked: Library.likesRevision >= 0 && trackId !== "" && Library.isLiked(trackId)
-                            // сбоку место держим и у подкаста, иначе вторая кнопка уедет под обложку
+                            // on the side we keep room for a podcast too, otherwise the second button slides under the cover
                             visible: root.vertical || Player.isEpisode !== true
                             opacity: Player.isEpisode === true ? 0 : 1
                             enabled: Player.isEpisode !== true
@@ -913,7 +913,7 @@ Window {
                     }
                 }
 
-                // время — волна — время
+                // time — wave — time
                 PlayerProgress { id: progress; active: expLayer.visible && !seek.dragging }
                 Item {
                     x: headerRow.x
@@ -997,7 +997,7 @@ Window {
         }
     }
 
-    // Смена цветов под новую обложку — той же шторкой, что и в окне приложения, и одновременно с ней
+    // Color change for the new cover — with the same wipe as the app window, and in sync with it
     ThemeWipe {
         id: islandWipe
         anchors.fill: parent
@@ -1008,10 +1008,10 @@ Window {
         Component.onDestruction: Theme.removeWipe(islandWipe)
     }
 
-    // ================= Подсказка с клавишами (первые три раскрытия) =================
+    // ================= Key hint (first three expansions) =================
     Rectangle {
         id: keysPopover
-        // под островком (снизу — над ним), сбоку — у того же края
+        // under the island (at the bottom — above it), on the side — at the same edge
         x: root.edge === "left" ? 8 : root.edge === "right" ? parent.width - width - 8 : Math.round((parent.width - width) / 2)
         y: root.edge === "bottom" ? island.y - height - 8 : island.y + island.height + 8
         width: keysRow.implicitWidth + 24
@@ -1042,13 +1042,13 @@ Window {
         }
     }
 
-    // ================= Анимации смены трека =================
+    // ================= Track-change animations =================
     ParallelAnimation {
         id: textSlide
         NumberAnimation { target: root; property: "_textSlideX"; from: 24; to: 0; duration: 460; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate }
         NumberAnimation { target: root; property: "_textSlideOpacity"; from: 0; to: 1; duration: 320; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate }
     }
-    // обложка на островке — статичная фигура, без «танца» при смене трека
+    // the cover on the island is a static shape, with no "dance" on track change
     SequentialAnimation {
         id: coverDance
         PropertyAction { target: root; property: "_danceShape"; value: "" }
@@ -1112,7 +1112,7 @@ Window {
         }
     }
 
-    // Полоски уровня: настоящий уровень звука (своё воспроизведение) или ровное движение (другое устройство)
+    // Level bars: real audio level (own playback) or smooth motion (another device)
     component Bars: Item {
         id: bars
         property var levels: [0.45, 0.8, 0.6, 0.35]

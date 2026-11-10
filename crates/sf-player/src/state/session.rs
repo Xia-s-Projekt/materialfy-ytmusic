@@ -1,5 +1,5 @@
-//! Сохранённая сессия плеера (queue.md п. 9): трек и позиция возобновления, контекст, ручная очередь,
-//! первые строки «Далее», shuffle. Файл пишется атомарно (временный файл + переименование).
+//! The player's saved session (queue.md §9): the resume track and position, the context, the manual queue,
+//! the first "Next" rows, shuffle. The file is written atomically (a temporary file + rename).
 use std::path::Path;
 
 use md3_model::{PlayContext, TrackItem};
@@ -11,12 +11,12 @@ pub struct SessionData {
     pub version: u32,
     pub context_uri: Option<String>,
     pub context: PlayContext,
-    /// трек возобновления (с данными для показа до первого Play)
+    /// the resume track (with data to show before the first Play)
     pub track: Option<TrackItem>,
     pub position_ms: u32,
-    /// «Далее в очереди» — URI в порядке воспроизведения
+    /// "Next in queue" — URIs in playback order
     pub manual: Vec<String>,
-    /// первые строки «Далее» (до 30)
+    /// the first "Next" rows (up to 30)
     pub rows: Vec<TrackItem>,
     pub shuffle: bool,
 }
@@ -58,7 +58,7 @@ mod tests {
         let data = SessionData {
             version: SessionData::VERSION,
             context_uri: Some("spotify:playlist:x".into()),
-            context: PlayContext::with_uri("playlist", "spotify:playlist:x").titled("Плейлист"),
+            context: PlayContext::with_uri("playlist", "spotify:playlist:x").titled("Playlist"),
             track: Some(TrackItem { uri: "spotify:track:a".into(), title: "A".into(), ..Default::default() }),
             position_ms: 19_566,
             manual: vec!["spotify:track:b".into(), "spotify:track:b".into()],

@@ -1,12 +1,12 @@
 import QtQuick
 
-// Короткое уведомление MD3 внизу по центру; само прячется. Кладётся поверх окна:
-// Snackbar { id: snackbar; anchors.fill: parent; z: … }; snackbar.show("Ссылка скопирована").
-// С действием: show("Трек убран", "Вернуть", () => …) — кнопка справа, показ дольше.
+// A short MD3 notification at the bottom center; it hides itself. Placed over the window:
+// Snackbar { id: snackbar; anchors.fill: parent; z: … }; snackbar.show("Link copied").
+// With an action: show("Track removed", "Undo", () => …) — a button on the right, shown for longer.
 Item {
     id: root
 
-    property real bottomMargin: 112   // над мини-плеером
+    property real bottomMargin: 112   // above the mini player
     property int duration: 2500
     property int actionDuration: 5000
     property bool shown: false
@@ -15,7 +15,7 @@ Item {
 
     signal action()
 
-    // holdMs — сколько держать (необязательно; по умолчанию duration или actionDuration)
+    // holdMs — how long to keep it up (optional; defaults to duration or actionDuration)
     function show(text, actionText, onAction, holdMs) {
         label.text = text
         root.actionText = actionText ?? ""
@@ -43,7 +43,7 @@ Item {
 
         Elevation { target: pill; level: 3 }
 
-        // клик по плашке не уходит в содержимое под ней
+        // a click on the banner does not reach the content beneath it
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
 
         Label {

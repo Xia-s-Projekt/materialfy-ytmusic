@@ -2,13 +2,13 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Текст-ссылка (исполнитель, альбом): подчёркивается при наведении. Кликабелен только сам текст,
-// а не пустое место справа — там клик достаётся строке под ним.
+// Link text (artist, album): underlined on hover. Only the text itself is clickable,
+// not the empty space to the right — there the click goes to the row below it.
 Label {
     id: root
 
     property bool linkEnabled: true
-    // Карточка исполнителя при наведении (через Catalog — её показывает главное окно)
+    // Artist card on hover (via Catalog — the main window shows it)
     property string previewArtistId
     signal clicked()
 

@@ -1,9 +1,9 @@
-// Кнопки воспроизведения под эскизом окна на панели задач Windows (issue #2). Владелец — агент «shell».
-// ITaskbarList3::ThumbBarAddButtons на HWND главного окна; нажатие приходит в окно как WM_COMMAND с
-// HIWORD(wParam) = THBN_CLICKED — ловит фильтр нативных событий. Состояние — из синглтона Player
-// (играет → «Пауза», нет трека → кнопки неактивны), подписи — Translations.tr (mf_i18n), глифы — шрифт
-// Material Symbols, светлые на тёмной панели задач и тёмные на светлой. Explorer пересоздаёт кнопку окна
-// (перезапуск, окно снова показано из трея) — шлёт «TaskbarButtonCreated», тогда кнопки добавляются заново.
+// Playback buttons under the window thumbnail on the Windows taskbar (issue #2). Owner — the "shell" agent.
+// ITaskbarList3::ThumbBarAddButtons on the main window's HWND; a click reaches the window as WM_COMMAND with
+// HIWORD(wParam) = THBN_CLICKED — caught by the native event filter. The state comes from the Player singleton
+// (playing → "Pause", no track → the buttons are inactive), the labels come from Translations.tr (mf_i18n), the glyphs from the
+// Material Symbols font, light on a dark taskbar and dark on a light one. Explorer recreates the window button
+// (a restart, the window shown again from the tray) — it sends "TaskbarButtonCreated", and then the buttons are added again.
 #include "taskbar.h"
 
 #if defined(_WIN32)
@@ -51,13 +51,13 @@ enum Button : UINT
   Next = 3,
 };
 
-// Кодовые точки Material Symbols (assets/fonts/icons.json; шрифт урезан, эти глифы в нём есть — плеер ими пользуется)
+// Material Symbols code points (assets/fonts/icons.json; the font is trimmed, these glyphs are in it — the player uses them)
 constexpr char16_t glyph_previous = 0xE045; // skip_previous
 constexpr char16_t glyph_play = 0xE037;     // play_arrow
 constexpr char16_t glyph_pause = 0xE034;    // pause
 constexpr char16_t glyph_next = 0xE044;     // skip_next
 
-// Панель задач светлая (Параметры → Персонализация → Цвета → «Режим Windows»)
+// The taskbar is light (Settings → Personalization → Colors → "Windows mode")
 bool
 taskbar_light()
 {
@@ -73,14 +73,14 @@ taskbar_light()
   return status == ERROR_SUCCESS && value != 0;
 }
 
-// Залитый глиф по центру квадрата size×size (по контуру, а не по ячейке шрифта)
+// A filled glyph centered in a size×size square (by the outline, not by the font cell)
 HICON
 make_icon(char16_t code, int size, const QColor& color)
 {
   QImage image(size, size, QImage::Format_ARGB32_Premultiplied);
   image.fill(Qt::transparent);
   QFont font(QStringLiteral("Material Symbols Rounded"));
-  // Глифы нарисованы в сетке 24 с полями: play_arrow ~14/24 по высоте — так он занимает ~3/4 значка
+  // The glyphs are drawn in a 24 grid with padding: play_arrow is ~14/24 tall — so it takes up ~3/4 of the icon
   font.setPixelSize(std::max(8, static_cast<int>(std::lround(size * 1.25))));
   font.setVariableAxis(QFont::Tag("FILL"), 1.0f);
   font.setVariableAxis(QFont::Tag("opsz"), 20.0f);
@@ -105,7 +105,7 @@ public:
     , m_translations(translations)
     , m_created(RegisterWindowMessageW(L"TaskbarButtonCreated"))
   {
-    // Окно с повышенными правами иначе не получит сообщения от Explorer
+    // An elevated window would not otherwise receive messages from Explorer
     ChangeWindowMessageFilterEx(m_hwnd, m_created, MSGFLT_ALLOW, nullptr);
     ChangeWindowMessageFilterEx(m_hwnd, WM_COMMAND, MSGFLT_ALLOW, nullptr);
 
@@ -115,8 +115,8 @@ public:
     QObject::connect(player, &Player::trackChanged, context, refresh);
     if (translations)
       QObject::connect(translations, &Translations::languageChanged, context, refresh);
-    // Кнопка окна на панели задач уже могла появиться (окно показано до установки фильтра) —
-    // тогда TaskbarButtonCreated не придёт; не появилась — добавление не удастся и повторится по нему
+    // The window button on the taskbar may already have appeared (the window was shown before the filter was installed) —
+    // then TaskbarButtonCreated will not arrive; if it has not appeared, adding will fail and will be retried on it
     add();
   }
 
@@ -128,7 +128,7 @@ public:
     if (msg->hwnd != m_hwnd)
       return false;
     if (msg->message == m_created && m_created) {
-      // Новая кнопка (Explorer перезапущен, окно снова показано) — старый объект и кнопки недействительны
+      // A new button (Explorer restarted, the window shown again) — the old object and buttons are invalid
       reset();
       add();
       return false;
@@ -138,12 +138,12 @@ public:
         if (HIWORD(msg->wParam) != THBN_CLICKED)
           return false;
         clicked(LOWORD(msg->wParam));
-        // result бывает нулевым (Qt передаёт так сообщения, пришедшие не через оконную процедуру)
+        // result is sometimes zero (Qt passes messages that did not come through the window procedure this way)
         if (result)
           *result = 0;
         return true;
       case WM_SETTINGCHANGE:
-        // Сменилась тема Windows (светлая / тёмная панель задач) — перерисовать глифы
+        // The Windows theme changed (light / dark taskbar) — redraw the glyphs
         if (msg->lParam && std::wcscmp(reinterpret_cast<const wchar_t*>(msg->lParam), L"ImmersiveColorSet") == 0) {
           QMetaObject::invokeMethod(QCoreApplication::instance(), [this] { update(true); }, Qt::QueuedConnection);
         }
@@ -200,14 +200,14 @@ private:
     return true;
   }
 
-  // Значки под текущий размер (SM_CXSMICON при DPI панели задач) и цвет панели задач
+  // Icons for the current size (SM_CXSMICON at the taskbar's DPI) and the taskbar color
   void ensure_icons(bool force)
   {
     const int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
     const bool light = taskbar_light();
     if (!force && size == m_icon_size && light == m_light && m_icons[0])
       return;
-    // Старые значки живут до следующего ThumbBarUpdateButtons (панель задач могла ещё не забрать копию)
+    // The old icons live until the next ThumbBarUpdateButtons (the taskbar may not have picked up a copy yet)
     drop_old_icons();
     m_old_icons = m_icons;
     m_icon_size = size;
@@ -238,7 +238,7 @@ private:
   {
     const bool enabled = m_player && m_player->getHasTrack();
     const bool playing = m_player && m_player->getPlaying();
-    // Подписи — те же, что в меню значка в трее (Main.qml)
+    // The labels are the same as in the tray icon menu (Main.qml)
     const std::array<std::pair<HICON, QString>, 3> spec{ {
       { m_icons[0], tr("Previous track") },
       { playing ? m_icons[2] : m_icons[1], playing ? tr("Pause") : tr("Resume") },
@@ -263,7 +263,7 @@ private:
       return;
     ensure_icons(false);
     auto list = buttons();
-    // Кнопки на окне уже есть (второй вызов без пересоздания кнопки окна) — Add вернёт ошибку, обновляем их
+    // The buttons on the window already exist (a second call without recreating the window button) — Add will return an error, so we update them
     m_added = SUCCEEDED(m_list->ThumbBarAddButtons(m_hwnd, static_cast<UINT>(list.size()), list.data()))
               || SUCCEEDED(m_list->ThumbBarUpdateButtons(m_hwnd, static_cast<UINT>(list.size()), list.data()));
     if (m_added)
@@ -311,7 +311,7 @@ taskbar_install(QObject* object)
   if (!player)
     return false;
   auto* translations = engine->singletonInstance<Translations*>("Materialfy.Core", "Translations");
-  // Живёт до конца процесса (окно главное)
+  // It lives until the process ends (the window is the main one).
   QGuiApplication::instance()->installNativeEventFilter(new ThumbBar(hwnd, player, translations));
   return true;
 }

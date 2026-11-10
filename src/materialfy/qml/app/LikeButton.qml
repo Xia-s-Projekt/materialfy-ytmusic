@@ -2,7 +2,7 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// «Мне нравится» для трека (dict из модели или Player.track). Состояние — из Library, клик — переключить.
+// "Like" for a track (a dict from the model or Player.track). State comes from Library, a click toggles it.
 IconButton {
     id: root
 
@@ -17,7 +17,7 @@ IconButton {
     enabled: _id !== ""
     onClicked: Library.toggleLike(track)
 
-    // Короткий «удар сердца» при лайке
+    // A short "heartbeat" on like
     onLikedChanged: if (liked && _ready) beat.restart()
     property bool _ready: false
     Component.onCompleted: _ready = true

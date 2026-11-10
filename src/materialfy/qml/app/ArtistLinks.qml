@@ -2,28 +2,28 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Исполнители через запятую: каждый — своя ссылка. Наведение на имя показывает карточку этого
-// исполнителя, клик открывает его страницу — без меню выбора, когда исполнителей несколько.
-// Если имена не влезают в строку, остаётся прежняя подпись с «…»: резать имя пополам хуже.
+// Comma-separated artists: each one is its own link. Hovering a name shows that artist's card
+// and clicking opens their page — with no picker menu when there are several artists.
+// If the names do not fit on one line, the plain label with "…" stays: cutting a name in half is worse.
 Item {
     id: root
 
-    // [{ id, name }]; пусто — просто подпись text (выпуск, старые строки без ссылок)
+    // [{ id, name }]; empty — just the text label (episode, old rows without links)
     property var refs: []
     property string text: ""
     property string type: "bodyMedium"
     property color color: Theme.fgSurfaceVariant
     property bool centered: false
-    // Карточка исполнителя по наведению. В нижней панели она не нужна: там имя — просто путь на его
-    // страницу, а карточка всплывала бы над плеером и перекрывала строку, по которой велит кликнуть
+    // Artist card on hover. The bottom panel does not need it: there the name is just a path to their
+    // page, while the card would pop up over the player and cover the row the click targets
     property bool preview: true
 
     readonly property var _refs: refs ?? []
     readonly property bool fits: width <= 0 || _names.advanceWidth <= width
-    // имена из refs должны совпадать с подписью: иначе показываем строку как есть, без ссылок
+    // the names from refs must match the label: otherwise the row is shown as-is, without links
     readonly property bool _matches: text === "" || _names.text === text
     readonly property bool linked: _refs.length > 0 && fits && _matches
-    // ширина содержимого — без оглядки на width: иначе в раскладке получается петля биндингов
+    // content width — without looking at width: otherwise the layout gets a binding loop
     readonly property real naturalWidth: _refs.length > 0 && _matches ? _names.advanceWidth : _label.advanceWidth
 
     implicitWidth: naturalWidth

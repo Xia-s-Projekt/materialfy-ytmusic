@@ -1,5 +1,5 @@
-//! «Любимые треки» аккаунта: кэш на диске (свежесть 15 мин) и оптимистичные изменения поверх лагающих чтений.
-//! Перенос spotifast/src/liked.rs.
+//! The account's "Liked Songs": a disk cache (15 min freshness) and optimistic changes on top of lagging reads.
+//! Ported from spotifast/src/liked.rs.
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,7 @@ struct Change {
     saved: bool,
     item: SavedTrack,
     confirmed: bool,
-    /// снять намерение может только обновление, начатое после записи
+    /// only a refresh started after the write can clear the intent
     #[serde(skip)]
     confirmed_generation: u64,
 }
@@ -89,7 +89,7 @@ impl LikedSongs {
         self.refresh = Some(Refresh { rows: PagedList::default(), through: self.server.items.len().max(50) });
     }
 
-    /// Смещение следующей страницы (одна в полёте), None — грузить нечего.
+    /// Offset of the next page (one in flight); None — nothing left to load.
     pub fn request_offset(&mut self) -> Option<u32> {
         if !self.cache_checked {
             return None;
@@ -103,7 +103,7 @@ impl LikedSongs {
         Some(offset)
     }
 
-    /// Старый префикс держится, пока обновлённый не станет не хуже. true — нужна ещё страница обновления.
+    /// The old prefix is kept until the refreshed one is no worse. true — another refresh page is needed.
     pub fn absorb(&mut self, offset: u32, page: Page<SavedTrack>, now: i64) -> bool {
         if let Some(refresh) = &mut self.refresh {
             refresh.rows.absorb(offset, page);

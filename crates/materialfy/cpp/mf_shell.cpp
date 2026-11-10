@@ -88,17 +88,17 @@ argv_storage()
   return argv;
 }
 int argc_storage = 0;
-// Удаляется в app_destroy — после движка и остановки tokio
+// Freed in app_destroy — after the engine and after tokio stops
 QApplication* app = nullptr;
 QPointer<QWindow> main_window;
 
-// Картинки Spotify: один и тот же путь /image/<id> отдают несколько CDN. Основной i.scdn.co в РФ не открывается
-// или отвечает по 8+ с — его адреса переписываем на зеркала (тот же список — sf_api::image_hosts). Берём текущее
-// рабочее зеркало; таймаут или сетевая ошибка переводят всех на следующее (404 — нет картинки, хост ни при чём).
+// Spotify images: several CDNs serve the same /image/<id> path. The main one, i.scdn.co, does not open in Russia
+// or answers in 8+ seconds — its addresses are rewritten to mirrors (the same list — sf_api::image_hosts). We take the current
+// working mirror; a timeout or a network error moves everyone to the next one (404 — there is no image, the host is not at fault).
 const char* const spotify_image_hosts[] = { "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com",
                                             "image-cdn.spotifycdn.com", "i2o.scdn.co" };
 constexpr int spotify_image_host_count = 4;
-// и прежние адреса: кэш обложек, скачанных до зеркал, лежит под i.scdn.co
+// and the old addresses: the cache of covers downloaded before the mirrors lives under i.scdn.co
 const char* const spotify_image_known_hosts[] = { "i.scdn.co", "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com",
                                                   "image-cdn.spotifycdn.com", "i2o.scdn.co" };
 std::atomic<int> spotify_image_host{ 0 };
@@ -112,8 +112,8 @@ is_spotify_image_host(const QString& host)
   return false;
 }
 
-// Только HTTP/1.1: по HTTP/2 сервер обложек отвечает REFUSED_STREAM, когда страница
-// разом просит десятки картинок, и часть обложек не появляется.
+// HTTP/1.1 only: over HTTP/2 the image server answers REFUSED_STREAM when the page
+// asks for dozens of images at once, and some of the covers never appear.
 class Http1Nam : public QNetworkAccessManager
 {
 public:
@@ -124,13 +124,13 @@ protected:
   {
     QNetworkRequest copy(request);
     copy.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
-    // зависшее соединение не держит очередь (на хост их всего шесть): через 10 с — ошибка и повтор в QML
+    // a hung connection does not hold up the queue (there are only six of them per host): after 10 s — an error and a retry in QML
     copy.setTransferTimeout(10000);
     QUrl url = copy.url();
     if (op != GetOperation || !is_spotify_image_host(url.host()) || !url.path().startsWith(QLatin1String("/image/")))
       return QNetworkAccessManager::createRequest(op, copy, data);
 
-    // проверка запасных обложек: сеть, где ни одно зеркало Spotify не открывается (и кэш не выручает)
+    // checking the fallback covers: a network where no Spotify mirror opens (and the cache does not help)
     static const bool no_spotify_images = qEnvironmentVariableIsSet("MATERIALFY_TEST_NO_SPOTIFY_IMAGES");
     if (no_spotify_images) {
       url.setHost(QStringLiteral("spotify-images.invalid"));
@@ -138,7 +138,7 @@ protected:
       copy.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
       return QNetworkAccessManager::createRequest(op, copy, data);
     }
-    // картинка по id не меняется: из кэша — без перепроверки; уже скачанное по любому из адресов не качаем
+    // the image for an id does not change: from the cache — without re-checking; anything already downloaded from any address is not downloaded again
     copy.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferCache);
     if (QAbstractNetworkCache* disk = cache()) {
       for (const char* known : spotify_image_known_hosts) {
@@ -156,7 +156,7 @@ protected:
     QNetworkReply* reply = QNetworkAccessManager::createRequest(op, copy, data);
     QObject::connect(reply, &QNetworkReply::finished, reply, [reply, host] {
       const auto error = reply->error();
-      const bool host_failed = error == QNetworkReply::OperationCanceledError // таймаут
+      const bool host_failed = error == QNetworkReply::OperationCanceledError // timeout
                                || error == QNetworkReply::TimeoutError || error == QNetworkReply::HostNotFoundError
                                || error == QNetworkReply::ConnectionRefusedError
                                || error == QNetworkReply::RemoteHostClosedError
@@ -174,7 +174,7 @@ protected:
   }
 };
 
-// Прокси картинок из настроек «Сеть»: общий для всех NAM, читается на каждый запрос
+// The image proxy from the "Network" settings: shared by all NAMs, read on every request
 QMutex proxy_mutex;
 int proxy_mode = 1;
 QNetworkProxy proxy_manual;
@@ -198,7 +198,7 @@ public:
       case 3:
         return { manual };
       case 4:
-        // неверные настройки: тип не подходит для HTTP — запрос падает с ProxyNotFoundError, а не идёт напрямую
+        // invalid settings: the type is not suitable for HTTP — the request fails with ProxyNotFoundError instead of going direct
         return { QNetworkProxy(QNetworkProxy::FtpCachingProxy) };
       default:
         return systemProxyForQuery(query);
@@ -206,7 +206,7 @@ public:
   }
 };
 
-// QML создаёт NAM в своих потоках загрузки — у каждого свой QNetworkDiskCache на общий каталог
+// QML creates NAMs in its loading threads — each has its own QNetworkDiskCache on a shared folder
 class CachingNamFactory : public QQmlNetworkAccessManagerFactory
 {
 public:
@@ -272,7 +272,7 @@ app_quit()
 namespace {
 wchar_t crash_log_path[MAX_PATH * 2] = {};
 
-// Модуль и смещение адреса: «Qt6Qml.dll+0x1216b7» — как в журнале событий Windows
+// Module and address offset: "Qt6Qml.dll+0x1216b7" — as in the Windows event log
 void
 describe_address(void* address, char* out, size_t size)
 {
@@ -309,7 +309,7 @@ on_unhandled_exception(EXCEPTION_POINTERS* info)
     }
     fclose(file);
   }
-  return EXCEPTION_CONTINUE_SEARCH; // дальше — как обычно (отчёт Windows, журнал событий)
+  return EXCEPTION_CONTINUE_SEARCH; // from here on — as usual (the Windows error report, the event log)
 }
 } // namespace
 #elif defined(Q_OS_LINUX)
@@ -323,16 +323,16 @@ on_unhandled_exception(EXCEPTION_POINTERS* info)
 
 namespace {
 char crash_log_path[4096] = {};
-// прежние обработчики (у SIGSEGV/SIGBUS — защита Rust от переполнения стека): возвращаем их перед повтором
+// the previous handlers (for SIGSEGV/SIGBUS — Rust's stack-overflow guard): we restore them before repeating
 struct sigaction previous_actions[NSIG] = {};
 
-// Обработчик сигнала: только open/write/backtrace, без Qt и без выделения памяти в куче
+// The signal handler: open/write/backtrace only, no Qt and no heap allocation
 void
 on_fatal_signal(int signal_number)
 {
   const int fd = open(crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
   if (fd >= 0) {
-    // snprintf в обработчике сигнала небезопасен; все ловимые сигналы — двузначные
+    // snprintf is unsafe in a signal handler; all catchable signals are two-digit
     static const char prefix[] = "=== native crash · Materialfy · signal ";
     const char number[3] = {char('0' + signal_number / 10), char('0' + signal_number % 10), '\n'};
     auto written = write(fd, prefix, sizeof prefix - 1);
@@ -343,7 +343,7 @@ on_fatal_signal(int signal_number)
     backtrace_symbols_fd(frames, count, fd);
     close(fd);
   }
-  // прежний обработчик (Rust или по умолчанию): повтор сигнала даёт обычное падение и дамп
+  // the previous handler (Rust or the default): repeating the signal gives an ordinary crash and a dump
   sigaction(signal_number, &previous_actions[signal_number], nullptr);
   raise(signal_number);
 }
@@ -359,13 +359,13 @@ install_native_crash_log(const QString& path)
 #elif defined(Q_OS_LINUX)
   const QByteArray utf8 = path.toUtf8();
   std::strncpy(crash_log_path, utf8.constData(), sizeof crash_log_path - 1);
-  // первый вызов backtrace подгружает libgcc_s и может выделить память: делаем это до падения
+  // the first backtrace call loads libgcc_s and may allocate memory: we do this before the crash
   void* warmup[1];
   backtrace(warmup, 1);
   struct sigaction action {};
   action.sa_handler = on_fatal_signal;
   sigemptyset(&action.sa_mask);
-  // на запасном стеке Rust: при переполнении стека обычный уже кончился
+  // on Rust's alternate stack: on a stack overflow the normal one is already exhausted
   action.sa_flags = SA_ONSTACK;
   for (const int signal_number : {SIGSEGV, SIGBUS, SIGABRT, SIGFPE, SIGILL}) {
     sigaction(signal_number, &action, &previous_actions[signal_number]);
@@ -392,7 +392,7 @@ app_set_names(const QString& name, const QString& org, const QString& desktop)
   QCoreApplication::setOrganizationName(org);
   QGuiApplication::setDesktopFileName(desktop);
 #if defined(Q_OS_WIN)
-  // AppUserModelID = имя приложения (как у ярлыков из materialfy.iss): группировка на панели задач
+  // AppUserModelID = the application name (as on the shortcuts from materialfy.iss): taskbar grouping
   SetCurrentProcessExplicitAppUserModelID(reinterpret_cast<const wchar_t*>(name.utf16()));
 #endif
 }
@@ -453,8 +453,8 @@ system_ui_languages()
 void
 copy_to_clipboard(const QString& text)
 {
-  // Windows: буфер бывает занят другим процессом (история буфера и т. п.) — OleSetClipboard
-  // отказывает; повторяем с паузой. Более новое копирование отменяет повторы старого.
+  // Windows: the clipboard is sometimes held by another process (clipboard history, etc.) — OleSetClipboard
+  // refuses; we retry with a pause. A newer copy cancels the retries of an older one.
   static int generation = 0;
   struct Attempt
   {
@@ -503,8 +503,8 @@ monotonic_ms()
   return static_cast<long long>(GetTickCount64());
 }
 
-// Стек приостановленного потока: адреса возврата по таблицам раскрутки x64 (без dbghelp и без выделения памяти,
-// пока поток стоит — он может держать блокировку кучи)
+// The stack of a suspended thread: return addresses from the x64 unwind tables (no dbghelp and no allocation,
+// while the thread is stopped it may hold a heap lock)
 USHORT
 capture_thread_stack(HANDLE thread, void** frames, USHORT capacity)
 {
@@ -518,7 +518,7 @@ capture_thread_stack(HANDLE thread, void** frames, USHORT capacity)
     DWORD64 image_base = 0;
     PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &image_base, nullptr);
     if (!function) {
-      // листовая функция: адрес возврата на вершине стека
+      // a leaf function: the return address is at the top of the stack
       context.Rip = *reinterpret_cast<DWORD64*>(context.Rsp);
       context.Rsp += 8;
       continue;
@@ -530,7 +530,7 @@ capture_thread_stack(HANDLE thread, void** frames, USHORT capacity)
   return count;
 }
 
-// Сторож: GUI-поток не отметился 10 с — окно «не отвечает». Его стек — в crash.log, один раз на зависание.
+// Watchdog: the GUI thread has not checked in for 10 s — the window "is not responding". Its stack goes to crash.log, once per hang.
 void
 watch_gui_thread()
 {
@@ -545,7 +545,7 @@ watch_gui_thread()
     if (reported || !gui_thread || !crash_log_path[0])
       continue;
     reported = true;
-    // Несколько снимков через полсекунды, пока поток молчит: долгая работа видна в каждом, случайное — в одном
+    // Several snapshots half a second apart while the thread is silent: long-running work shows up in every one, a fluke in only one
     constexpr int max_samples = 12;
     constexpr USHORT depth = 64;
     static void* samples[max_samples][depth];
@@ -564,7 +564,7 @@ watch_gui_thread()
       fprintf(file, "=== hang · Materialfy · the GUI thread has not responded for %lld s, %d samples\n",
               (monotonic_ms() - gui_tick_ms.load()) / 1000, taken);
       char where[MAX_PATH + 32];
-      // сводка: в скольких снимках встречается адрес (верхние 40 по частоте)
+      // summary: in how many snapshots an address appears (the top 40 by frequency)
       std::vector<std::pair<void*, int>> hits;
       for (int s = 0; s < taken; ++s)
         for (USHORT i = 0; i < counts[s]; ++i) {
@@ -656,7 +656,7 @@ engine_root_object(const QQmlApplicationEngine& engine)
 void
 engine_install_caching_nam(QQmlApplicationEngine& engine, const QString& dir, std::int64_t max_bytes)
 {
-  // Фабрика должна жить дольше движка — не удаляется
+  // The factory must outlive the engine — it is not deleted
   engine.setNetworkAccessManagerFactory(new CachingNamFactory(dir, static_cast<qint64>(max_bytes)));
 }
 
@@ -664,7 +664,7 @@ void
 set_image_proxy(int mode, const QString& host, int port, const QString& user, const QString& password)
 {
   QNetworkProxy manual;
-  // SOCKS5 по умолчанию разрешает имена на стороне прокси (как socks5h в sf-auth)
+  // SOCKS5 by default resolves names on the proxy side (like socks5h in sf-auth)
   if (mode == 2 || mode == 3)
     manual = QNetworkProxy(mode == 3 ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy,
                            host,
@@ -699,7 +699,7 @@ post_raise_window()
       if (!main_window)
         return;
       main_window->show();
-      // свёрнутое окно show() не разворачивает
+      // show() does not un-minimize a minimized window
       if (main_window->windowStates() & Qt::WindowMinimized)
         main_window->setWindowStates(main_window->windowStates() & ~Qt::WindowMinimized);
       main_window->raise();
@@ -813,7 +813,7 @@ is_software_device_name(QString name)
          name.contains(QLatin1String("basic render driver")) || name.contains(QLatin1String("gdi generic"));
 }
 
-// Поток рендера, сразу после создания графики окна: рисует ли кадры процессор
+// The render thread, right after the window's graphics are created: whether the CPU is drawing frames
 bool
 detect_software_rendering(QQuickWindow* window)
 {
@@ -875,7 +875,7 @@ watch_software_rendering(QObject* object)
     window->setProperty("softwareRendering", forced != QLatin1String("0"));
     return;
   }
-  // sceneGraphInitialized приходит в потоке рендера, где контекст OpenGL текущий; свойство окна — в GUI-потоке
+  // sceneGraphInitialized arrives in the render thread, where the OpenGL context is current; the window property is on the GUI thread
   QObject::connect(
     window,
     &QQuickWindow::sceneGraphInitialized,
@@ -892,9 +892,9 @@ QString
 prefer_fastest_screen()
 {
 #if defined(Q_OS_LINUX)
-  // Qt Quick берёт период vsync у primaryScreen(); на Wayland это может быть 60-герцовый монитор,
-  // и анимации на 144 Гц идут по таймеру 60 Гц. Публичного API нет — экспортируемая функция
-  // QWindowSystemInterface::handlePrimaryScreenChanged (её зовут платформенные плагины).
+  // Qt Quick takes the vsync period from primaryScreen(); on Wayland that can be a 60 Hz monitor,
+  // and animations on a 144 Hz display run on a 60 Hz timer. There is no public API — the exported function
+  // QWindowSystemInterface::handlePrimaryScreenChanged (called by the platform plugins).
   const auto screens = QGuiApplication::screens();
   if (screens.size() < 2)
     return QStringLiteral("primary screen: single monitor");

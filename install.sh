@@ -27,10 +27,10 @@ RUST_MIN="1.98"
 say()  { printf '\033[1;35m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
-# версия a >= b (через sort -V)
+# version a >= b (via sort -V)
 ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]; }
 
-# Запуск из репозитория — собираем на месте; иначе — клон в MATERIALFY_DIR
+# Run from the repository — build in place; otherwise — clone into MATERIALFY_DIR
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 if [ -n "$SELF_DIR" ] && [ -f "$SELF_DIR/crates/materialfy/Cargo.toml" ]; then
     DIR="$SELF_DIR"
@@ -61,17 +61,17 @@ confirm() {
     printf '    Continue? [Y/n] '
     local answer
     read -r answer </dev/tty || answer=n
-    case "$answer" in "" | y | Y | д | Д) ;; *) fail "Cancelled." ;; esac
+    case "$answer" in "" | y | Y) ;; *) fail "Cancelled." ;; esac
 }
 
-# --- Системные пакеты -------------------------------------------------------
+# --- System packages -------------------------------------------------------
 
 has_header() { [ -e "/usr/include/$1" ]; }
 has_pc() { have pkg-config && pkg-config --exists "$1"; }
 
-# Qt ищем заранее: скачивать его (а значит, и ставить 7zip для распаковки) нужно, только если в системе нет годного
+# Qt is looked up in advance: downloading it (and therefore installing 7zip to unpack it) is needed only if the system has no suitable one
 qt_ok() { [ -x "$1" ] && ver_ge "$("$1" -query QT_VERSION 2>/dev/null || echo 0)" "${QT_VERSION%.*}"; }
-# системный Qt годится, только если стоят и QML-модули (qt6-declarative и т. п.)
+# the system Qt is usable only if the QML modules are installed too (qt6-declarative etc.)
 qt_full() {
     local qml
     qml="$("$1" -query QT_INSTALL_QML 2>/dev/null)" || return 1
@@ -92,12 +92,12 @@ have c++ || need+=(c++)
 have pkg-config || need+=(pkg-config)
 have python3 || need+=(python3)
 [ -n "$QMAKE" ] || have 7z || have 7zz || need+=(7zip)
-# звук: cpal (ALSA) и librespot (PulseAudio)
+# audio: cpal (ALSA) and librespot (PulseAudio)
 has_pc alsa || need+=(alsa-dev)
 has_pc libpulse || need+=(pulse-dev)
 has_header GL/gl.h || need+=(opengl-dev)
 has_header xkbcommon/xkbcommon.h || need+=(xkbcommon-dev)
-# cxx-qt не линкуется GNU ld.bfd: нужен lld, mold или gold
+# cxx-qt does not link with GNU ld.bfd: lld, mold or gold is required
 { have ld.lld || have ld.mold || have ld.gold; } || need+=(lld)
 
 if [ ${#need[@]} -gt 0 ]; then
@@ -124,7 +124,7 @@ Mesa-libGL-devel Mesa-libEGL-devel libxkbcommon-devel libxkbcommon-x11-0 fontcon
     $cmd
 fi
 
-# --- Исходники --------------------------------------------------------------
+# --- Sources --------------------------------------------------------------
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
@@ -170,10 +170,10 @@ if ! rust_ok; then
 fi
 say "$(rustc --version)"
 
-# --- Встроенный ytmusicapi (без pip) ----------------------------------------
-# YouTube Music API (sigma67/ytmusicapi) вендорен в репозиторий:
-# crates/yt-api/python/vendor. Если его вдруг нет (частичный клон) — поставим
-# --target туда же, чтобы всей системе pip не трогать.
+# --- Embedded ytmusicapi (no pip) ----------------------------------------
+# The YouTube Music API (sigma67/ytmusicapi) is vendored in the repository:
+# crates/yt-api/python/vendor. If it is missing (a partial clone) — install it
+# with --target to the same place, so pip does not touch the whole system.
 if [ ! -d "$DIR/crates/yt-api/python/vendor/ytmusicapi" ]; then
     say "Installing embedded ytmusicapi into crates/yt-api/python/vendor (one time)"
     python3 -m pip install --target "$DIR/crates/yt-api/python/vendor" "ytmusicapi==1.12.3" \
@@ -182,17 +182,17 @@ else
     say "Embedded ytmusicapi already present (no pip needed)"
 fi
 
-# --- Сборка -----------------------------------------------------------------
+# --- Build -----------------------------------------------------------------
 
 say "Building Materialfy (5-15 minutes the first time)"
-# --locked: Cargo.lock держит vergen 9.0.6 (9.1 ломает build-скрипт librespot-core)
+# --locked: Cargo.lock holds vergen 9.0.6 (9.1 breaks the librespot-core build script)
 (cd "$DIR" && QMAKE="$QMAKE" cargo build --locked --release -p "$APP" --quiet) || fail "Build failed (see the output above)."
 mkdir -p "$DIR/bin"
 install -m755 "$DIR/target/release/$APP" "$DIR/bin/$APP"
 [ "${MATERIALFY_KEEP_BUILD:-}" = "1" ] || [ "$IN_PLACE" = "1" ] || rm -rf "$DIR/target"
 
-# --- Запуск: команда и значок в меню ----------------------------------------
-# QML и ресурсы exe находит сам: $DIR/src/materialfy/qml — вверх от $DIR/bin
+# --- Launch: command and menu entry ----------------------------------------
+# The exe finds the QML and resources itself: $DIR/src/materialfy/qml — up from $DIR/bin
 
 mkdir -p "$BIN" "$APPS" "$ICONS" "$ICONS_PNG"
 {

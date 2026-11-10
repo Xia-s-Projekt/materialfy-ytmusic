@@ -1,5 +1,5 @@
-//! Дерево плейлистов аккаунта на диске: пока сессия поднимается (на медленной сети это десятки секунд),
-//! библиотека показывает прошлый список вместо пустого экрана. Свежий rootlist из сессии перезаписывает кэш.
+//! The account's playlist tree on disk: while the session comes up (on a slow network that is tens of seconds),
+//! the library shows the previous list instead of an empty screen. A fresh rootlist from the session overwrites the cache.
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -11,9 +11,9 @@ const VERSION: u32 = 1;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CachedLibrary {
     pub version: u32,
-    /// строки rootlist в порядке Spotify (маркеры папок включительно)
+    /// rootlist rows in Spotify order (folder markers included)
     pub rootlist: Vec<RootlistEntry>,
-    /// шапки плейлистов: имя, владелец, обложка, число треков
+    /// playlist headers: name, owner, cover, track count
     pub playlists: Vec<Playlist>,
 }
 
@@ -22,7 +22,7 @@ impl CachedLibrary {
         Self { version: VERSION, rootlist, playlists }
     }
 
-    /// Пустое дерево кэш не заменяет: пустая библиотека на экране хуже старой.
+    /// An empty tree does not replace the cache: an empty library on screen is worse than the old one.
     fn valid(&self) -> bool {
         self.version == VERSION && !self.rootlist.is_empty()
     }

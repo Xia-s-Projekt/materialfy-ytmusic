@@ -1,4 +1,4 @@
-//! Сверка с выходом Python (theme.build_scheme / seed_from_image).
+//! Cross-check against Python's output (theme.build_scheme / seed_from_image).
 use std::path::Path;
 
 use serde_json::Value;
@@ -30,7 +30,7 @@ fn schemes_match_python() {
             let got = scheme.colors.get(role.as_str()).map(|&c| format_color(c));
             if got.as_deref() != want.as_str() {
                 mismatches.push(format!(
-                    "{} dark={dark} {variant}: {role} = {got:?}, ждали {want}",
+                    "{} dark={dark} {variant}: {role} = {got:?}, expected {want}",
                     v["seed"]
                 ));
             }
@@ -38,7 +38,7 @@ fn schemes_match_python() {
     }
     assert!(
         mismatches.is_empty(),
-        "{} расхождений:\n{}",
+        "{} mismatches:\n{}",
         mismatches.len(),
         mismatches.join("\n")
     );
@@ -46,7 +46,7 @@ fn schemes_match_python() {
 
 #[test]
 fn stable_roles_default_seed() {
-    // фирменный фиолетовый, tonalSpot; значения — из Python theme.build_scheme
+    // brand purple, tonalSpot; the values come from Python's theme.build_scheme
     let dark = build_scheme(DEFAULT_SEED, true, Variant::TonalSpot, 0.0);
     let light = build_scheme(DEFAULT_SEED, false, Variant::TonalSpot, 0.0);
     let hex = |s: &mf_theme::Scheme, role: &str| format_color(s.colors[role]);
@@ -83,9 +83,9 @@ fn stable_roles_default_seed() {
     assert!(dark.dark && !light.dark);
 }
 
-/// Пиксели 112×112, которые отдаёт Qt (QImage.scaled Smooth → RGB888) для seed.png.
-/// На одних и тех же пикселях квантование и ранжирование обязаны совпасть с Python точно.
-/// Эталоны сняты Python на Windows, поэтому rand() — MSVC (на других ОС Python сам даёт иное).
+/// The 112×112 pixels Qt returns (QImage.scaled Smooth → RGB888) for seed.png.
+/// On the same pixels, quantization and ranking must match Python exactly.
+/// The references were recorded by Python on Windows, so rand() is MSVC (on other OSes Python itself gives something else).
 #[test]
 fn seed_from_qt_pixels_matches_python() {
     let raw = std::fs::read(manifest("tests/seed_112.rgb")).unwrap();
@@ -94,8 +94,8 @@ fn seed_from_qt_pixels_matches_python() {
     assert_eq!(seed_from_pixels_with(&pixels, CrtRand::Msvc), 0xFFFFDB00);
 }
 
-/// Полный путь от файла: декодирование `image` и порт qSmoothScaleImage (у seed.png 17 из 12544
-/// пикселей отличаются от Qt на 1), seed совпадает с Python — #FFFFDB00.
+/// The full path from a file: decoding `image` and the qSmoothScaleImage port (for seed.png 17 of 12544
+/// pixels differ from Qt by 1), the seed matches Python — #FFFFDB00.
 #[test]
 fn seed_from_image_matches_python() {
     let png = manifest("tests/seed.png");
@@ -103,7 +103,7 @@ fn seed_from_image_matches_python() {
         seed_from_image_with(&png, CrtRand::Msvc).unwrap(),
         0xFFFFDB00
     );
-    // у этой картинки результат не зависит от rand()
+    // for this image the result does not depend on rand()
     assert_eq!(
         seed_from_image_with(&png, CrtRand::Glibc).unwrap(),
         0xFFFFDB00
@@ -113,12 +113,12 @@ fn seed_from_image_matches_python() {
 
 #[test]
 fn seed_from_missing_image_is_error() {
-    assert!(seed_from_image(Path::new("нет/такой/картинки.png")).is_err());
+    assert!(seed_from_image(Path::new("no/such/image.png")).is_err());
 }
 
-/// Широкая сверка с Python: по строке на схему — seed dark variant contrast и 59 ARGB в порядке ROLE_NAMES.
-/// По умолчанию — tests/schemes_extra.txt (217 схем: оттенки по кругу, чёрный/белый, контраст −1…1, выборка
-/// из 12852 схем, сверенных при порте); полный дамп можно подать через MF_THEME_DUMP=<файл>.
+/// A broad cross-check with Python: one line per scheme — seed dark variant contrast and 59 ARGB in ROLE_NAMES order.
+/// By default — tests/schemes_extra.txt (217 schemes: hues around the circle, black/white, contrast −1…1, a sample
+/// of 12852 schemes checked during the port); the full dump can be supplied via MF_THEME_DUMP=<file>.
 #[test]
 fn schemes_match_python_dump() {
     let path = std::env::var("MF_THEME_DUMP")
@@ -138,21 +138,21 @@ fn schemes_match_python_dump() {
             let got = format!("{:08X}", scheme.colors[name]);
             if got != *want {
                 bad.push(format!(
-                    "{seed:08X} dark={dark} {variant} c={contrast}: {name} = {got}, ждали {want}"
+                    "{seed:08X} dark={dark} {variant} c={contrast}: {name} = {got}, expected {want}"
                 ));
             }
         }
     }
     assert!(
         bad.is_empty(),
-        "{total} схем, {} расхождений:\n{}",
+        "{total} schemes, {} mismatches:\n{}",
         bad.len(),
         bad[..bad.len().min(80)].join("\n")
     );
 }
 
-/// Сверка seed_from_image с Python (Windows) на наборе картинок: MF_THEME_SEEDS=<файл «путь ARGB» по строке>.
-/// При порте: 40 картинок, PNG — все совпали, JPEG — 10 из 20 отличаются из-за декодера (см. seed_from_image).
+/// Cross-check of seed_from_image with Python (Windows) on a set of images: MF_THEME_SEEDS=<file with "path ARGB" per line>.
+/// During the port: 40 images, PNG — all matched, JPEG — 10 of 20 differ because of the decoder (see seed_from_image).
 #[test]
 #[ignore]
 fn seeds_match_python_dump() {
@@ -171,24 +171,24 @@ fn seeds_match_python_dump() {
         total += 1;
         let lower = file.to_ascii_lowercase();
         if got != want {
-            // JPEG — другой декодер, расхождение ожидаемо; только печатаем
+            // JPEG — a different decoder, the mismatch is expected; we only print it
             if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
-                println!("JPEG {file}: {got}, у Python {want}");
+                println!("JPEG {file}: {got}, Python has {want}");
             } else {
-                bad.push(format!("{file}: {got}, ждали {want}"));
+                bad.push(format!("{file}: {got}, expected {want}"));
             }
         }
     }
     assert!(
         bad.is_empty(),
-        "{total} картинок, {} расхождений:\n{}",
+        "{total} images, {} mismatches:\n{}",
         bad.len(),
         bad.join("\n")
     );
 }
 
-/// То же, но по пикселям, уже уменьшенным Qt (рядом с картинкой лежит <путь>.rgb): проверяет только
-/// квантование и ранжирование (при порте — 40 из 40).
+/// The same, but on pixels already shrunk by Qt (a <path>.rgb file sits next to the image): it checks only
+/// quantization and ranking (during the port — 40 out of 40).
 #[test]
 #[ignore]
 fn seeds_from_qt_pixels_match_python_dump() {
@@ -203,12 +203,12 @@ fn seeds_from_qt_pixels_match_python_dump() {
         let pixels: Vec<[u8; 3]> = raw.as_chunks::<3>().0.to_vec();
         let got = format!("{:08X}", seed_from_pixels_with(&pixels, CrtRand::Msvc));
         if got != want {
-            bad.push(format!("{file}: {got}, ждали {want}"));
+            bad.push(format!("{file}: {got}, expected {want}"));
         }
     }
     assert!(
         bad.is_empty(),
-        "{} расхождений:\n{}",
+        "{} mismatches:\n{}",
         bad.len(),
         bad.join("\n")
     );

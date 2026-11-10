@@ -1,6 +1,6 @@
 [package]
 name = "sf-auth"
-description = "Вход в Spotify: PKCE через браузер (loopback), гранты Web API и воспроизведения, хранилище секретов, прокси"
+description = "Signing in to Spotify: PKCE through a browser (loopback), Web API and playback grants, secret storage, proxy"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

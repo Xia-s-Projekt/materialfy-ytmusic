@@ -2,14 +2,14 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Доля проигранного для полосы перемотки, плавно между обновлениями позиции (они приходят ~5 раз в секунду,
-// у другого устройства — опросом): досчитывается по общим часам Ticker (~30 Гц), в тех же кадрах, что и бегущая
-// волна. Раньше это была анимация (Behavior) на каждое обновление: она шла почти без пауз на частоте монитора
-// и перерисовывала всё окно, пока играет музыка, даже у скрытой полосы.
+// The played fraction for the seek bar, smooth between position updates (they arrive ~5 times a second,
+// by polling for another device): advanced off the shared Ticker clock (~30 Hz), in the same frames as the running
+// wave. This used to be a Behavior animation on every update: it ran almost continuously at monitor refresh
+// and repainted the whole window while music played, even for a hidden bar.
 QtObject {
     id: root
 
-    property bool active: true             // полосу видно и её не тянут
+    property bool active: true             // the bar is visible and is not being dragged
     property real value: Player.position
 
     readonly property Connections _sync: Connections {

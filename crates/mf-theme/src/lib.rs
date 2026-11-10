@@ -1,8 +1,8 @@
-//! Цветовая схема MD3 (src/materialfy/theme.py): materialyoucolor 3.0.4, spec "2025", platform "phone".
-//! Эталон — .venv/Lib/site-packages/materialyoucolor; значения должны совпадать с Python до бита
-//! (см. тест-векторы в tests/vectors.json). Из material-colors берутся только HCT и палитры схем;
-//! разрешение ролей (spec.rs), QuantizeCelebi (quantize.rs), Score (score.rs) и сглаживающий масштаб Qt
-//! (scale.rs) портированы с эталона — у material-colors они расходятся с Python.
+//! MD3 color scheme (src/materialfy/theme.py): materialyoucolor 3.0.4, spec "2025", platform "phone".
+//! The reference is .venv/Lib/site-packages/materialyoucolor; values must match Python bit for bit
+//! (see the test vectors in tests/vectors.json). Only HCT and the scheme's palettes are taken from material-colors;
+//! role resolution (spec.rs), QuantizeCelebi (quantize.rs), Score (score.rs) and Qt's smoothing scale
+//! (scale.rs) are ported from the reference — in material-colors they diverge from Python.
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -21,7 +21,7 @@ mod spec;
 
 pub const DEFAULT_SEED: u32 = 0xFF6750A4;
 
-/// 59 ролей — ровно COLOR_NAMES из materialyoucolor (ключи ThemeEngine.colors в QML).
+/// 59 roles — exactly COLOR_NAMES from materialyoucolor (the keys of ThemeEngine.colors in QML).
 pub const ROLE_NAMES: [&str; 59] = [
     "background",
     "onBackground",
@@ -84,7 +84,7 @@ pub const ROLE_NAMES: [&str; 59] = [
     "errorPaletteKeyColor",
 ];
 
-/// Роли material-colors в порядке ROLE_NAMES.
+/// The material-colors roles in ROLE_NAMES order.
 const ROLES: [Role; 59] = [
     Role::Background,
     Role::OnBackground,
@@ -147,7 +147,7 @@ const ROLES: [Role; 59] = [
     Role::ErrorPaletteKeyColor,
 ];
 
-/// Варианты схемы; имена — значения Settings.schemeVariant и ThemeEngine.variants (в этом порядке).
+/// Scheme variants; the names are the values of Settings.schemeVariant and ThemeEngine.variants (in this order).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Variant {
     #[default]
@@ -188,7 +188,7 @@ impl Variant {
         Self::ALL.into_iter().find(|v| v.name() == name)
     }
 
-    /// Имена в порядке ThemeEngine.variants.
+    /// The names in ThemeEngine.variants order.
     pub fn names() -> [&'static str; 7] {
         Self::ALL.map(Variant::name)
     }
@@ -220,7 +220,7 @@ impl std::str::FromStr for Variant {
     }
 }
 
-/// ARGB всех 59 ролей.
+/// The ARGB of all 59 roles.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scheme {
     pub seed: u32,
@@ -235,9 +235,9 @@ pub enum ThemeError {
     Image(String),
 }
 
-/// Схема из seed (build_scheme в theme.py). ~1 мс; можно звать из GUI-потока для стартовой схемы.
+/// A scheme from a seed (build_scheme in theme.py). ~1 ms; safe to call from the GUI thread for the startup scheme.
 pub fn build_scheme(seed: u32, dark: bool, variant: Variant, contrast: f64) -> Scheme {
-    // Content/Fidelity/Monochrome сами откатываются на spec 2021 — как _maybe_fallback_spec_version в Python
+    // Content/Fidelity/Monochrome fall back to spec 2021 by themselves — like _maybe_fallback_spec_version in Python
     let scheme = DynamicScheme::from_spec(
         Hct::new(Rgb::from_u32(seed)),
         variant.material(),
@@ -246,7 +246,7 @@ pub fn build_scheme(seed: u32, dark: bool, variant: Variant, contrast: f64) -> S
         Platform::Phone,
         SpecVersion::Spec2025,
     );
-    // палитры — из material-colors, разрешение ролей — порт Python (spec.rs)
+    // palettes — from material-colors, role resolution — a Python port (spec.rs)
     let resolver = spec::Resolver::new(&scheme);
     let colors = ROLE_NAMES
         .iter()
@@ -261,23 +261,23 @@ pub fn build_scheme(seed: u32, dark: bool, variant: Variant, contrast: f64) -> S
     }
 }
 
-/// Сторона картинки, до которой она уменьшается перед квантованием.
+/// The side of the image it is shrunk to before quantization.
 pub const SAMPLE_SIZE: u32 = 112;
-/// Число кластеров QuantizeCelebi.
+/// The number of QuantizeCelebi clusters.
 pub const MAX_COLORS: usize = 128;
 
-/// Доминантный цвет картинки (seed_from_image): масштаб до 112×112 (сглаживание, без сохранения пропорций),
-/// RGB, QuantizeCelebi(pixels, 128) → Score.score → первый; пусто → DEFAULT_SEED.
+/// The dominant color of an image (seed_from_image): scale to 112×112 (smoothing, aspect ratio not kept),
+/// RGB, QuantizeCelebi(pixels, 128) → Score.score → the first; empty → DEFAULT_SEED.
 ///
-/// Отличия от Python: PNG дают те же пиксели, что Qt, с точностью до единицы в редких краевых пикселях;
-/// JPEG декодирует не libjpeg-turbo, а zune-jpeg (≈1 % отсчётов на 1–2 уровня), поэтому у части обложек seed
-/// выходит соседним оттенком. Квантование и ранжирование на одних и тех же пикселях совпадают точно.
-/// Блокирующая (декодирование + ~10 мс квантования) — звать из spawn_blocking.
+/// Differences from Python: PNGs give the same pixels as Qt, up to one unit in rare edge pixels;
+/// JPEG is decoded by zune-jpeg rather than libjpeg-turbo (≈1 % of samples by 1–2 levels), so for some covers the seed
+/// comes out as a neighboring hue. Quantization and ranking on the same pixels match exactly.
+/// Blocking (decoding + ~10 ms of quantization) — call from spawn_blocking.
 pub fn seed_from_image(path: &Path) -> Result<u32, ThemeError> {
     seed_from_image_with(path, CrtRand::native())
 }
 
-/// seed_from_image с явным выбором rand() (см. CrtRand).
+/// seed_from_image with an explicit choice of rand() (see CrtRand).
 pub fn seed_from_image_with(path: &Path, crt: CrtRand) -> Result<u32, ThemeError> {
     let image = image::ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
@@ -287,7 +287,7 @@ pub fn seed_from_image_with(path: &Path, crt: CrtRand) -> Result<u32, ThemeError
     Ok(seed_from_rgba_with(&image.to_rgba8(), crt))
 }
 
-/// То же по уже декодированной картинке (например, из памяти).
+/// The same for an already decoded image (for example from memory).
 pub fn seed_from_rgba(image: &image::RgbaImage) -> u32 {
     seed_from_rgba_with(image, CrtRand::native())
 }
@@ -299,7 +299,7 @@ pub fn seed_from_rgba_with(image: &image::RgbaImage, crt: CrtRand) -> u32 {
     )
 }
 
-/// То же по готовым пикселям RGB.
+/// The same for ready RGB pixels.
 pub fn seed_from_pixels(pixels: &[[u8; 3]]) -> u32 {
     seed_from_pixels_with(pixels, CrtRand::native())
 }
@@ -319,8 +319,8 @@ pub fn seed_from_pixels_with(pixels: &[[u8; 3]], crt: CrtRand) -> u32 {
         .unwrap_or(DEFAULT_SEED)
 }
 
-/// "#RRGGBB" / "#AARRGGBB" → ARGB (альфа FF), как QColor(str); неверная строка → None.
-/// Как и QColor, понимает ещё "#RGB", "#RRRGGGBBB" и "#RRRRGGGGBBBB" (берутся старшие 8 бит канала).
+/// "#RRGGBB" / "#AARRGGBB" → ARGB (alpha FF), like QColor(str); an invalid string → None.
+/// Like QColor, it also understands "#RGB", "#RRRGGGBBB" and "#RRRRGGGGBBBB" (the top 8 bits of the channel are taken).
 pub fn parse_color(text: &str) -> Option<u32> {
     let hex = text.trim().strip_prefix('#')?;
     if hex.is_empty() || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -344,7 +344,7 @@ pub fn parse_color(text: &str) -> Option<u32> {
     }
 }
 
-/// ARGB → "#AARRGGBB" (верхний регистр, как в тест-векторах).
+/// ARGB → "#AARRGGBB" (upper case, as in the test vectors).
 pub fn format_color(argb: u32) -> String {
     format!("#{argb:08X}")
 }

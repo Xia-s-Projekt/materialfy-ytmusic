@@ -1,5 +1,5 @@
-//! Сверка с выходами lyrics_sources.py из yamusic-md3 (tests/fixtures.json — замороженные эталоны; Python-код удалён).
-//! Числа сравниваются через текст JSON: одинаковые f64 дают одинаковую кратчайшую запись.
+//! Cross-check against the outputs of lyrics_sources.py from yamusic-md3 (tests/fixtures.json — frozen references; the Python code was removed).
+//! Numbers are compared through their JSON text: equal f64 values give the same shortest representation.
 use serde::Serialize;
 use serde_json::Value;
 use mf_lyrics::lrc::{add_gaps, build_from_timed_lines, lines_from_lrc, parse_yrc, round3};
@@ -11,7 +11,7 @@ fn fixtures() -> Value {
     serde_json::from_str(include_str!("fixtures.json")).unwrap()
 }
 
-/// Значение → текст → Value: так и наш результат, и эталон проходят один и тот же разбор чисел
+/// Value → text → Value: this way both our result and the reference go through the same number parsing
 fn canon<T: Serialize>(v: &T) -> Value {
     serde_json::from_str(&serde_json::to_string(v).unwrap()).unwrap()
 }
@@ -56,7 +56,7 @@ fn add_gaps_matches_python() {
     let f = fixtures();
     for c in cases(&f, "add_gaps") {
         let lines: Vec<Line> = serde_json::from_value(c["lines"].clone()).unwrap();
-        // разбор строк туда-обратно не теряет полей
+        // parsing lines back and forth does not lose fields
         assert_eq!(canon(&lines), canon(&c["lines"]));
         assert_eq!(canon(&add_gaps(lines, 0.0)), canon(&c["out"]));
     }

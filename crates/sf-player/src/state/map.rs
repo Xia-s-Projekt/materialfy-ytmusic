@@ -1,5 +1,5 @@
-//! Модели Web API и librespot → элементы md3-model для снимка плеера (своя копия правил sf_api::map:
-//! обложки 300/640, артисты через «, », available = is_playable != false).
+//! Web API and librespot models → md3-model items for the player snapshot (our own copy of the sf_api::map rules:
+//! cover art 300/640, artists joined with ", ", available = is_playable != false).
 use md3_model::{ArtistRef, DeviceItem, PlayContext, TrackItem, contexts};
 use sf_api::map::{COVER_LARGE_PX, COVER_PX};
 use sf_api::models::{self, PlayableItem, pick_image};
@@ -70,7 +70,7 @@ pub fn playable(item: &PlayableItem) -> TrackItem {
     }
 }
 
-/// Трек из отчёта librespot; недостающее (альбом, id артистов) — из кэша.
+/// A track from a librespot report; whatever is missing (the album, artist ids) — from the cache.
 pub fn local_track(local: &LocalTrack, cached: Option<&TrackItem>) -> TrackItem {
     let artists: Vec<ArtistRef> = if local.artists.iter().any(|artist| artist.id.is_some()) {
         artist_refs(&local.artists)
@@ -108,7 +108,7 @@ pub fn local_track(local: &LocalTrack, cached: Option<&TrackItem>) -> TrackItem 
     }
 }
 
-/// Устройство Connect; `this_device_id` — id этого ПК.
+/// A Connect device; `this_device_id` — this PC's id.
 pub fn device(device: &models::Device, this_device_id: Option<&str>) -> DeviceItem {
     let id = device.id.clone().unwrap_or_default();
     DeviceItem {
@@ -124,7 +124,7 @@ pub fn device(device: &models::Device, this_device_id: Option<&str>) -> DeviceIt
     }
 }
 
-/// Тип контекста (Player.source) по его URI.
+/// The context type (Player.source) by its URI.
 pub fn context_kind(uri: &str) -> &'static str {
     if uri.ends_with(":collection") || uri.contains(":collection:") {
         return contexts::LIKED;
@@ -142,7 +142,7 @@ pub fn context_kind(uri: &str) -> &'static str {
     }
 }
 
-/// Контекст, известный только по URI (удалённое устройство, чужой запуск).
+/// A context known only by URI (a remote device, someone else's start).
 pub fn context_from_uri(uri: &str) -> PlayContext {
     PlayContext::with_uri(context_kind(uri), uri)
 }
@@ -156,7 +156,7 @@ mod tests {
         let item = models::Track {
             id: Some("t".into()),
             uri: "spotify:track:t".into(),
-            name: "Песня".into(),
+            name: "Song".into(),
             duration_ms: 1000,
             artists: vec![
                 models::ArtistRef { id: Some("a".into()), name: "A".into(), uri: None },
@@ -164,7 +164,7 @@ mod tests {
             ],
             album: Some(models::Album {
                 id: "al".into(),
-                name: "Альбом".into(),
+                name: "Album".into(),
                 images: vec![
                     models::Image { url: "big".into(), width: Some(640), height: Some(640) },
                     models::Image { url: "mid".into(), width: Some(300), height: Some(300) },

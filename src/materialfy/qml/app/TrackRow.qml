@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Строка трека: номер · обложка · название/исполнители · альбом · (добавил/добавлено) · (прослушивания) · лайк ·
-// длительность.
-// editable — режим правки плейлиста: ручка перетаскивания слева, «убрать» вместо сердца и ⋯.
+// Track row: number - cover - title/artists - album - (added by/added at) - (plays) - like -
+// duration.
+// editable — playlist edit mode: a drag handle on the left, "remove" instead of the heart and ....
 Item {
     id: root
 
@@ -14,7 +14,7 @@ Item {
     property string title
     property string version
     property string artists
-    property var artistRefs: []        // [{ id, name }] — для перехода к исполнителю
+    property var artistRefs: []        // [{ id, name }] — for navigating to the artist
     property string albumId
     property string album
     property string cover
@@ -25,18 +25,18 @@ Item {
     property int durationMs: 0
     property bool explicit: false
     property bool available: true
-    // прослушивания на Spotify (0 — неизвестно); колонка — только где showPlays (альбом, исполнитель)
-    // и строка достаточно широкая
+    // plays on Spotify (0 — unknown); the column only where showPlays (album, artist)
+    // and the row is wide enough
     property real playCount: 0
     property bool showPlays: false
     property bool _playsRoom: width > 600
     property bool liked: false
-    property bool current: false       // играет сейчас
-    // выбранный трек ещё грузится (движок не отдал его): строка уже его, а звука пока нет
+    property bool current: false       // playing now
+    // the selected track is still loading (the engine has not handed it over): the row already shows it, but there is no sound yet
     property bool loading: Player.buffering
     property bool showAlbum: true
     property bool wide: showAlbum && _wideAuto
-    // колонка альбома появляется с запасом ±20 px, чтобы не мигать у самой границы при растягивании
+    // the album column appears with a +/-20 px margin, so it does not flicker right at the boundary when resizing
     property bool _wideAuto: width > 720
     onWidthChanged: {
         _wideAuto = _wideAuto ? width > 700 : width > 740
@@ -44,27 +44,27 @@ Item {
         _sized = width > 0
     }
     property real _albumT: wide ? 1 : 0
-    // Колонка выезжает, когда строку растягивают; первая ширина (строку в раскладке создают нулевой) — сразу,
-    // иначе каждая новая строка полсекунды анимировала бы колонку и перекладывалась в каждом кадре
+    // The column slides out when the row is stretched; the first width (the row is created zero-width in the layout) — immediately,
+    // otherwise every new row would animate the column for half a second and relayout on every frame
     property bool _sized: false
     Component.onCompleted: _sized = width > 0
     Behavior on _albumT { enabled: root._sized; NumberAnimation { duration: 0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
-    property var track: null           // полный словарь трека для меню; без него — собирается из полей
-    // позиция в плейлисте (для «Убрать из этого плейлиста»); -1 — неизвестна (например, в поиске)
-    // и в словарь для меню тогда не попадает: Main.qml различает «нет» и число
+    property var track: null           // the full track dictionary for the menu; without it — assembled from the fields
+    // position in the playlist (for "Remove from this playlist"); -1 — unknown (for example, in search)
+    // and then it does not make it into the menu dictionary: Main.qml tells "none" from a number
     property int pos: -1
-    property bool highlighted: false   // вспышка «перейти к треку» / после добавления
+    property bool highlighted: false   // a "jump to track" flash / after adding
 
-    // Плейлист: кто и когда добавил. addedColumn: "" — нет колонки, "by" — «Добавил», "at" — «Добавлено»
+    // Playlist: who added it and when. addedColumn: "" — no column, "by" — "Added by", "at" — "Added at"
     property string addedAt
     property string addedBy
     property string addedColumn
     property bool editable: false
-    property bool dragging: false      // строка поднята и едет за курсором
+    property bool dragging: false      // the row is lifted and follows the cursor
 
-    signal activated()                 // клик — воспроизвести
-    signal likeClicked()               // клик по сердцу
-    signal removeClicked()             // «убрать из плейлиста» (editable)
+    signal activated()                 // click — play
+    signal likeClicked()               // click on the heart
+    signal removeClicked()             // "remove from playlist" (editable)
     signal dragStarted()
     signal dragMoved(real dy, real sceneY)
     signal dragFinished()
@@ -89,7 +89,7 @@ Item {
         const p = item.mapToItem(null, x, y)
         Catalog.requestTrackMenu(trackData(), p.x, p.y)
     }
-    // меню у кнопки «⋯»: под ней, правым краем к её правому краю
+    // the menu at the "..." button: below it, right-aligned to its right edge
     function openMenuAt(button) {
         const p = button.mapToItem(null, 0, 0)
         Catalog.requestTrackMenuAt(trackData(), p.x, p.y, button.width, button.height)
@@ -126,11 +126,11 @@ Item {
         color: root.dragging ? Theme.surfaceContainerHighest
              : root.current && !root.editable ? Qt.alpha(Theme.primary, 0.12) : "transparent"
     }
-    // тень поднятой строки (Elevation кладётся рядом с bg — внутрь строки, сдвигается вместе с ней)
+    // the shadow of the lifted row (Elevation is placed next to bg — inside the row, moves with it)
     Elevation { target: bg; level: root.dragging ? 2 : 0 }
 
-    // Вспышка и всё, что видно только в правке или под курсором, создаётся по требованию: строк в списке
-    // десятки, а мигает, правится или наведена одна
+    // The flash and everything visible only in edit mode or under the cursor is created on demand: there are dozens of rows in the list,
+    // but only one blinks, is edited or hovered
     Loader {
         anchors.fill: parent
         active: root.highlighted
@@ -145,7 +145,7 @@ Item {
                 NumberAnimation { target: flash; property: "opacity"; to: 0.18; duration: Theme.motion.effectsDefault }
                 NumberAnimation { target: flash; property: "opacity"; to: 0; duration: Theme.motion.effectsDefault * 2 }
             }
-            // reduced motion — без вспышки: ровная подсветка, пока строка помечена
+            // reduced motion — no flash: an even highlight while the row is marked
             states: State {
                 when: Theme.reducedMotion === true
                 PropertyChanges { flash.opacity: 0.12 }
@@ -158,10 +158,10 @@ Item {
         anchors.leftMargin: 12 - 8 * root._editT
         anchors.rightMargin: 16
         spacing: 16
-        // недоступный в регионе трек приглушён, как в очереди (QueueRow)
+        // a region-unavailable track is dimmed, as in the queue (QueueRow)
         opacity: root.available ? 1 : Theme.stateLayer.disabledContent
 
-        // Ручка перетаскивания: ширина 0 → 28 при входе в правку
+        // Drag handle: width 0 -> 28 on entering edit mode
         Item {
             id: handle
             Layout.preferredWidth: root.editable ? 28 : 0
@@ -170,7 +170,7 @@ Item {
             Behavior on Layout.preferredWidth { enabled: Theme.reducedMotion !== true; NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
             Behavior on Layout.rightMargin { enabled: Theme.reducedMotion !== true; NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
             clip: true
-            // с первого входа в правку и остаётся (иконка гаснет при выходе)
+            // from the first entry into edit mode and stays (the icon dims on exit)
             Loader {
                 anchors.fill: parent
                 active: root.editable || item !== null
@@ -206,7 +206,7 @@ Item {
             horizontalAlignment: Text.AlignRight
         }
 
-        // выбранный трек ещё грузится — индикатор MD3 поверх обложки; строка уже переключилась на него
+        // the selected track is still loading — an MD3 indicator over the cover; the row has already switched to it
         Item {
             Layout.preferredWidth: 48
             Layout.preferredHeight: 48
@@ -236,7 +236,7 @@ Item {
                 spacing: 6
                 Label {
                     Layout.fillWidth: true
-                    Layout.maximumWidth: Math.ceil(implicitWidth)   // дробный масштаб: ширина в раскладке округляется вниз
+                    Layout.maximumWidth: Math.ceil(implicitWidth)   // fractional scale: the layout width rounds down
                     text: root.title
                     type: "bodyLarge"
                     weight: 500
@@ -281,8 +281,8 @@ Item {
             color: Theme.fgSurfaceVariant
         }
 
-        // «Добавил» (аватар + имя) / «Добавлено» (дата); в узкой строке — только аватар, а дату прячем:
-        // место нужнее названию
+        // "Added by" (avatar + name) / "Added at" (date); in a narrow row — avatar only, and the date is hidden:
+        // the space is needed for the title
         RowLayout {
             visible: root.addedColumn !== "" && !(root.addedColumn === "at" && root._compactAdded)
             Layout.preferredWidth: root.addedColumn === "by" && root._compactAdded ? 28 : 132
@@ -302,7 +302,7 @@ Item {
             }
         }
 
-        // Прослушивания: полное число с разделителями разрядов
+        // Plays: the full number with digit grouping
         Label {
             visible: root.showPlays && root._playsRoom
             Layout.preferredWidth: 112
@@ -313,7 +313,7 @@ Item {
             font.features: ({ "tnum": 1 })
         }
 
-        // Сердце и ⋯ — в просмотре; «убрать» — в правке (перекрёстное растворение)
+        // Heart and ... — in view mode; "remove" — in edit mode (cross-fade)
         Item {
             implicitWidth: root.editable ? 32 : 32 + 16 + 32
             implicitHeight: 32
@@ -324,7 +324,7 @@ Item {
                 Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsDefault } }
                 spacing: 16
 
-                // Сердце: залитое у лайкнутых, контур — при наведении на строку
+                // Heart: filled when liked, outline on row hover
                 Item {
                     width: 32
                     height: 32
@@ -347,7 +347,7 @@ Item {
                         onClicked: root.likeClicked()
                     }
                 }
-                // «⋯» — с первого наведения на строку
+                // "..." — from the first hover over the row
                 Loader {
                     width: 32
                     height: 32
@@ -364,7 +364,7 @@ Item {
                     }
                 }
             }
-            // «убрать» — с первого входа в правку
+            // "remove" — from the first entry into edit mode
             Loader {
                 anchors.right: parent.right
                 width: 32
@@ -394,7 +394,7 @@ Item {
 
     HoverHandler { id: rowHover }
 
-    // Перетаскивание в очередь (вне правки)
+    // Dragging into the queue (outside edit mode)
     QueueDragSource {
         anchors.fill: parent
         z: -2
@@ -409,7 +409,7 @@ Item {
         onTapped: (point) => root.openMenu(root, point.position.x, point.position.y)
     }
 
-    // Под содержимым: клики по сердцу достаются ему, по остальной строке — сюда
+    // Under the content: clicks on the heart go to it, clicks on the rest of the row — here
     StateLayer {
         z: -1
         anchors.fill: parent

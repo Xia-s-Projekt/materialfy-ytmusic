@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// «Продолжить подкасты»: карточка 300×104, обложка 80, выпуск, шоу, прямой прогресс 4 px,
-// «Осталось N мин» / «Новый выпуск». episode — EPISODE_KEYS.
+// "Continue podcasts": a 300×104 card, 80 px cover, episode, show, a 4 px straight progress bar,
+// "N min left" / "New episode". episode — EPISODE_KEYS.
 Item {
     id: root
 

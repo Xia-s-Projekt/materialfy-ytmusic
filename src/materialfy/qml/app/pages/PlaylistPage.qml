@@ -4,9 +4,9 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Плейлист: просмотр, а у своего / совместного — правка прямо на странице (название, описание, видимость,
-// обложка, порядок, удаление и добавление треков). Каждое действие сразу уходит в Spotify и отменяется
-// из Snackbar («Вернуть» / «Отменить»).
+// Playlist: viewing, and for your own / collaborative ones — editing right on the page (title, description, visibility,
+// cover, order, deletion and addition of tracks). Every action goes to Spotify at once and is undone
+// from the Snackbar ("Undo" / "Cancel").
 TrackListPage {
     id: page
 
@@ -14,7 +14,7 @@ TrackListPage {
     property string playlistTitle
     property string cover
 
-    // Library.playlistInfo — метод: перечитываем по сигналам моста
+    // Library.playlistInfo is a method: re-read on the bridge signals
     property var info: ({})
     property int _rev: 0
     function _reload() {
@@ -39,15 +39,15 @@ TrackListPage {
     overline: collaborative ? I18n.t("COLLABORATIVE PLAYLIST") : I18n.t("PLAYLIST")
     description: info.description ?? ""
     heroImage: (info.cover ?? "") !== "" ? info.cover : cover
-    // Модель треков: стабильный экземпляр по id + счётчик владельцев у моста. playlistTracks зовём
-    // один раз на открытие (guard _acquiredId — повторные оценки binding'ов счётчик не надувают),
-    // releasePlaylist — на скрытие (Router прячет ушедшую страницу), смену id и уничтожение:
-    // последний release отменяет идущее чтение; возврат на страницу перечитывает кэш кусками.
-    // Шапка (playlistInfo) независима и не releasing'ся.
+    // Track model: a stable instance per id + an owner count at the bridge. playlistTracks is called
+    // once per open (the _acquiredId guard — repeated binding evaluations do not inflate the count),
+    // releasePlaylist — on hiding (Router hides the page that left), an id change and destruction:
+    // the last release cancels the ongoing read; returning to the page re-reads the cache in chunks.
+    // The header (playlistInfo) is independent and is not released.
     property string _acquiredId: ""
-    // Скрытие страницы (Router прячет на каждом push, сцена — в мини-режиме) снимает владение:
-    // идущее чтение отменяется, но модель и строки остаются — «назад» не пересоздаёт список
-    // во время анимации и сохраняет прокрутку. Модель обнуляется при смене id и уничтожении.
+    // Hiding the page (Router hides on every push, the scene — in mini mode) drops ownership:
+    // the ongoing read is cancelled, but the model and rows remain — "back" does not recreate the list
+    // during the animation and preserves the scroll. The model is cleared on an id change and destruction.
     function _syncModel() {
         if (playlistId === _acquiredId)
             return
@@ -90,9 +90,9 @@ TrackListPage {
             w.notify(text, actionText ?? "", onAction ?? null)
     }
 
-    // ---- Удаление с «Вернуть»: удалённые за один показ Snackbar возвращаются вместе ----
-    // Web API снимает все вхождения uri, поэтому одно удаление — группа [{uri, pos}] по возрастанию pos
-    property var _removed: []               // группы в порядке удаления
+    // ---- Delete with "Undo": items removed during one Snackbar showing are restored together ----
+    // The Web API removes all occurrences of a uri, so one deletion is a group [{uri, pos}] ordered by ascending pos
+    property var _removed: []               // groups in deletion order
     Timer { id: undoWindow; interval: 5000; onTriggered: page._removed = [] }
     onTrackRemoved: row => {
         const t = model.get(row)
@@ -113,7 +113,7 @@ TrackListPage {
         const list = _removed
         _removed = []
         undoWindow.stop()
-        // группы — в обратном порядке удаления, внутри группы — по возрастанию pos, подряд идущие одним вызовом
+        // groups — in reverse deletion order, within a group — by ascending pos, consecutive ones in a single call
         let first = -1
         for (let g = list.length - 1; g >= 0; g--) {
             const group = list[g]
@@ -130,7 +130,7 @@ TrackListPage {
             _flashAfterChange(first)
     }
 
-    // мигнуть строкой, когда модель обновится (добавление/возврат приходят из сервиса)
+    // flash the row when the model updates (additions/restorations come from the service)
     property int _pendingFlash: -1
     function _flashAfterChange(row) {
         _pendingFlash = row
@@ -151,7 +151,7 @@ TrackListPage {
         notify(I18n.t("“{0}” → position {1}", t ? t.title ?? "" : "", to + 1), I18n.t("Revert"), () => Library.moveTracks(page.playlistId, to, from))
     }
 
-    // ---- Шапка: владелец, «N треков, длительность», видимость ----
+    // ---- Header: owner, "N tracks, duration", visibility ----
     heroMeta: Flow {
         spacing: 8
         RowLayout {
@@ -208,7 +208,7 @@ TrackListPage {
         IconButton {
             icon: "radio"
             size: "m"
-            // станции идут через сессию воспроизведения (как «Радио исполнителя»)
+            // stations go through the playback session (like "Artist radio")
             enabled: page.uri !== "" && !Radio.locked
             onClicked: {
                 Radio.playStation(page.uri, page.title)
@@ -327,7 +327,7 @@ TrackListPage {
         }
     }
 
-    // ---- Меню «⋯» ----
+    // ---- "..." menu ----
     function _menuItems() {
         const items = [
             { id: "queue", text: I18n.t("Add to queue"), icon: "add_to_queue", enabled: page.uri !== "" },

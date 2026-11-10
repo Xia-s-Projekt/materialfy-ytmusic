@@ -59,8 +59,8 @@ struct State {
     snapshot: PlayerSnapshot,
     queue: VecDeque<QueueRow>,
     manual: VecDeque<QueueRow>,
-    /// «Далее из контекста»: радио, которое YouTube Music прислала на трек,
-    /// запущенный не из списка (полка главной, поиск, одиночный трек).
+    /// "Next from context": the radio that YouTube Music sent for the track,
+    /// started from outside a list (the home shelf, search, a single track).
     radio: VecDeque<QueueRow>,
     index: Option<usize>,
     uid: u64,
@@ -392,9 +392,9 @@ async fn run(
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::VolumeChanged);
                     }
                     Command::SetShuffle(s) => {
-                        // Включение перемешивания меняет только порядок
-                        // воспроизведения: следующий трек выбирается из ещё не
-                        // сыгранных строк (next_index).
+                        // Turning on shuffle only changes the order
+                        // of playback: the next track is chosen from the not yet
+                        // played rows (next_index).
                         state.shuffle = s;
                         emit(&snapshot_tx, &events_tx, &state, PlayerEvent::ModeChanged);
                     }
@@ -433,7 +433,7 @@ async fn run(
                         }
                     }
                     Command::RadioRows { queue_gen, tracks } => {
-                        // Устаревшая подборка: с момента запроса очередь заменили.
+                        // A stale selection: since the request, the queue has been replaced.
                         if queue_gen != state.queue_gen {
                             continue;
                         }
@@ -473,9 +473,9 @@ async fn run(
                         if plays_as_list(&state.context) {
                             set_queue(&mut state, tracks, row);
                         } else {
-                            // Полка главной, результаты поиска, история: список на
-                            // экране — не очередь. Играет выбранный трек, а далее
-                            // идёт радио, которое YouTube Music прислал на него.
+                            // The home shelf, search results, history: the list on
+                            // the screen is not a queue. The selected track plays, and after it
+                            // comes the radio that YouTube Music sent for it.
                             let track = tracks.into_iter().nth(row).unwrap_or_default();
                             set_queue(&mut state, vec![track], 0);
                             spawn_radio(&state, &client, &cmd_tx);
@@ -531,8 +531,8 @@ async fn run(
                             set_queue(&mut state, tracks, index);
                             spawn_enrichment(&state, &client, &cmd_tx);
                         } else {
-                            // Список на экране (полка, поиск) — не очередь: играет
-                            // выбранный трек, дальше — радио на него.
+                            // The list on screen (a shelf, search) is not a queue: it plays
+                            // the selected track, then the radio for it.
                             let track = tracks.into_iter().nth(index).unwrap_or_default();
                             set_queue(&mut state, vec![track], 0);
                             spawn_radio(&state, &client, &cmd_tx);
@@ -543,9 +543,9 @@ async fn run(
                     }
                     Command::PlayContext(context, offset_uri, shuffle) => {
                         state.context = context.clone();
-                        // «Перемешать» на контексте: порядок воспроизведения
-                        // случайный (next_index), первый трек — тоже случайный.
-                        // Обычный запуск контекста режим не трогает.
+                        // "Shuffle" on a context: the playback order
+                        // is random (next_index), the first track is random too.
+                        // A normal context start does not touch the mode.
                         if let Some(s) = shuffle {
                             state.shuffle = s;
                         }
@@ -763,7 +763,7 @@ async fn run(
                             Repeat::All => {
                                 let total = total_rows(&state);
                                 if total > 0 && state.autoplay {
-                                    // Очередь пройдена целиком: начинаем круг заново.
+                                    // The queue has been played through: we start the loop over.
                                     let next = match next_index(&mut state, &mut rng) {
                                         Some(next) => next,
                                         None => {
@@ -853,7 +853,7 @@ fn next_index(state: &mut State, rng: &mut Rng) -> Option<usize> {
         let next = cur + 1;
         return (next < total).then_some(next);
     }
-    // Перемешивание: следующий трек — любая ещё не сыгранная строка.
+    // Shuffle: the next track is any row that has not been played yet.
     let unheard: Vec<usize> = (0..total)
         .filter(|i| *i != cur && !state.played.contains(&uid_at(state, *i)))
         .collect();
@@ -863,20 +863,20 @@ fn next_index(state: &mut State, rng: &mut Rng) -> Option<usize> {
     Some(unheard[rng.below(unheard.len())])
 }
 
-/// Все строки очереди: контекст, свои, радио.
+/// All queue rows: context, manual, radio.
 fn total_rows(state: &State) -> usize {
     state.queue.len() + state.manual.len() + state.radio.len()
 }
 
-/// uid строки по сквозному индексу (сначала строки контекста, затем свои).
+/// A row's uid by its overall index (context rows first, then manual ones).
 fn uid_at(state: &State, index: usize) -> u64 {
     row_at(state, index).map(|r| r.uid).unwrap_or(u64::MAX)
 }
 
-/// Список, который играется сам по себе: альбом, плейлист, любимые треки,
-/// топ исполнителя, подкаст. Всё остальное — полка главной, результаты
-/// поиска, одиночный трек — играется радио: выбранный трек и то, что
-/// YouTube Music рекомендует вслед за ним, а не список с экрана.
+/// A list that plays by itself: an album, a playlist, liked tracks,
+/// an artist's top, a podcast. Everything else — the home shelf, search results,
+/// a single track — plays as radio: the selected track and what
+/// YouTube Music recommends after it, not the list on the screen.
 fn plays_as_list(context: &PlayContext) -> bool {
     matches!(context.kind.as_str(), "album" | "playlist" | "liked" | "artist" | "show" | "radio")
 }
@@ -1234,7 +1234,7 @@ mod tests {
             state.played.insert(uid_at(&state, next));
             seen.push(next);
         }
-        assert_eq!(seen, vec![0, 1, 2], "без перемешивания очередь идёт по порядку");
+        assert_eq!(seen, vec![0, 1, 2], "without shuffle the queue plays in order");
     }
 
     #[test]
@@ -1249,18 +1249,18 @@ mod tests {
             state.played.insert(uid_at(&state, next));
             state.index = Some(next);
         }
-        assert_eq!(played.len(), 11, "каждая неслышанная строка звучит один раз");
+        assert_eq!(played.len(), 11, "each unheard row sounds exactly once");
         let mut unique = played.clone();
         unique.sort();
         unique.dedup();
-        assert_eq!(unique.len(), 11, "повторов в перемешанной очереди нет");
-        assert!(!played.contains(&"v0".to_string()), "играющая строка не предлагается снова");
+        assert_eq!(unique.len(), 11, "there are no repeats in the shuffled queue");
+        assert!(!played.contains(&"v0".to_string()), "the playing row is not offered again");
     }
 
     #[test]
     fn set_queue_keeps_the_context_order() {
-        // Порядок воспроизведения решает только признак перемешивания:
-        // список в очереди лежит как есть.
+        // Only the shuffle flag decides the playback order:
+        // the list sits in the queue as is.
         let state = state_with(4);
         assert_eq!(ids(&state), ["v0", "v1", "v2", "v3"]);
         assert!(!state.shuffle);
@@ -1287,7 +1287,7 @@ mod tests {
 
     #[test]
     fn a_seed_track_advances_into_its_radio() {
-        // Очередь из одного трека + радио: после него играет радио, а не стоп.
+        // A single-track queue + radio: after it the radio plays, not a stop.
         let mut state = state_with(1);
         state.uid += 1;
         state.radio.push_back(QueueRow {
@@ -1297,7 +1297,7 @@ mod tests {
         });
         let mut rng = Rng::new();
         state.played.insert(uid_at(&state, 0));
-        assert_eq!(next_index(&mut state, &mut rng), Some(1), "далее — строка радио");
+        assert_eq!(next_index(&mut state, &mut rng), Some(1), "next — a radio row");
         assert_eq!(row_at(&state, 1).map(|r| r.track.track_id.as_str()), Some("radio"));
     }
 
@@ -1315,17 +1315,17 @@ mod tests {
         state.shuffle = true;
         let mut rng = Rng::new();
         state.played.insert(uid_at(&state, 0));
-        let next = next_index(&mut state, &mut rng).expect("радио ещё не играло");
-        assert!((1..=3).contains(&next), "далее — любая строка радио, получили {next}");
+        let next = next_index(&mut state, &mut rng).expect("the radio has not played yet");
+        assert!((1..=3).contains(&next), "next — any radio row, got {next}");
     }
 
     #[test]
     fn lists_play_in_order_everything_else_is_radio() {
         for kind in ["album", "playlist", "liked", "artist", "show", "radio"] {
-            assert!(plays_as_list(&PlayContext::new(kind)), "{kind} играется списком");
+            assert!(plays_as_list(&PlayContext::new(kind)), "{kind} plays as a list");
         }
         for kind in ["", "tracks", "search", "track"] {
-            assert!(!plays_as_list(&PlayContext::new(kind)), "{kind} играется радио");
+            assert!(!plays_as_list(&PlayContext::new(kind)), "{kind} plays as radio");
         }
     }
 }

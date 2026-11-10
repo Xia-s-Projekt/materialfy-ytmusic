@@ -1,4 +1,4 @@
-//! Ссылки open.spotify.com / spotify: → канонический URI. Перенос spotifast/src/link.rs.
+//! open.spotify.com / spotify: links → canonical URI. Ported from spotifast/src/link.rs.
 //! Spotify links as they arrive from outside: the desktop's URL handler,
 //! the command line, and a second launch handing one to the running
 //! instance.

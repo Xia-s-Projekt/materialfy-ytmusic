@@ -1,8 +1,8 @@
-//! Spotify Connect (исполнитель «services-extra»): список устройств (/me/player/devices, свежесть 12 с) +
-//! приёмники из локальной сети (zeroconf, которых ещё нет в аккаунте), перенос (PlayerHandle::transfer_*),
-//! громкость устройства, активация приёмника (addUser → ждём появления ≤ 20 с → перенос), имя этого устройства.
-//! Активное устройство и «идёт перенос» — из снимка плеера (он держит оптимистичное состояние и сам сообщает
-//! «{имя} не ответил»). Логика перенесена из spotifast (src/ui/devices.rs).
+//! Spotify Connect (provider "services-extra"): device list (/me/player/devices, freshness 12 s) +
+//! receivers from the local network (zeroconf, not yet in the account), transfer (PlayerHandle::transfer_*),
+//! device volume, receiver activation (addUser → wait for it to appear ≤ 20 s → transfer), this device's name.
+//! The active device and "a transfer is in progress" — from the player snapshot (it keeps the optimistic state and reports itself
+//! "{name} did not answer"). The logic is ported from spotifast (src/ui/devices.rs).
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
@@ -20,38 +20,38 @@ use crate::auth::{AuthEvent, AuthService};
 use crate::extra::connect::{self, SOURCE_ZEROCONF, ThisDevice};
 use crate::lock;
 
-/// Список устройств считается свежим (reference app.rs DEVICES_FRESH).
+/// The device list is considered fresh (reference app.rs DEVICES_FRESH).
 pub const DEVICES_FRESH: Duration = Duration::from_secs(12);
-/// Поиск приёмников mDNS.
+/// mDNS receiver search.
 pub const DISCOVER_TIMEOUT: Duration = Duration::from_secs(3);
-/// Ждём, пока активированный приёмник появится в Spotify Connect.
+/// Wait until the activated receiver appears in Spotify Connect.
 pub const RECEIVER_WAIT: Duration = Duration::from_secs(20);
 const RECEIVER_POLL: Duration = Duration::from_secs(2);
-/// Громкость при перетягивании уходит не чаще.
+/// The volume goes out no more often when dragging.
 const VOLUME_DEBOUNCE: Duration = Duration::from_millis(150);
-/// Показанная громкость держится до ответа списка.
+/// The shown volume is held until the list answers.
 const VOLUME_HOLD: Duration = Duration::from_millis(2500);
-/// Имя, которым мы представляемся приёмнику при addUser.
+/// The name we introduce ourselves to the receiver with at addUser.
 const CLIENT_NAME: &str = "Materialfy";
 const NEED_PLAYBACK: &str = "Turn on playback on this computer first — the receiver needs something to connect to";
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DevicesSnapshot {
-    /// активное первым, затем этот ПК, затем остальные; приёмники zeroconf — source = "zeroconf"
+    /// active first, then this PC, then the rest; zeroconf receivers — source = "zeroconf"
     pub devices: Arc<Vec<DeviceItem>>,
     pub active: Option<DeviceItem>,
     pub loading: bool,
-    /// id устройства, на которое идёт перенос ("" — нет)
+    /// id of the device the transfer is going to ("" — none)
     pub transferring_to: String,
     pub error_text: String,
-    /// id и имя Connect-устройства этого ПК (пусто, пока движок не готов)
+    /// id and name of this PC's Connect device (empty until the engine is ready)
     pub this_device_id: String,
     pub this_device_name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DevicesEvent {
-    /// ошибки активации приёмника и т. п.; «{имя} не ответил» шлёт только плеер (PlayerEvent::Notice)
+    /// receiver activation errors etc.; "{name} did not answer" is sent only by the player (PlayerEvent::Notice)
     Notice(String),
 }
 
@@ -63,14 +63,14 @@ struct State {
     api_in_flight: bool,
     discover_in_flight: bool,
     error_text: String,
-    /// цель последнего transfer
+    /// the target of the last transfer
     transfer_target: String,
-    /// строка приёмника, который подключается
+    /// the receiver row that is connecting
     activating: Option<String>,
-    /// оптимистичная громкость: id → (проценты, когда)
+    /// optimistic volume: id → (percent, when)
     volumes: HashMap<String, (i32, Instant)>,
     volume_seq: HashMap<String, u64>,
-    /// поколение входа: ответы до выхода не принимаются
+    /// login generation: answers before logout are not accepted
     account_generation: u64,
 }
 
@@ -101,7 +101,7 @@ impl DevicesService {
         service
     }
 
-    /// Запросить список (Web API + mDNS); вызывается при открытии меню и по refresh.
+    /// Request the list (Web API + mDNS); called when the menu opens and on refresh.
     pub fn refresh(&self) {
         if !self.auth.is_signed_in() {
             lock(&self.state).error_text = ServiceError::NotSignedIn.to_string();
@@ -135,7 +135,7 @@ impl DevicesService {
                             st.error_text.clear();
                             st.fetched_at = Some(Instant::now());
                         }
-                        // прежний список остаётся, ошибка видна в меню
+                        // the previous list stays, the error is visible in the menu
                         Err(e) => st.error_text = mf_i18n::tf("Couldn’t get the device list: {0}", &[&e]),
                     }
                 }
@@ -174,7 +174,7 @@ impl DevicesService {
         }
     }
 
-    /// Перенести воспроизведение на устройство (id этого ПК → transfer_here).
+    /// Transfer playback to a device (this PC's id → transfer_here).
     pub fn transfer(&self, device_id: String, play: bool) {
         let row = self.snapshot().devices.iter().find(|d| d.id == device_id).cloned();
         if let Some(row) = row.filter(|d| d.source == SOURCE_ZEROCONF) {
@@ -184,7 +184,7 @@ impl DevicesService {
         {
             let mut st = lock(&self.state);
             st.transfer_target = device_id.clone();
-            // после переноса флаги is_active в кэше Web API устарели
+            // after the transfer the is_active flags in the Web API cache are stale
             st.fetched_at = None;
         }
         if self.player.this_device_id().as_deref() == Some(device_id.as_str()) {
@@ -203,7 +203,7 @@ impl DevicesService {
         self.transfer(id, true);
     }
 
-    /// Громкость устройства 0..100 (с задержкой 150 мс при перетягивании).
+    /// Device volume 0..100 (with a 150 ms delay when dragging).
     pub fn set_volume(&self, device_id: String, percent: u8) {
         let percent = percent.min(100);
         let active = self.player.snapshot().device.map(|d| d.id).unwrap_or_default();
@@ -216,7 +216,7 @@ impl DevicesService {
             *seq
         };
         self.recompute();
-        // играющее устройство и этот ПК — через плеер: он держит показанную громкость сам
+        // the playing device and this PC — through the player: it keeps the shown volume itself
         if device_id == active || device_id == this {
             self.player.set_volume(f64::from(percent) / 100.0);
             return;
@@ -227,7 +227,7 @@ impl DevicesService {
             if lock(&me.state).volume_seq.get(&device_id) != Some(&seq) {
                 return;
             }
-            // сначала через сессию (connect-state), Web API — только если её нет или она отказала
+            // first through the session (connect-state), Web API — only if there is none or it refused
             let connect = me.player.connect_volume(&device_id, percent).await;
             if let Some(Err(e)) = &connect {
                 tracing::debug!("volume via session failed ({e}); trying Web API");
@@ -255,7 +255,7 @@ impl DevicesService {
         });
     }
 
-    /// Подключить приёмник из локальной сети по имени (zeroconf addUser), затем перенести.
+    /// Connect a receiver from the local network by name (zeroconf addUser), then transfer.
     pub fn activate_receiver(&self, name: String) {
         let receiver = lock(&self.state).receivers.iter().find(|r| r.name == name).cloned();
         let Some(receiver) = receiver else {
@@ -268,7 +268,7 @@ impl DevicesService {
         };
         let credentials = zeroconf::Credentials {
             username: session.username(),
-            // AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS: переиспользуемые креды сессии
+            // AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS: reusable session credentials
             auth_type: 1,
             auth_data: session.auth_data(),
         };
@@ -307,7 +307,7 @@ impl DevicesService {
         });
     }
 
-    /// Имя этого устройства по умолчанию: «Materialfy · <имя ПК>».
+    /// This device's default name: "Materialfy · <PC name>".
     pub fn default_device_name() -> String {
         let host = std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_default();
         if host.is_empty() { "Materialfy".to_owned() } else { format!("Materialfy · {host}") }
@@ -325,7 +325,7 @@ impl DevicesService {
         self.events.subscribe()
     }
 
-    // --- внутреннее ----------------------------------------------------------------------------
+    // --- internal ----------------------------------------------------------------------------
 
     fn notice(&self, text: String) {
         let _ = self.events.send(DevicesEvent::Notice(text));
@@ -336,7 +336,7 @@ impl DevicesService {
         if name.trim().is_empty() { Self::default_device_name() } else { name }
     }
 
-    /// Список из кластера connect-state сессии; Web API — только без движка или при отказе сессии.
+    /// The list from the session's connect-state cluster; Web API — only without the engine or when the session refuses.
     async fn fetch_devices(&self) -> Result<Vec<DeviceItem>, ServiceError> {
         let this = self.player.this_device_id();
         let devices = match self.player.connect_devices().await {
@@ -346,7 +346,7 @@ impl DevicesService {
         Ok(devices.iter().map(|d| sf_api::map::device_item(d, this.as_deref())).collect())
     }
 
-    /// Кластер изменился (пуш сессии): перечитать список из него — без сети, пока кластер свежий.
+    /// The cluster changed (a session push): re-read the list from it — without the network, while the cluster is fresh.
     fn refresh_connect(&self) {
         let generation = lock(&self.state).account_generation;
         let Some(me) = self.me.upgrade() else { return };
@@ -366,14 +366,14 @@ impl DevicesService {
         });
     }
 
-    /// addUser на приёмнике, затем ждём, пока Spotify покажет его в списке устройств; Ok — id устройства.
+    /// addUser on the receiver, then wait until Spotify shows it in the device list; Ok — the device id.
     async fn activate(&self, receiver: Receiver, credentials: zeroconf::Credentials, generation: u64) -> Result<String, String> {
         let name = receiver.name.clone();
         let our_name = CLIENT_NAME.to_owned();
         let handed = tokio::task::spawn_blocking({
             let receiver = receiver.clone();
             move || -> Result<zeroconf::Info, String> {
-                // адреса приёмников — локальная сеть: мимо прокси
+                // receiver addresses — the local network: past the proxy
                 let http = reqwest::blocking::Client::builder()
                     .no_proxy()
                     .timeout(Duration::from_secs(8))
@@ -422,7 +422,7 @@ impl DevicesService {
         }
     }
 
-    /// Снимок из кэша списка + снимка плеера (активное устройство, перенос, громкость этого ПК).
+    /// A snapshot from the list cache + the player snapshot (active device, transfer, this PC's volume).
     fn recompute(&self) {
         let p = self.player.snapshot();
         let this_id = self.player.this_device_id().unwrap_or_default();
@@ -483,7 +483,7 @@ impl DevicesService {
     }
 }
 
-/// Плеер (активное устройство, перенос, громкость), вход и имя устройства → снимок.
+/// Player (active device, transfer, volume), login and device name → snapshot.
 async fn listen(weak: Weak<DevicesService>) {
     let Some(me) = weak.upgrade() else { return };
     let mut player = me.player.subscribe().events;

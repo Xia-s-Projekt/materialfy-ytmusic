@@ -2,13 +2,13 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Подпись «cast · Играет на {имя}» на месте кодек-бейджа, пока играет другое устройство.
-// Варианты: «{имя} · пауза», «Переносим на …», «{имя} не отвечает». brief — только имя (полоска мини-режима).
+// A "cast · Playing on {name}" label in place of the codec badge while another device plays.
+// Variants: "{name} · paused", "Moving to …", "{name} not responding". brief — name only (the mini-mode strip).
 Row {
     id: root
 
     property bool brief: false
-    // Имя держим и после пропажи устройства: снимок может уже не содержать его
+    // The name is kept after the device disappears: the snapshot may no longer contain it
     property string _name: ""
     readonly property string deviceName: (Player.device ?? {}).name ?? ""
     onDeviceNameChanged: if (deviceName !== "") _name = deviceName

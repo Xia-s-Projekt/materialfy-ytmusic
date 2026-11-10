@@ -1,7 +1,7 @@
 import QtQuick
 
-// Connected button group MD3 Expressive (как Normal | Circular в референсе).
-// model: ["Normal", "Circular"] или [{ text, icon }]; currentIndex — выбранный сегмент.
+// Connected button group MD3 Expressive (like Normal | Circular in the reference).
+// model: ["Normal", "Circular"] or [{ text, icon }]; currentIndex is the selected segment.
 Row {
     id: root
 
@@ -9,9 +9,9 @@ Row {
     property int currentIndex: 0
     property string size: "s"
     property bool showCheck: false
-    // false — currentIndex задаётся только снаружи (binding), клик лишь шлёт activated()
+    // false — currentIndex is only set from outside (binding), a click only emits activated()
     property bool autoSelect: true
-    property color segmentColor: Theme.surfaceContainerHighest   // невыбранный сегмент
+    property color segmentColor: Theme.surfaceContainerHighest   // unselected segment
 
     signal activated(int index)
 
@@ -32,7 +32,7 @@ Row {
             readonly property string iconName: typeof modelData === "string" ? "" : (modelData.icon ?? "")
             readonly property var spec: ({ xs: { h: 32, pad: 12, inner: 4 }, s: { h: 40, pad: 16, inner: 8 }, m: { h: 56, pad: 24, inner: 8 } })[root.size]
 
-            // Выбранный сегмент и внешние углы — полностью круглые, внутренние — малое скругление.
+            // The selected segment and the outer corners are fully round, the inner ones have a small radius.
             readonly property real full: height / 2
             property real leftR: selected || first ? full : (area.pressed ? spec.inner / 2 : spec.inner)
             property real rightR: selected || last ? full : (area.pressed ? spec.inner / 2 : spec.inner)

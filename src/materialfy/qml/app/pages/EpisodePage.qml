@@ -4,7 +4,7 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Выпуск подкаста: шапка, карточка прослушивания, описание с главами, ещё выпуски шоу.
+// Podcast episode: header, listening card, description with chapters, more episodes of the show.
 Page {
     id: page
 
@@ -12,14 +12,14 @@ Page {
     readonly property QtObject ep: Catalog.episode(episodeId)
     readonly property var info: ep ? ep.info : ({})
     readonly property var showInfo: ep ? ep.show : ({})
-    readonly property bool compact: width < 840     // окно 900 px (рейл) или 1280 с правой панелью
+    readonly property bool compact: width < 840     // a 900 px window (rail) or 1280 with the right panel
     readonly property bool isCurrent: (info.uri ?? "") !== "" && Player.uri === info.uri
 
     title: info.title ?? ""
     showHeader: false
-    readonly property bool heroTitle: true     // название — в шапке; в верхней панели — после прокрутки
+    readonly property bool heroTitle: true     // the title is in the header; in the top bar — after scrolling
 
-    // год / месяц и год / полная дата — по точности даты ("October 9, 2024", «9 октября 2024»)
+    // year / month and year / full date — by the date precision ("October 9, 2024", "9 October 2024")
     function _date(iso) {
         return I18n.releaseDate(iso ?? "")
     }
@@ -38,7 +38,7 @@ Page {
         shapesOpacity: 0.5
     }
 
-    // ---- Шапка ----
+    // ---- Header ----
     Item {
         id: hero
         Layout.fillWidth: true
@@ -122,7 +122,7 @@ Page {
         onShared: snackbar.show(I18n.t("Link copied"))
     }
 
-    // ---- Описание и главы ----
+    // ---- Description and chapters ----
     ColumnLayout {
         Layout.fillWidth: true
         Layout.maximumWidth: 880
@@ -132,7 +132,7 @@ Page {
         Label {
             Layout.fillWidth: true
             visible: text !== ""
-            // строки-главы показывает ChapterList
+            // the chapter rows are shown by ChapterList
             text: chapters.chapters.length > 0
                   ? (page.info.description ?? "").split("\n").filter(l => !/^\s*[(\[]?(\d{1,2}:)?\d{1,2}:\d{2}/.test(l)).join("\n").trim()
                   : (page.info.description ?? "")
@@ -154,7 +154,7 @@ Page {
         }
     }
 
-    // ---- Ещё выпуски ----
+    // ---- More episodes ----
     SectionHeader {
         visible: page.ep !== null && page.ep.more.count > 0
         text: I18n.t("More episodes")

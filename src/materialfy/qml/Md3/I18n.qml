@@ -6,9 +6,9 @@ import Materialfy.Core
 // (Translations.ru / Translations.pt, built from i18n/ru/*.json and i18n/pt/*.json). Every function reads
 // Translations.language, so a binding that calls I18n.t(...) re-evaluates when the language changes
 // (Settings.language → Translations.language).
-//   I18n.t("Play")                          → "Play" / "Играть" / "Reproduzir"
+//   I18n.t("Play")                          -> "Play" (or its translation in the current language)
 //   I18n.t("{0} of {1}", a, b)              → positional placeholders
-//   I18n.n(count, "{0} track", "{0} tracks") → "5 tracks" / "5 треков" / "5 faixas" (key "{0} track|{0} tracks")
+//   I18n.n(count, "{0} track", "{0} tracks") -> "5 tracks" (or the plural form of the current language; key "{0} track|{0} tracks")
 // Formatting helpers (compact numbers, dates, durations, sizes) keep their locale data in _loc below.
 QtObject {
     id: root
@@ -109,7 +109,7 @@ QtObject {
         return _plural(count, one, many, count)
     }
 
-    // n() with a compact {0}: "1.2M listeners" / "1,2 млн слушателей" (after «млн»/«тыс.» Russian uses the many form)
+    // n() with a compact {0}: "1.2M listeners" (after the million/thousand abbreviation Russian uses the many form)
     function nCompact(count, one, many) {
         const c = Number(count) || 0
         return _plural(c >= 1e4 ? 5 : c, one, many, compact(c))
@@ -146,10 +146,10 @@ QtObject {
             million: " млн",
             thousand: " тыс.",
             monthsShort: ["янв.", "февр.", "мар.", "апр.", "мая", "июн.", "июл.", "авг.", "сент.", "окт.", "нояб.", "дек."],
-            // genitive: «9 октября»
+            // genitive: for dates like "9 October"
             monthsLong: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября",
                          "октября", "ноября", "декабря"],
-            // nominative: «октябрь 2024»
+            // nominative: for month-year like "October 2024"
             monthsNominative: ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь",
                                "октябрь", "ноябрь", "декабрь"],
             dayMonth: "{0} {1}",
@@ -210,7 +210,7 @@ QtObject {
         return String(Math.round(Number(x) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, _cur().group)
     }
 
-    // 12.3M / 450K / 8,765 — Russian: 12,3 млн / 450 тыс. / 8 765
+    // 12.3M / 450K / 8,765 — Russian uses its own abbreviations and digit grouping
     function compact(x) {
         const v = Number(x) || 0
         if (v >= 1e6)
@@ -230,7 +230,7 @@ QtObject {
         return isNaN(d.getTime()) ? null : d
     }
 
-    // "Oct 9" / "9 октября"
+    // "Oct 9"; day first in Russian
     function dayMonth(dateLike) {
         const d = _date(dateLike)
         if (!d)
@@ -239,7 +239,7 @@ QtObject {
         return format(_cur().dayMonth, [d.getDate(), months[d.getMonth()]])
     }
 
-    // "Oct 9, 2024" / "9 окт. 2024"; shortDate omits the current year
+    // "Oct 9, 2024" (day first in Russian); shortDate omits the current year
     function date(dateLike) {
         const d = _date(dateLike)
         if (!d)
@@ -256,7 +256,7 @@ QtObject {
     }
 
     // Release date with the precision Spotify knows it to ("2001-03-12" | "2001-03" | "2001"):
-    // "March 12, 2001" / "12 марта 2001", "March 2001" / "март 2001", "2001". Parsed by hand, so the time zone
+    // "March 12, 2001" (day first in Russian), "March 2001", "2001". Parsed by hand, so the time zone
     // never moves the day.
     function releaseDate(text) {
         const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?/.exec(String(text ?? ""))
@@ -271,7 +271,7 @@ QtObject {
         return format(_cur().date, [Number(m[3]), _cur().monthsLong[month], year])
     }
 
-    // "October 2024" / "октябрь 2024"
+    // "October 2024" (nominative month in Russian)
     function monthYear(dateLike) {
         const d = _date(dateLike)
         if (!d)
@@ -307,7 +307,7 @@ QtObject {
         return date(d)
     }
 
-    // Length from milliseconds: "1 hr 5 min" / "1 ч 5 мин", "45 min", under a minute "30 sec"
+    // "1 hr 5 min" (Russian uses single-letter units), "45 min", under a minute "30 sec"
     function duration(ms) {
         const totalMin = Math.round((Number(ms) || 0) / 60000)
         if (totalMin < 1 && Number(ms) > 0)
@@ -326,7 +326,7 @@ QtObject {
         return h > 0 ? h + ":" + pad(m) + ":" + pad(sec) : m + ":" + pad(sec)
     }
 
-    // Size in bytes: "1.5 GB" / "1,5 ГБ", "300 MB"
+    // "1.5 GB" (Russian uses a decimal comma and Cyrillic unit letters), "300 MB"
     function bytes(b) {
         b = Number(b) || 0
         const u = _cur().bytes

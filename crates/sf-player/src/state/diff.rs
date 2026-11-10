@@ -1,5 +1,5 @@
-//! Минимальные изменения модели очереди: старые строки → новые (по uid). Строка с тем же uid, но другим
-//! содержимым, уходит и приходит заново. Слишком много шагов — один Reset.
+//! Minimal changes to the queue model: old rows → new ones (by uid). A row with the same uid but different
+//! contents is removed and comes back. Too many steps — a single Reset.
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -13,12 +13,12 @@ pub fn queue_changes(old: &[QueueRow], new: &Arc<Vec<QueueRow>>) -> Vec<QueueCha
     if old == new.as_slice() {
         return Vec::new();
     }
-    // пошаговый дифф опирается на уникальность uid; повтор (или пустой список) — просто Reset
+    // the step-by-step diff relies on uid uniqueness; a duplicate (or an empty list) — just Reset
     if old.is_empty() || new.is_empty() || !unique_uids(old) || !unique_uids(new) {
         return vec![QueueChange::Reset(new.clone())];
     }
     let fresh: HashMap<u64, &QueueRow> = new.iter().map(|row| (row.uid, row)).collect();
-    // строки, которые остаются как есть
+    // rows that stay as they are
     let kept: HashSet<u64> = old
         .iter()
         .filter(|row| fresh.get(&row.uid).is_some_and(|other| *other == *row))
@@ -27,7 +27,7 @@ pub fn queue_changes(old: &[QueueRow], new: &Arc<Vec<QueueRow>>) -> Vec<QueueCha
     let mut steps = Vec::new();
     let mut current: Vec<u64> = old.iter().map(|row| row.uid).collect();
 
-    // 1. удаления (подряд идущие — одним шагом)
+    // 1. removals (consecutive ones — in a single step)
     let mut at = 0;
     while at < current.len() {
         if kept.contains(&current[at]) {
@@ -42,7 +42,7 @@ pub fn queue_changes(old: &[QueueRow], new: &Arc<Vec<QueueRow>>) -> Vec<QueueCha
         steps.push(QueueChange::Remove { at, count });
     }
 
-    // 2. перестановки: всё вне наибольшей возрастающей подпоследовательности
+    // 2. moves: everything outside the longest increasing subsequence
     let target: Vec<u64> = new.iter().map(|row| row.uid).filter(|uid| kept.contains(uid)).collect();
     if current != target {
         let position: HashMap<u64, usize> = current.iter().enumerate().map(|(i, uid)| (*uid, i)).collect();
@@ -73,7 +73,7 @@ pub fn queue_changes(old: &[QueueRow], new: &Arc<Vec<QueueRow>>) -> Vec<QueueCha
         }
     }
 
-    // 3. вставки по порядку
+    // 3. insertions in order
     let mut index = 0;
     while index < new.len() {
         if kept.contains(&new[index].uid) {
@@ -95,7 +95,7 @@ fn unique_uids(rows: &[QueueRow]) -> bool {
     rows.iter().all(|row| seen.insert(row.uid))
 }
 
-/// Индексы (в `values`) наибольшей возрастающей подпоследовательности.
+/// The indices (in `values`) of the longest increasing subsequence.
 fn longest_increasing(values: &[usize]) -> HashSet<usize> {
     let mut tails: Vec<usize> = Vec::new();
     let mut previous = vec![usize::MAX; values.len()];
@@ -119,7 +119,7 @@ fn longest_increasing(values: &[usize]) -> HashSet<usize> {
     out
 }
 
-/// Применить изменения к списку так же, как это делает модель моста (для тестов).
+/// Apply the changes to a list the same way the bridge model does (for tests).
 #[cfg(test)]
 pub fn apply(rows: &mut Vec<QueueRow>, changes: &[QueueChange]) {
     for change in changes {

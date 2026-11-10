@@ -1,17 +1,17 @@
-//! Внешние источники (lyrics_sources.py). Все запросы — с User-Agent из crate::USER_AGENT, таймаут TIMEOUT_SECS,
-//! до 2 повторов при сетевой ошибке/5xx с паузой 0,7·(n+1) с.
+//! External sources (lyrics_sources.py). All requests use the User-Agent from crate::USER_AGENT, the TIMEOUT_SECS timeout,
+//! and up to 2 retries on a network error/5xx with a 0.7·(n+1) s pause.
 //!
-//! - NetEase поиск: GET https://music.163.com/api/cloudsearch/pc?s=<clean_title primary_artist>&type=1&limit=15&offset=0
-//!   (Referer: https://music.163.com); выбор лучшего — правила ne_search;
-//! - NetEase текст: POST https://interface3.music.163.com/eapi/song/lyric/v1, форма params=<eapi>,
-//!   Referer как выше, Cookie: "os=pc; appver=2.10.13"; eapi = HEX_UPPER(AES-128-ECB-PKCS7(key "e82ckenh8dichen8",
+//! - NetEase search: GET https://music.163.com/api/cloudsearch/pc?s=<clean_title primary_artist>&type=1&limit=15&offset=0
+//!   (Referer: https://music.163.com); picking the best one — the ne_search rules;
+//! - NetEase lyrics: POST https://interface3.music.163.com/eapi/song/lyric/v1, form params=<eapi>,
+//!   Referer as above, Cookie: "os=pc; appver=2.10.13"; eapi = HEX_UPPER(AES-128-ECB-PKCS7(key "e82ckenh8dichen8",
 //!   f"{path}-36cd479b6b5-{json}-36cd479b6b5-{md5(f'nobody{path}use{json}md5forencrypt')}")), path "/api/song/lyric/v1",
-//!   json — компактный (separators ',' ':') {"id","cp":"false","lv":"0","kv":"0","tv":"0","rv":"0","yv":"0","ytv":"0","yrv":"0","csrf_token":""};
-//! - Musixmatch: https://apic-desktop.musixmatch.com/ws/1.1/, заголовки authority/cookie как MXM_HEADERS, app_id web-desktop-app-v1.0;
-//!   токен token.get кэшируется в <cache>/mxm_token.json {"token", "expires"} (6 ч; null — 1 ч);
-//! - LRCLIB: https://lrclib.net/api/get и /api/search, заголовок Lrclib-Client: materialfy.
+//!   json — compact (separators ',' ':') {"id","cp":"false","lv":"0","kv":"0","tv":"0","rv":"0","yv":"0","ytv":"0","yrv":"0","csrf_token":""};
+//! - Musixmatch: https://apic-desktop.musixmatch.com/ws/1.1/, authority/cookie headers as in MXM_HEADERS, app_id web-desktop-app-v1.0;
+//!   the token.get token is cached in <cache>/mxm_token.json {"token", "expires"} (6 h; null — 1 h);
+//! - LRCLIB: https://lrclib.net/api/get and /api/search, the Lrclib-Client header: materialfy.
 //!
-//! Чужие API меняются, поэтому JSON читается терпимо (отсутствующее поле = пусто), как в Kotlin-версии.
+//! Third-party APIs change, so JSON is read leniently (a missing field = empty), as in the Kotlin version.
 use std::fmt;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -48,7 +48,7 @@ enum HttpError {
 impl fmt::Display for HttpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            // как urllib.error.HTTPError
+            // like urllib.error.HTTPError
             Self::Status(code) => {
                 let reason = reqwest::StatusCode::from_u16(*code).ok().and_then(|s| s.canonical_reason()).unwrap_or("");
                 write!(f, "HTTP Error {code}: {reason}")
@@ -64,7 +64,7 @@ impl From<HttpError> for String {
     }
 }
 
-/// Текст ошибки reqwest вместе с причинами (сама по себе она слишком общая)
+/// reqwest's error text together with its causes (on its own it is too generic)
 fn error_chain(e: &reqwest::Error) -> String {
     let mut out = e.to_string();
     let mut src = std::error::Error::source(e);
@@ -76,7 +76,7 @@ fn error_chain(e: &reqwest::Error) -> String {
     out
 }
 
-/// Запрос с повторами при сетевой ошибке и 5xx; тело — UTF-8 с заменой битых байтов.
+/// A request with retries on a network error and 5xx; the body is UTF-8 with bad bytes replaced.
 async fn http_text(build: impl Fn() -> reqwest::RequestBuilder) -> Result<String, HttpError> {
     let mut attempt = 0;
     loop {
@@ -115,7 +115,7 @@ fn timeout() -> Duration {
     Duration::from_secs(TIMEOUT_SECS)
 }
 
-// ── терпимое чтение JSON (семантика Python: x.get(k) or {}) ──────────────────
+// ── lenient JSON reading (Python semantics: x.get(k) or {}) ──────────────────
 
 static NULL: Value = Value::Null;
 
@@ -123,7 +123,7 @@ fn get<'a>(v: &'a Value, key: &str) -> &'a Value {
     v.get(key).unwrap_or(&NULL)
 }
 
-/// Истинность значения в Python
+/// Truthiness of a value in Python
 fn truthy(v: &Value) -> bool {
     match v {
         Value::Null => false,
@@ -135,7 +135,7 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
-/// str(x) Python для значений из JSON (для параметров запроса)
+/// Python's str(x) for values from JSON (for request parameters)
 fn py_str(v: &Value) -> String {
     match v {
         Value::Null => "None".into(),
@@ -150,7 +150,7 @@ fn text_of(v: &Value) -> &str {
     v.as_str().unwrap_or("")
 }
 
-/// float(x) Python: число или строка с числом
+/// Python's float(x): a number or a string with a number
 fn py_float(v: &Value, what: &str) -> Result<f64, String> {
     match v {
         Value::Number(n) => n.as_f64().ok_or_else(|| format!("bad number {what}")),
@@ -166,7 +166,7 @@ fn now_secs() -> f64 {
 
 // ── NetEase ──────────────────────────────────────────────────────────────────
 
-/// Лучшее совпадение песни NetEase (объект song) или None.
+/// The best NetEase song match (the song object) or None.
 pub async fn ne_search(http: &reqwest::Client, query: &LyricsQuery) -> Result<Option<Value>, String> {
     let q = format!("{} {}", clean_title(&query.title), primary_artist(&query.artist));
     let url = "https://music.163.com/api/cloudsearch/pc";
@@ -181,8 +181,8 @@ pub async fn ne_search(http: &reqwest::Client, query: &LyricsQuery) -> Result<Op
     Ok(pick_ne_song(songs, query))
 }
 
-/// Правила выбора из ne_search: название похоже, длительность ±6 с, нет «лишних» версий (Remix и т. п.),
-/// без длительности — обязательно совпадение исполнителя; очки — исполнитель 10, точное название 5, близость длительности до 5.
+/// The ne_search selection rules: a similar title, duration ±6 s, no "extra" versions (Remix and so on),
+/// without a duration the artist must match exactly; points — artist 10, exact title 5, duration closeness up to 5.
 pub fn pick_ne_song(songs: Vec<Value>, query: &LyricsQuery) -> Option<Value> {
     let (title, artist, duration) = (query.title.as_str(), query.artist.as_str(), query.duration);
     let primary = primary_artist(artist);
@@ -202,7 +202,7 @@ pub fn pick_ne_song(songs: Vec<Value>, query: &LyricsQuery) -> Option<Value> {
         if duration > 0.0 && diff > 6.0 {
             continue;
         }
-        // "Song (Remix)", когда играет "Song": другой тайминг
+        // "Song (Remix)" when "Song" is playing: different timing
         if version_tags(&name).iter().any(|t| !title_tags.contains(t)) {
             continue;
         }
@@ -218,7 +218,7 @@ pub fn pick_ne_song(songs: Vec<Value>, query: &LyricsQuery) -> Option<Value> {
     best
 }
 
-/// Параметры запроса текста NetEase в порядке ключей Python
+/// The NetEase lyrics request parameters in Python's key order
 pub fn ne_lyric_json(song_id: &str) -> String {
     let mut s = format!("{{\"id\":{}", Value::String(song_id.to_owned()));
     s.push_str(",\"cp\":\"false\"");
@@ -229,12 +229,12 @@ pub fn ne_lyric_json(song_id: &str) -> String {
     ensure_ascii(&s)
 }
 
-/// Ответ /eapi/song/lyric/v1 (поля yrc.lyric и lrc.lyric).
+/// The /eapi/song/lyric/v1 response (the yrc.lyric and lrc.lyric fields).
 pub async fn ne_lyric(http: &reqwest::Client, song_id: i64) -> Result<Value, String> {
     ne_lyric_by_id(http, &song_id.to_string()).await
 }
 
-/// То же по строковому id (str(song["id"]) в Python).
+/// The same for a string id (str(song["id"]) in Python).
 pub async fn ne_lyric_by_id(http: &reqwest::Client, song_id: &str) -> Result<Value, String> {
     let params = ne_eapi_params_text(NE_LYRIC_PATH, &ne_lyric_json(song_id));
     let url = "https://interface3.music.163.com/eapi/song/lyric/v1";
@@ -248,7 +248,7 @@ pub async fn ne_lyric_by_id(http: &reqwest::Client, song_id: &str) -> Result<Val
     .await?)
 }
 
-/// json.dumps(ensure_ascii=True): всё не-ASCII — \uXXXX (за пределами BMP — суррогатной парой)
+/// json.dumps(ensure_ascii=True): all non-ASCII is \\uXXXX (outside the BMP — a surrogate pair)
 fn ensure_ascii(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -264,13 +264,13 @@ fn ensure_ascii(s: &str) -> String {
     out
 }
 
-/// eapi-шифрование NetEase. Ключи — в порядке обхода `params` (serde_json без preserve_order — по алфавиту).
+/// NetEase eapi encryption. The keys are in `params` traversal order (serde_json without preserve_order — alphabetical).
 pub fn ne_eapi_params(path: &str, params: &Value) -> String {
     let text = ensure_ascii(&serde_json::to_string(params).unwrap_or_default());
     ne_eapi_params_text(path, &text)
 }
 
-/// eapi-шифрование над готовым JSON-текстом (его же берёт md5)
+/// eapi encryption over a finished JSON text (md5 takes that same text)
 pub fn ne_eapi_params_text(path: &str, text: &str) -> String {
     let digest = hex::encode(Md5::digest(format!("nobody{path}use{text}md5forencrypt").as_bytes()));
     let data = format!("{path}-36cd479b6b5-{text}-36cd479b6b5-{digest}");
@@ -280,7 +280,7 @@ pub fn ne_eapi_params_text(path: &str, text: &str) -> String {
 
 // ── Musixmatch ───────────────────────────────────────────────────────────────
 
-/// Токен Musixmatch (пользовательский или анонимный из кэша/token.get); None — заблокирован.
+/// The Musixmatch token (the user's or an anonymous one from the cache/token.get); None — blocked.
 pub async fn mxm_token(http: &reqwest::Client, cache_dir: &Path, user_token: &str) -> Result<Option<String>, String> {
     if !user_token.is_empty() {
         return Ok(Some(user_token.to_owned()));
@@ -290,7 +290,7 @@ pub async fn mxm_token(http: &reqwest::Client, cache_dir: &Path, user_token: &st
         && let Ok(c) = serde_json::from_str::<Value>(&raw)
         && get(&c, "expires").as_f64().unwrap_or(0.0) > now_secs()
     {
-        // None — заблокированы, повтор позже
+        // None — blocked, retry later
         return Ok(get(&c, "token").as_str().map(str::to_owned));
     }
     let url = format!("{MXM_BASE}token.get?app_id={MXM_APP_ID}&format=json");
@@ -325,7 +325,7 @@ async fn mxm_call(http: &reqwest::Client, method: &str, token: &str, params: &[(
     Ok(get(&d, "message").clone())
 }
 
-/// ("word", строки) / ("line", строки) / None.
+/// ("word", lines) / ("line", lines) / None.
 pub async fn mxm_fetch(http: &reqwest::Client, query: &LyricsQuery, token: &str) -> Result<Option<(&'static str, Vec<Line>)>, String> {
     let duration = query.duration;
     let q_duration = if duration != 0.0 { (duration.trunc() as i64).to_string() } else { String::new() };
@@ -377,8 +377,8 @@ pub async fn mxm_fetch(http: &reqwest::Client, query: &LyricsQuery, token: &str)
     Ok(None)
 }
 
-/// richsync_body: [{"ts", "te", "l": [{"c": текст, "o": смещение от ts}]}] → строки по словам.
-/// Пробельный кусок приклеивается к предыдущему слогу (он и завершает слово).
+/// richsync_body: [{"ts", "te", "l": [{"c": text, "o": offset from ts}]}] → word-by-word lines.
+/// A whitespace chunk is glued to the previous syllable (it is the one that ends the word).
 pub fn parse_richsync(body: &str) -> Result<Vec<Line>, String> {
     let items: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
     let mut lines = Vec::new();
@@ -410,7 +410,7 @@ pub fn parse_richsync(body: &str) -> Result<Vec<Line>, String> {
     Ok(lines)
 }
 
-/// subtitle_body: [{"text", "time": {"total"}}] → пары (время, текст)
+/// subtitle_body: [{"text", "time": {"total"}}] → (time, text) pairs
 pub fn parse_subtitles(body: &str) -> Result<Vec<(f64, String)>, String> {
     let items: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
     items
@@ -423,10 +423,10 @@ pub fn parse_subtitles(body: &str) -> Result<Vec<(f64, String)>, String> {
 
 // ── LRCLIB ───────────────────────────────────────────────────────────────────
 
-/// syncedLyrics с LRCLIB. Кандидаты — точный get и поиск по названию с исполнителем, а если среди них
-/// ничего не подошло — все треки исполнителя (поиск LRCLIB ищет по словам целиком: «погибать» не найдёт
-/// «Пагибать»). Из синхронных записей с похожим названием и длительностью берётся разметка, с которой
-/// согласно больше всего записей, — одну и ту же разметку часто копируют на версии другой длины.
+/// syncedLyrics from LRCLIB. The candidates are the exact get and a search by title with the artist, and if none of them
+/// fits — all of the artist's tracks (LRCLIB's search matches whole words: it will not find
+/// "Pagibat'"). Of the synced records with a similar title and duration, the markup most of them
+/// agree on is taken — the same markup is often copied onto versions of a different length.
 pub async fn lrclib_fetch(http: &reqwest::Client, query: &LyricsQuery) -> Result<Option<String>, String> {
     let duration = query.duration;
     let mut params: Vec<(&str, String)> = vec![("track_name", query.title.clone()), ("artist_name", query.artist.clone())];
@@ -456,14 +456,14 @@ fn extend_found(found: &mut Vec<Value>, res: Result<Value, HttpError>) -> Result
     match res {
         Ok(Value::Array(rows)) => found.extend(rows),
         Ok(_) => {}
-        // уже есть что выбирать — сбой дополнительного поиска не страшен
+        // there is already something to choose from — a failure of the extra search is not a problem
         Err(_) if !found.is_empty() => {}
         Err(e) => return Err(e.into()),
     }
     Ok(())
 }
 
-/// Похожие названия: совпадение/вхождение после нормализации или отличие в паре букв (≥ 80 % совпадения).
+/// Similar titles: a match/substring after normalization or a difference in a pair of letters (≥ 80 % similarity).
 fn title_like(a: &str, b: &str) -> bool {
     if similar(a, b) {
         return true;
@@ -488,7 +488,7 @@ fn levenshtein(a: &[char], b: &[char]) -> usize {
 struct LrcCandidate<'a> {
     lrc: &'a str,
     duration: f64,
-    /// времена первых строк с текстом — «почерк» разметки
+    /// the times of the first lines with text — the markup's "handwriting"
     stamps: Vec<f64>,
 }
 
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn lrclib_prefers_agreeing_sync_over_copied_one() {
-        // разметку с 00:21 скопировали на версии любой длины, независимые синхронизации сходятся на 00:02
+        // markup with 00:21 was copied onto versions of any length, independent syncs converge on 00:02
         let rows = vec![
             lrc_row(1, "No Coke", "Dr. Alban", 224.0, "00:21.16"),
             lrc_row(2, "No Coke", "Dr. Alban", 222.0, "00:21.16"),
@@ -576,21 +576,21 @@ mod tests {
     #[test]
     fn lrclib_title_tolerates_spelling() {
         let rows = vec![
-            lrc_row(1, "Шмыг под кожу", "Мистер Малой", 134.0, "00:10.00"),
-            lrc_row(2, "Буду Пагибать Малодым", "Мистер Малой", 134.0, "00:17.00"),
+            lrc_row(1, "Slip under the skin", "Mr Small", 134.0, "00:10.00"),
+            lrc_row(2, "Will be dieing young", "Mr Small", 134.0, "00:17.00"),
         ];
-        let lrc = pick_lrclib(&rows, &q("Буду погибать молодым", "Мистер Малой", 135.0)).unwrap();
+        let lrc = pick_lrclib(&rows, &q("Will be dying young", "Mr Small", 135.0)).unwrap();
         assert!(lrc.starts_with("[00:17"));
-        assert!(!title_like("Шмыг под кожу", "Буду погибать молодым"));
-        assert!(pick_lrclib(&rows, &q("Буду погибать молодым", "Другой", 135.0)).is_none());
+        assert!(!title_like("Slip under the skin", "Will be dying young"));
+        assert!(pick_lrclib(&rows, &q("Will be dying young", "Other", 135.0)).is_none());
     }
 
     #[tokio::test]
-    #[ignore = "сеть: настоящий LRCLIB"]
+    #[ignore = "network: real LRCLIB"]
     async fn lrclib_live() {
         let http = reqwest::Client::new();
-        let malo = lrclib_fetch(&http, &q("Буду погибать молодым", "Мистер Малой", 135.0)).await.unwrap().unwrap();
-        assert!(malo.contains("[00:1"), "{}", &malo[..80.min(malo.len())]);
+        let yest = lrclib_fetch(&http, &q("Yesterday", "The Beatles", 125.0)).await.unwrap().unwrap();
+        assert!(yest.contains("[00:"), "{}", &yest[..80.min(yest.len())]);
         let coke = lrclib_fetch(&http, &q("No Coke", "Dr. Alban", 224.0)).await.unwrap().unwrap();
         assert!(coke.trim_start().starts_with("[00:02"), "{}", &coke[..80.min(coke.len())]);
     }
@@ -601,7 +601,7 @@ mod tests {
             ne_lyric_json("123"),
             r#"{"id":"123","cp":"false","lv":"0","kv":"0","tv":"0","rv":"0","yv":"0","ytv":"0","yrv":"0","csrf_token":""}"#
         );
-        assert_eq!(ensure_ascii("ж😀"), "\\u0436\\ud83d\\ude00");
+        assert_eq!(ensure_ascii("é😀"), "\\u00e9\\ud83d\\ude00");
     }
 
     #[test]
@@ -616,10 +616,10 @@ mod tests {
         let songs = songs.as_array().unwrap().clone();
         let best = pick_ne_song(songs.clone(), &q("Creep", "Radiohead", 238.0)).unwrap();
         assert_eq!(best["id"], 3);
-        // без длительности чужой исполнитель не подходит
+        // without a duration another artist does not fit
         let best = pick_ne_song(songs[1..2].to_vec(), &q("Creep", "Radiohead", 0.0));
         assert!(best.is_none());
-        // версия, которая есть в названии играющего трека, — не лишняя
+        // a version that is in the playing track's title is not an extra one
         let best = pick_ne_song(songs, &q("Creep (Acoustic)", "Radiohead", 238.0)).unwrap();
         assert_eq!(best["id"], 1);
     }

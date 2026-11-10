@@ -3,20 +3,20 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Сцена «Радио» на главной. Слева (в узком окне — сверху) карточка станции: фигура группы выбранного сида
-// с его обложкой и кнопкой, подпись и действия. Рядом — группы сидов ровными рядами: «Недавние треки»,
-// «Артисты», «Альбомы и плейлисты», «Любой трек» с «+». У каждого сида своя ячейка: подпись обрезается
-// в ней и ни с чем не пересекается; заголовок группы — отдельной строкой над рядом.
-// Раньше сиды стояли по эллиптической орбите вокруг центра — подписи наезжали друг на друга и на обложку.
-// Модели групп обновляются на месте (по URI): смена сидов или выбора не пересоздаёт остальные ячейки.
+// The "Radio" scene on the home page. On the left (top in a narrow window) is the station card: the shape of the selected seed's group
+// with its cover and a button, a label and actions. Next to it — seed groups in even rows: "Recent tracks",
+// "Artists", "Albums and playlists", "Any track" with a "+". Each seed has its own cell: the label is elided
+// inside it and never overlaps anything; the group title is a separate row above the line.
+// Seeds used to sit on an elliptical orbit around the center — labels ran into each other and over the cover.
+// Group models are refreshed in place (by URI): changing the seeds or the selection does not recreate the other cells.
 Item {
     id: root
 
     property var groups: []                // Radio.seeds: [{key, title, items: [{uri, label, cover, kind}]}]
-    property string selected               // URI выбранного сида
-    property bool locked: false            // нет воспроизведения на этом ПК — сиды неактивны
+    property string selected               // URI of the selected seed
+    property bool locked: false            // no playback on this PC — the seeds are inactive
     property bool loading: false
-    property bool playing: false           // играет станция выбранного сида
+    property bool playing: false           // the selected seed's station is playing
     property bool signedIn: true
     property bool premium: true
     property string errorText
@@ -33,17 +33,17 @@ Item {
     signal loginRequested()
 
     readonly property bool reduced: Theme.reducedMotion === true
-    // Карточка слева от групп, если рядом с ней влезает хотя бы 6 ячеек; иначе — над ними
+    // The card sits left of the groups if at least 6 cells fit beside it; otherwise above them
     readonly property real heroWidth: Math.max(300, Math.min(400, width * 0.32))
     readonly property bool sideBySide: signedIn && width - heroWidth - 24 >= 6 * 88
-    // Ячейка сида тянется под ширину: самая длинная группа (7 с «+») — одной строкой, подписи длиннее
+    // A seed cell stretches to the width: the longest group (7 with "+") is a single line, longer labels
     readonly property real groupsWidth: sideBySide ? width - heroWidth - 24 : width
     readonly property real slotWidth: Math.floor(Math.max(compact ? 76 : 84, Math.min(112, groupsWidth / 7 - 4)))
     readonly property real seedSize: Math.max(48, Math.min(64, Math.round(slotWidth * 0.62)))
 
     implicitHeight: column.implicitHeight
 
-    // Тональные пары групп: цвет / контейнер / текст на них; фигура группы
+    // Tonal pairs for groups: color / container / text on them; the group shape
     readonly property var styles: ({
         recent:      { role: "primary", shape: "softSquare" },
         artists:     { role: "tertiary", shape: "softSquare" },
@@ -75,8 +75,8 @@ Item {
     }
     readonly property var currentStyle: current ? (styles[current.group.key] ?? styles.any) : styles.recent
 
-    // Список сидов → ListModel на месте: совпавшие ячейки остаются, сдвинутые переезжают (move),
-    // новые вставляются — без пересоздания всего ряда
+    // Seed list → ListModel in place: matching cells stay, shifted ones move (move),
+    // new ones are inserted — without recreating the whole row
     function syncModel(model, items) {
         for (let i = 0; i < items.length; ++i) {
             const it = { uri: items[i].uri ?? "", label: items[i].label ?? "", cover: items[i].cover ?? "", kind: items[i].kind ?? "" }
@@ -115,7 +115,7 @@ Item {
             columnSpacing: 24
             rowSpacing: 20
 
-            // ---- Карточка станции ----
+            // ---- Station card ----
             Rectangle {
                 id: card
                 Layout.preferredWidth: root.sideBySide ? root.heroWidth : -1
@@ -138,7 +138,7 @@ Item {
                     columnSpacing: 24
                     rowSpacing: 16
 
-                    // фигура группы, в ней обложка сида и «Слушать»
+                    // the group shape, with the seed cover and "Play" inside
                     Item {
                         id: hero
                         readonly property real size: root.sideBySide ? Math.min(220, card.width - 2 * card.pad)
@@ -189,11 +189,11 @@ Item {
                         }
                     }
 
-                    // подпись: что за станция и действия
+                    // label: which station it is, and the actions
                     ColumnLayout {
                         id: caption
                         Layout.fillWidth: true
-                        // ширина от карточки, а не от содержимого: длинный ряд кнопок не раздвигает подпись за край
+                        // width from the card, not from the content: a long row of buttons does not push the label past the edge
                         Layout.maximumWidth: room
                         Layout.alignment: Qt.AlignVCenter
                         spacing: 4
@@ -254,7 +254,7 @@ Item {
                             Layout.alignment: root.sideBySide ? Qt.AlignHCenter : Qt.AlignLeft
                             visible: !root.loading
                             spacing: 8
-                            // не влезают в строку карточки — столбиком по центру
+                            // they do not fit on the card's line — a centered column
                             columns: rowWidth > caption.room ? 1 : 8
                             horizontalItemAlignment: Grid.AlignHCenter
                             verticalItemAlignment: Grid.AlignVCenter
@@ -264,7 +264,7 @@ Item {
                                     if (c.visible) { w += c.implicitWidth; n++ }
                                 return w + Math.max(0, n - 1) * spacing
                             }
-                            // вход / подключение воспроизведения
+                            // sign in / connect playback
                             Button {
                                 visible: !root.signedIn
                                 text: I18n.t("Sign in")
@@ -283,7 +283,7 @@ Item {
                                 style: "text"
                                 onClicked: root.moreRequested()
                             }
-                            // станция
+                            // station
                             Button {
                                 visible: root.signedIn && !root.locked && root.current !== null
                                 text: I18n.t("Track list")
@@ -309,7 +309,7 @@ Item {
                 }
             }
 
-            // ---- Группы сидов ----
+            // ---- Seed groups ----
             ColumnLayout {
                 visible: root.signedIn
                 Layout.fillWidth: true
@@ -319,7 +319,7 @@ Item {
                 enabled: !root.locked && root.signedIn
 
                 Repeater {
-                    model: root.groupKeys          // постоянный список: группы не пересоздаются
+                    model: root.groupKeys          // a fixed list: the groups are not recreated
                     ColumnLayout {
                         id: group
                         required property string modelData
@@ -340,7 +340,7 @@ Item {
                         onInfoChanged: sync()
                         Component.onCompleted: sync()
 
-                        // заголовок группы: значок-фигура в цвете группы и название
+                        // group title: a shape icon in the group color and the name
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 8
@@ -361,7 +361,7 @@ Item {
 
                         Flow {
                             Layout.fillWidth: true
-                            Layout.leftMargin: -(root.slotWidth - root.seedSize) / 2 + 2  // кружки по краю заголовка
+                            Layout.leftMargin: -(root.slotWidth - root.seedSize) / 2 + 2  // circles along the title edge
                             spacing: 4
                             Repeater {
                                 model: seeds
@@ -384,7 +384,7 @@ Item {
                                         y: 6
                                         anchors.horizontalCenter: parent.horizontalCenter
 
-                                        // ореол цвета группы у выбранного
+                                        // a halo in the group color on the selected one
                                         MorphShape {
                                             anchors.centerIn: parent
                                             width: parent.width + 10
@@ -418,7 +418,7 @@ Item {
                                             }
                                         }
                                     }
-                                    // подпись — в пределах своей ячейки
+                                    // label — within its own cell
                                     Label {
                                         anchors.top: disc.bottom
                                         anchors.topMargin: 6

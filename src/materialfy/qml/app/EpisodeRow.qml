@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Строка выпуска: обложка · «10 окт · 58 мин» · название · описание · кнопка play, статус
-// (новый / начат / играет / прослушан) и действия (в очередь, сохранить, меню). Клик — страница выпуска.
+// Episode row: cover · "Oct 10 · 58 min" · title · description · play button, status
+// (new / started / playing / played) and actions (to queue, save, menu). Click — the episode page.
 Item {
     id: root
 
@@ -27,7 +27,7 @@ Item {
     implicitHeight: content.implicitHeight + 24
     implicitWidth: 480
 
-    // словарь для меню трека и очереди
+    // dictionary for the track menu and the queue
     function trackData() {
         return {
             trackId: episode.episodeId ?? "", uri: uri, title: episode.title ?? "",
@@ -54,7 +54,7 @@ Item {
         return I18n.shortDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
     }
     function _minutes(ms) {
-        return I18n.duration(Math.max(60000, ms))      // не меньше «1 мин»
+        return I18n.duration(Math.max(60000, ms))      // never less than "1 min"
     }
 
     Rectangle {
@@ -69,7 +69,7 @@ Item {
         onClicked: if ((root.episode.episodeId ?? "") !== "") Catalog.openEpisode(root.episode.episodeId)
     }
     HoverHandler { id: hover }
-    // выпуск можно перетащить в очередь, как строку трека
+    // an episode can be dragged into the queue, like a track row
     QueueDragSource {
         anchors.fill: parent
         z: -2
@@ -144,7 +144,7 @@ Item {
                 maximumLineCount: root.compact ? 1 : 2
             }
 
-            // подвал: play, статус, действия
+            // footer: play, status, actions
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 6
@@ -184,7 +184,7 @@ Item {
                     }
                 }
 
-                // статус
+                // status
                 Row {
                     spacing: 8
                     Layout.alignment: Qt.AlignVCenter
@@ -242,10 +242,10 @@ Item {
                         iconColor: root.saved ? Theme.primary : Theme.fgSurfaceVariant
                         onClicked: Library.toggleSaved(root.uri)
                     }
-                    // «⋯» создаётся с первого наведения и остаётся (строк много, а наведена одна);
-                    // видимость — на самой кнопке, как и раньше
+                    // "⋯" is created on the first hover and stays (there are many rows but only one is hovered);
+                    // visibility is on the button itself, as before
                     Loader {
-                        // невидимый item всё равно занимает ширину в Row — прячем сам Loader
+                        // an invisible item still takes width in a Row — so we hide the Loader itself
                         active: root.hovered || root.isCurrent || item !== null
                         visible: item !== null && item.visible
                         sourceComponent: IconButton {

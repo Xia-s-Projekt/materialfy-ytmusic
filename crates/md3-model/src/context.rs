@@ -1,8 +1,8 @@
-//! Контекст воспроизведения списка: тип (для Player.source) + context URI Spotify.
+//! Playback context of a list: the type (for Player.source) + the Spotify context URI.
 use serde::{Deserialize, Serialize};
 
 /// {"type": liked|playlist|album|artist|search|radio|show|queue|…, "uri": "spotify:…"?, "title": "…", "cover": "…"}.
-/// `uri` — то, что уходит в librespot/Web API как context_uri (None — играть списком URI).
+/// `uri` — what goes to librespot/Web API as context_uri (None — play as a list of URIs).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PlayContext {
@@ -10,10 +10,10 @@ pub struct PlayContext {
     pub kind: String,
     #[serde(rename = "uri", skip_serializing_if = "Option::is_none")]
     pub context_uri: Option<String>,
-    /// подпись «Играет из …» (имя плейлиста/альбома/станции); пусто — неизвестно
+    /// label for "Playing from …" (the name of the playlist/album/station); empty — unknown
     #[serde(skip_serializing_if = "String::is_empty")]
     pub title: String,
-    /// обложка контекста ~300 px (карточка «Играет из …»); пусто — нет
+    /// context cover ~300 px (the "Playing from …" card); empty — none
     #[serde(skip_serializing_if = "String::is_empty")]
     pub cover: String,
 }
@@ -38,23 +38,23 @@ impl PlayContext {
     }
 }
 
-/// Значения `PlayContext.kind` (= Player.source в QML).
+/// Values of `PlayContext.kind` (= Player.source in QML).
 pub mod contexts {
     pub const LIKED: &str = "liked";
     pub const PLAYLIST: &str = "playlist";
     pub const ALBUM: &str = "album";
     pub const ARTIST: &str = "artist";
     pub const SEARCH: &str = "search";
-    /// радио Spotify (станция spotify:station:…); бывшее "wave"
+    /// Spotify radio (a spotify:station:… station); formerly "wave"
     pub const RADIO: &str = "radio";
     pub const SHOW: &str = "show";
     pub const EPISODE: &str = "episode";
-    /// отдельные треки (очередь, история, «любой трек»)
+    /// separate tracks (the queue, history, "any track")
     pub const TRACKS: &str = "tracks";
-    /// контекст неизвестен (удалённое устройство не сообщило)
+    /// the context is unknown (the remote device did not report it)
     pub const UNKNOWN: &str = "";
 
-    /// `spotify:user:<id>:collection` — «Любимые треки» как контекст.
+    /// `spotify:user:<id>:collection` — "Liked songs" as a context.
     pub fn liked_uri(account_id: &str) -> String {
         format!("spotify:user:{account_id}:collection")
     }

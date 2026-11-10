@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Строка настройки: заголовок + пояснение слева, контрол справа (кладётся внутрь).
-// Если контрол не помещается рядом с подписью (узкое окно) — он уходит под неё.
+// Settings row: title + description on the left, control on the right (placed inside).
+// If the control does not fit next to the label (narrow window) — it moves under it.
 GridLayout {
     id: root
 
@@ -12,9 +12,9 @@ GridLayout {
     default property alias control: slot.data
 
     Layout.fillWidth: true
-    // ширину задаёт родитель: иначе неявная ширина двух колонок распирает строку и она не переносится
+    // the width is set by the parent: otherwise the implicit width of the two columns inflates the row and it does not wrap
     Layout.preferredWidth: 0
-    // перенос контрола под подпись — с запасом ±16 px, иначе у границы строка мигала бы при растягивании
+    // the control wraps under the label with a margin of ±16 px, otherwise the row would flicker at the boundary while stretching
     property bool _stacked: false
     function _updateStack() {
         if (width <= 0)
@@ -48,7 +48,7 @@ GridLayout {
         id: slot
         implicitWidth: childrenRect.width
         implicitHeight: childrenRect.height
-        // контрол стал шире (другой язык, длиннее подпись кнопки) — пересчитать перенос
+        // the control became wider (another language, a longer button label) — recalculate the wrap
         onImplicitWidthChanged: root._updateStack()
     }
 }

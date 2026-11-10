@@ -1,7 +1,7 @@
 import QtQuick
 
-// Иконка-кнопка MD3 Expressive: style standard | filled | tonal | outlined,
-// size xs | s | m | l | xl, width narrow | default | wide. Поддерживает toggle.
+// MD3 Expressive icon button: style standard | filled | tonal | outlined,
+// size xs | s | m | l | xl, width narrow | default | wide. Supports toggle.
 Item {
     id: root
 
@@ -11,10 +11,10 @@ Item {
     property string widthMode: "default"
     property bool checkable: false
     property bool checked: false
-    // false — состояние задаётся только снаружи (checked: binding), клик лишь шлёт clicked()
+    // false — the state is only set from outside (checked: binding), a click just emits clicked()
     property bool autoToggle: true
     property color iconColor: _contentColor
-    // Мелким глифам (три точки more_horiz) стандартного кегля и веса мало: в кнопке они теряются
+    // Small glyphs (the three dots more_horiz) are too faint at the standard size and weight: they get lost
     property real iconSize: _spec.icon
     property real iconWeight: 400
     readonly property alias pressed: area.pressed
@@ -39,8 +39,8 @@ Item {
         case "filled": return checkable && !checked ? Theme.surfaceContainer : Theme.primary
         case "tonal": return checkable && !checked ? Theme.surfaceContainerHighest : Theme.secondaryContainer
         case "outlined": return _selected ? Theme.inverseSurface : "transparent"
-        // Выбранная standard-кнопка — с тональной подложкой: одного цвета иконки мало,
-        // при неудачной палитре primary почти не отличается от fgSurfaceVariant.
+        // A selected standard button — with a tonal backing: the icon color alone is not enough,
+        // with an unlucky palette primary is barely different from fgSurfaceVariant.
         default: return _selected ? Theme.secondaryContainer : "transparent"
         }
     }

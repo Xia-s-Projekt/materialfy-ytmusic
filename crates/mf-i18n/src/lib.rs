@@ -5,7 +5,7 @@
 //! * `t("Settings")` — the translation of an English string (or the string itself in English / when missing).
 //! * `tf("Played {0} of {1}", &[&a, &b])` — translate, then substitute positional `{0}`, `{1}`…
 //! * `n(count, "{0} track", "{0} tracks")` — plural: English one/many, Russian one/few/many
-//!   (dictionary key `"{0} track|{0} tracks"`, value `"{0} трек|{0} трека|{0} треков"`), Portuguese one/many
+//!   (dictionary key `"{0} track|{0} tracks"`, value with three `|`-separated forms for Russian), Portuguese one/many
 //!   (value `"{0} faixa|{0} faixas"`), `{0}` → count.
 
 use std::collections::HashMap;
@@ -365,20 +365,17 @@ mod tests {
     #[test]
     fn russian_lookup() {
         with_lang(Lang::Ru, || {
-            assert_eq!(t("Language"), "Язык");
+            let ru = dictionary(Lang::Ru).expect("ru dictionary");
+            assert_eq!(t("Language"), ru["Language"]);
             assert_eq!(t("No such string here"), "No such string here");
-            let forms = [
-                (1, "1 трек"),
-                (2, "2 трека"),
-                (5, "5 треков"),
-                (11, "11 треков"),
-                (21, "21 трек"),
-                (22, "22 трека"),
-                (25, "25 треков"),
-                (111, "111 треков"),
-            ];
-            for (c, want) in forms {
-                assert_eq!(n(c, "{0} track", "{0} tracks"), want);
+            // Russian picks one of three forms: one (1, 21), few (2, 22), many (5, 11, 25, 111)
+            let forms: Vec<&str> = ru["{0} track|{0} tracks"].split('|').collect();
+            assert_eq!(forms.len(), 3, "Russian needs three plural forms");
+            for (c, form) in [(1, 0), (21, 0), (2, 1), (22, 1), (5, 2), (11, 2), (25, 2), (111, 2)] {
+                assert_eq!(
+                    n(c, "{0} track", "{0} tracks"),
+                    forms[form].replace("{0}", &c.to_string())
+                );
             }
             // an untranslated plural falls back to the English forms
             assert_eq!(n(2, "{0} zork", "{0} zorks"), "2 zorks");
@@ -422,21 +419,21 @@ mod tests {
         // identical duplicates across files are fine
         let ok = merge::merge(
             &files(&[
-                ("a.json", r#"{"Play": "Играть"}"#),
-                ("b.json", r#"{"Play": "Играть", "Pause": "Пауза"}"#),
+                ("a.json", r#"{"Play": "Play"}"#),
+                ("b.json", r#"{"Play": "Play", "Pause": "Pause"}"#),
             ]),
             3,
         );
         assert_eq!(ok.unwrap().len(), 2);
         // conflicting values across files
-        let err = merge::merge(&files(&[("a.json", r#"{"Play": "Играть"}"#), ("b.json", r#"{"Play": "Воспроизвести"}"#)]), 3)
+        let err = merge::merge(&files(&[("a.json", r#"{"Play": "Play"}"#), ("b.json", r#"{"Play": "Start"}"#)]), 3)
             .unwrap_err();
         assert!(err.contains("duplicate key \"Play\"") && err.contains("a.json") && err.contains("b.json"), "{err}");
         // conflicting values inside one file
-        let err = merge::merge(&files(&[("a.json", r#"{"Play": "Играть", "Play": "Пуск"}"#)]), 3).unwrap_err();
+        let err = merge::merge(&files(&[("a.json", r#"{"Play": "Play", "Play": "Start"}"#)]), 3).unwrap_err();
         assert!(err.contains("duplicate key"), "{err}");
         // malformed plural: two forms where the language needs three
-        let err = merge::merge(&files(&[("ru.json", r#"{"{0} track|{0} tracks": "{0} трек|{0} треков"}"#)]), 3).unwrap_err();
+        let err = merge::merge(&files(&[("ru.json", r#"{"{0} track|{0} tracks": "{0} track|{0} tracks"}"#)]), 3).unwrap_err();
         assert!(err.contains("plural"), "{err}");
         // bad JSON
         assert!(merge::merge(&files(&[("a.json", "{")]), 3).is_err());

@@ -1,5 +1,5 @@
-//! Список со смещениями Web API, догружаемый страницами (PagedList из spotifast/src/model.rs без окон
-//! прокрутки: QML получает список целиком).
+//! An offset-based Web API list, loaded page by page (PagedList from spotifast/src/model.rs without scroll
+//! windows: QML gets the whole list).
 use sf_api::models::Page;
 
 #[derive(Clone, Debug, PartialEq)]

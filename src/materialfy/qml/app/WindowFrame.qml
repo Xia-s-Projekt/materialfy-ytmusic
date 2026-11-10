@@ -1,24 +1,24 @@
 import QtQuick
 import Md3
 
-// Рамка окна без системного хрома. Забирает к себе всё содержимое окна (Component.onCompleted) и рисует
-// под ним фон окна.
-// Windows: углы скругляет DWM (winframe.cpp, Windows 11), здесь — только фон.
-// Linux / macOS: окно прозрачное (Main.qml: color), приложение рисуется скруглённым прямоугольником радиуса
-// Theme.shape.large — слоем с маской roundclip; у развёрнутого окна и на весь экран углы прямые. Прозрачные
-// уголки остаются за угловыми зонами ResizeEdges: нажатие в них тянет угол окна. Тень — какую даёт система.
+// Window frame without system chrome. It takes over all window content (Component.onCompleted) and draws
+// the window background under it.
+// Windows: DWM rounds the corners (winframe.cpp, Windows 11), here — background only.
+// Linux / macOS: the window is transparent (Main.qml: color), the app is drawn as a rounded rectangle of radius
+// Theme.shape.large — as a layer masked with roundclip; for a maximized and fullscreen window the corners are square. Transparent
+// corners fall under the ResizeEdges corner zones: a press in them drags the window corner. The shadow is whatever the system gives.
 Item {
     id: root
 
     required property Window window
-    // окно рисует свой край само (Linux / macOS, не развёрнуто)
+    // the window draws its own edge itself (Linux / macOS, not maximized)
     readonly property bool framed: Qt.platform.os !== "windows" && window.visibility === Window.Windowed
-    // На программном рендере углы прямые: слой на всё окно — лишний проход по каждому пикселю в каждом кадре,
-    // а меняющееся содержимое «живого» слоя ещё и удваивает кадры (Qt просит следующий после каждого изменения)
+    // On software rendering the corners are square: a layer over the whole window is an extra pass over every pixel in every frame,
+    // and changing content in a "live" layer also doubles the frames (Qt asks for the next one after every change)
     readonly property bool rounded: framed && !Theme.lowPower
     readonly property real radius: rounded ? Theme.shape.large : 0
-    // слой включается только после того, как содержимое перенесено: иначе эффект слоя (его ставят рядом,
-    // в contentItem) попал бы внутрь самой рамки
+    // the layer is enabled only after the content has been moved: otherwise the layer effect (placed next to it,
+    // in contentItem) would end up inside the frame itself
     property bool _adopted: false
 
     anchors.fill: parent
@@ -36,7 +36,7 @@ Item {
         fragmentShader: Qt.resolvedUrl("shaders/roundclip.frag.qsb")
     }
 
-    // Тонкая обводка: композитор Linux часто не даёт окну без рамки ни тени, ни края
+    // Thin outline: the Linux compositor often gives a frameless window neither shadow nor edge
     Rectangle {
         anchors.fill: parent
         z: 100000

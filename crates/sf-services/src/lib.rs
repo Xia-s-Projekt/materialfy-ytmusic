@@ -1,26 +1,26 @@
-//! Сервисы приложения (без Qt) — фасад той же формы, что сервисы yamusic-md3 + devices, history, home.
-//! Каждый сервис — Arc; состояние — watch (снимок) и/или broadcast (события). Мосты QML подписываются в
-//! cxx_qt::Initialize и переносят изменения в GUI-поток через CxxQtThread::queue.
+//! Application services (without Qt) — a facade of the same shape as the yamusic-md3 + devices, history, home services.
+//! Every service is an Arc; the state is a watch (snapshot) and/or a broadcast (events). QML bridges subscribe in
+//! cxx_qt::Initialize and move changes into the GUI thread through CxxQtThread::queue.
 //!
-//! Один tokio-рантайм на всё (создаёт оболочка, engine.rs): сервисы, PlayerHandle-актор, librespot
-//! (Session/Spirc спавнят задачи на текущем рантайме) и задачи мостов. Блокирующее (keyring, zeroconf,
-//! размеры кэша) — spawn_blocking/свои потоки. Вход НЕ начинается в start — оболочка зовёт auth.start()
-//! после загрузки QML (если не --offline).
+//! One tokio runtime for everything (the shell creates it, engine.rs): services, the PlayerHandle actor, librespot
+//! (Session/Spirc spawn tasks on the current runtime) and the bridge tasks. Blocking work (keyring, zeroconf,
+//! cache sizes) — spawn_blocking/own threads. Sign-in does NOT start in start — the shell calls auth.start()
+//! after QML loads (unless --offline).
 
 pub mod auth;
 pub mod catalog;
 pub mod cover_fallback;
-/// внутреннее «services-core»
+/// internal "services-core"
 pub mod data;
 pub mod devices;
-/// внутреннее «services-extra»
+/// internal "services-extra"
 pub mod extra;
 pub mod glue;
 pub mod history;
 pub mod home;
 pub mod library;
 pub mod lyrics;
-/// «Новинки»: «Радар новинок» и свежие релизы исполнителей
+/// "New releases": "Release Radar" and fresh releases by artists
 pub mod releases;
 /// Friends (friend activity) and Jam through the session
 pub mod social;
@@ -61,7 +61,7 @@ pub enum ServiceError {
     Other(String),
 }
 
-/// Просьбы к оболочке Qt (медиаклавиши/MPRIS Raise/Quit).
+/// Requests to the Qt shell (media keys/MPRIS Raise/Quit).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppRequest {
     RaiseWindow,
@@ -70,13 +70,13 @@ pub enum AppRequest {
 
 #[derive(Clone, Debug, Default)]
 pub struct ServicesOptions {
-    /// сохранять/восстанавливать ручную очередь и точку возобновления (false в режиме снимков)
+    /// save/restore the manual queue and the resume point (false in snapshot mode)
     pub persist_session: bool,
-    /// медиаклавиши/SMTC/MPRIS (false в режиме снимков)
+    /// media keys/SMTC/MPRIS (false in snapshot mode)
     pub enable_media: bool,
 }
 
-/// Все сервисы. Clone — дешёвый (Arc).
+/// All services. Clone is cheap (Arc).
 #[derive(Clone)]
 pub struct Services {
     pub settings: Arc<SettingsStore>,
@@ -84,10 +84,10 @@ pub struct Services {
     pub auth: Arc<AuthService>,
     pub library: Arc<LibraryService>,
     pub catalog: Arc<CatalogService>,
-    /// Радио Spotify (бывшая «Моя волна»)
+    /// Spotify radio (formerly "My Wave")
     pub wave: Arc<WaveService>,
     pub home: Arc<HomeService>,
-    /// «Новинки»
+    /// "New releases"
     pub releases: Arc<ReleasesService>,
     pub lyrics: Arc<LyricsService>,
     pub history: Arc<HistoryService>,
@@ -101,7 +101,7 @@ pub struct Services {
     media: Arc<Mutex<Option<glue::MediaStop>>>,
 }
 
-/// Настройка «Обложки мимо прокси» → флаг клиента обложек (меняется сразу, без перезапуска).
+/// The "Covers bypass proxy" setting → the cover client's flag (changes at once, without a restart).
 fn follow_covers_bypass(rt: &Handle, settings: &Arc<SettingsStore>, direct: Arc<std::sync::atomic::AtomicBool>) {
     let settings = settings.clone();
     let mut changes = settings.subscribe();
@@ -119,10 +119,10 @@ fn follow_covers_bypass(rt: &Handle, settings: &Arc<SettingsStore>, direct: Arc<
 }
 
 impl Services {
-    /// Порядок: HTTP (прокси из настроек) → ApiGateway → PlayerHandle → Auth → History → Library → Catalog →
-    /// Wave → Releases → Home → Lyrics → Devices → glue (настройки → плеер) → медиаклавиши.
+    /// Order: HTTP (proxy from settings) → ApiGateway → PlayerHandle → Auth → History → Library → Catalog →
+    /// Wave → Releases → Home → Lyrics → Devices → glue (settings → player) → media keys.
     pub fn start(rt: &Handle, settings: Arc<SettingsStore>, options: ServicesOptions) -> anyhow::Result<Services> {
-        // применённый прокси из настроек; пароль из хранилища подставит auth.start()
+        // the applied proxy from settings; auth.start() will supply the password from the keyring
         let proxy = auth::settings_proxy(&settings, None);
         let http = sf_api::Http::from_proxy(&proxy).unwrap_or_else(|error| {
             tracing::warn!("invalid proxy settings: {error:#}");
@@ -135,7 +135,7 @@ impl Services {
             cover_dir: mf_platform::dirs::cache_subdir("covers"),
             session_file: options.persist_session.then(mf_platform::dirs::session_file),
             volume: settings.get_f64(SettingKey::Volume).clamp(0.0, 1.0),
-            // клиент только для обложек: по настройке «Обложки мимо прокси» — напрямую
+            // a client for covers only: per the "Covers bypass proxy" setting — direct
             http: http.bypassing(covers_direct),
         };
         let player = PlayerHandle::start(rt, config, api.clone()).map_err(|e| anyhow::anyhow!("player: {e}"))?;
@@ -164,7 +164,7 @@ impl Services {
             releases.clone(),
             settings.clone(),
         );
-        // тексты — через общий клиент: тот же прокси, что у Web API, смена применяется сразу
+        // texts — through the shared client: the same proxy as the Web API, changes apply at once
         let fetcher = {
             let http = http.clone();
             mf_lyrics::LyricsFetcher::with_source(mf_platform::dirs::cache_subdir("lyrics"), move || http.client())
@@ -206,8 +206,8 @@ impl Services {
         self.app_requests.subscribe()
     }
 
-    /// При выходе (из GUI-потока после exec): сохранить сессию и историю, остановить движок и медиаклавиши.
-    /// Блокирует ≤ 2 с.
+    /// On exit (from the GUI thread after exec): save the session and history, stop the engine and the media keys.
+    /// Blocks for ≤ 2 s.
     pub fn shutdown(&self) {
         self.player.shutdown();
         self.history.flush();
@@ -217,7 +217,7 @@ impl Services {
     }
 }
 
-/// Mutex без паники на «отравлении».
+/// A Mutex that does not panic on "poisoning".
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }

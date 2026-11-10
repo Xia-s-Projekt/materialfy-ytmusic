@@ -1,7 +1,7 @@
-//! Поиск через GraphQL-шлюз клиентов Spotify (pathfinder, сохранённый запрос searchDesktop) с токеном сессии
-//! librespot (login5): без квоты Web API, все разделы одним запросом. Ответ приводится к SearchResults Web API.
-//! Хэши сохранённого запроса и их обновление из бандла веб-плеера — в [`super::persisted`]; если не подошёл
-//! ни один, поиск уходит в Web API.
+//! Search through the Spotify clients' GraphQL gateway (pathfinder, the saved searchDesktop query) with a session token
+//! from librespot (login5): no Web API quota, every section in one request. The answer is mapped to Web API SearchResults.
+//! The saved-query hashes and refreshing them from the web player bundle — in [`super::persisted`]; if none of them fits,
+//! the search falls back to the Web API.
 use anyhow::{anyhow, bail};
 use serde_json::{Value, json};
 use sf_api::Http;
@@ -9,18 +9,18 @@ use sf_api::models::{Album, Artist, ArtistRef, Episode, Image, Owner, Page, Play
 
 use super::persisted;
 
-/// Хэши searchDesktop, проверенные вживую (2026-10): ответы одной формы (tracksV2, albumsV2, podcasts…).
-/// Семена: свежий хэш найдётся в бандле веб-плеера, когда все эти отзовут.
+/// searchDesktop hashes verified live (2026-10): answers of one shape (tracksV2, albumsV2, podcasts…).
+/// Seeds: a fresh hash will be found in the web player bundle once all of these are revoked.
 const SEARCH_HASHES: [&str; 4] = [
     "eef7cc54888d91bdd6802623477873caa3948ae173a0c34fd86827b267e94c03",
     "4801118d4a100f756e833d33984436a3899cff359c532f8fd3aaf174b60b3b49",
     "d9f785900f0710b31c07818d617f4f7600c1e21217e80f5b043d1e78d74e6026",
     "f1f1c151cd392433ef4d2683a10deb9adeefd660f29692d8539ce450d2dfdb96",
 ];
-/// Результатов в разделе — как search_limit общего приложения.
+/// Results per section — same as the common application's search_limit.
 pub const SEARCH_LIMIT: u32 = 20;
 
-/// Все разделы поиска по `query`.
+/// Every search section for `query`.
 pub async fn search(http: &Http, session: &sf_player::Session, query: &str) -> anyhow::Result<SearchResults> {
     let variables = json!({
         "searchTerm": query,
@@ -74,7 +74,7 @@ fn results(search: &Value) -> anyhow::Result<SearchResults> {
     })
 }
 
-/// Раздел как страница Web API; раздела нет — None, как у Web API без этого типа.
+/// A section as a Web API page; no section — None, as with the Web API without that type.
 fn section<T>(search: &Value, name: &str, map: impl Fn(&Value) -> Option<T>) -> Option<Page<T>> {
     let section = search.get(name)?;
     let items: Vec<T> = section.get("items")?.as_array()?.iter().filter_map(map).collect();
@@ -94,7 +94,7 @@ pub(super) fn id_of(uri: &str) -> String {
     uri.rsplit(':').next().unwrap_or_default().to_owned()
 }
 
-/// Сущность нужного вида: {"__typename": kind, "uri": "spotify:…"}; иное (PreRelease, Audiobook…) — мимо.
+/// An entity of the wanted kind: {"__typename": kind, "uri": "spotify:…"}; anything else (PreRelease, Audiobook…) — skipped.
 fn uri_of(data: &Value, kind: &str) -> Option<String> {
     if data.get("__typename").and_then(Value::as_str).is_some_and(|name| name != kind) {
         return None;
@@ -311,7 +311,7 @@ mod tests {
         let other = json!({ "errors": [{ "message": "Unauthorized" }] });
         assert!(matches!(parse(&other), Err(Failure::Other(_))));
         assert!(matches!(parse(&json!({ "data": {} })), Err(Failure::Other(_))));
-        // раздела нет — None, как у Web API
+        // no section — None, as with the Web API
         let Ok(partial) = parse(&json!({ "data": { "searchV2": { "artists": { "items": [] } } } })) else { panic!() };
         assert!(partial.tracks.is_none());
         assert_eq!(partial.artists.map(|page| page.total), Some(0));

@@ -1,9 +1,9 @@
-//! OAuth Authorization Code + PKCE через браузер и loopback (перенос spotifast/src/auth.rs).
+//! OAuth Authorization Code + PKCE through a browser and loopback (ported from spotifast/src/auth.rs).
 //!
-//! Три независимых гранта: общий и (по желанию) личный Web API — разные приложения, разные слоты хранилища;
-//! воспроизведение — идентичность десктоп-клиента Spotify (её использует librespot): токен один раз меняется на
-//! переиспользуемые креды, которые лежат в хранилище ОС. Пароль вводится в браузере; приложение видит только
-//! одноразовый код, который Spotify присылает на loopback-порт.
+//! Three independent grants: the shared and (optionally) the personal Web API — different applications, different store slots;
+//! playback — the identity of Spotify's desktop client (librespot uses it): the token is exchanged once for
+//! reusable credentials kept in the OS store. The password is entered in the browser; the app sees only
+//! the one-time code Spotify sends to the loopback port.
 
 use std::net::SocketAddr;
 use std::path::Path;
@@ -19,21 +19,21 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 
-/// Идентичность десктоп-клиента Spotify — с ней стримит librespot.
+/// The identity of Spotify's desktop client — librespot streams with it.
 pub const PLAYBACK_CLIENT_ID: &str = "65b708073fc0480ea92a077233ca87bd";
 pub const PLAYBACK_REDIRECT_PORT: u16 = 8898;
 
-/// Общее публичное приложение Web API (spotify-player, ncspot, Omarchy Spotify).
+/// The shared public Web API application (spotify-player, ncspot, Omarchy Spotify).
 pub const DEFAULT_WEB_CLIENT_ID: &str = "d420a117a32841c2b3474932e49fb54b";
 pub const WEB_REDIRECT_PORT: u16 = 8989;
 
 pub const REDIRECT_PATH: &str = "/login";
 
-/// Воспроизведение: то, что нужно librespot для звука и Spotify Connect.
+/// Playback: what librespot needs for audio and Spotify Connect.
 pub const PLAYBACK_SCOPES: &[&str] = &["streaming"];
 
-/// Web API: что нужно видимым функциям, плюс `user-read-private` ради тарифа (Free/Premium),
-/// от которого зависит локальное воспроизведение; без email.
+/// Web API: what the visible features need, plus `user-read-private` for the plan (Free/Premium),
+/// which local playback depends on; without email.
 pub const WEB_SCOPES: &[&str] = &[
     "ugc-image-upload",
     "playlist-modify-private",
@@ -54,13 +54,13 @@ pub const WEB_SCOPES: &[&str] = &[
 
 const AUTHORIZE_URL: &str = "https://accounts.spotify.com/authorize";
 const TOKEN_URL: &str = "https://accounts.spotify.com/api/token";
-/// Текст ошибки `wait_for_code` при отмене (её не показывают как сбой).
+/// The error text of `wait_for_code` on cancellation (it is not shown as a failure).
 pub const CANCELLED: &str = "Sign-in cancelled";
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
-/// Обновлять токен за столько до истечения.
+/// Refresh the token this long before it expires.
 const REFRESH_MARGIN: Duration = Duration::from_secs(90);
 
-/// Одно OAuth-приложение и запрашиваемые разрешения.
+/// One OAuth application and the requested permissions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Grant {
     pub client_id: String,
@@ -102,7 +102,7 @@ impl Grant {
     }
 }
 
-/// Начатый вход: URL для браузера и секреты для завершения.
+/// A started login: the URL for the browser and the secrets to finish it.
 #[derive(Clone, Debug)]
 pub struct Flow {
     pub verifier: String,
@@ -149,8 +149,8 @@ pub struct TokenResponse {
     pub scope: Option<String>,
 }
 
-/// Ждёт редирект Spotify на loopback-порт и возвращает код авторизации.
-/// Прерывается, когда `cancel` становится true (ошибка `CANCELLED`), или через 10 минут.
+/// Waits for Spotify's redirect to the loopback port and returns the authorization code.
+/// Interrupted when `cancel` becomes true (a `CANCELLED` error), or after 10 minutes.
 pub async fn wait_for_code(
     port: u16,
     expected_state: &str,
@@ -195,7 +195,7 @@ pub async fn wait_for_code(
         match outcome {
             Ok(code) => return Ok(code),
             Err(error) => {
-                // favicon или старая вкладка — не редирект, ждём дальше
+                // a favicon or an old tab is not a redirect, we keep waiting
                 tracing::debug!("loopback: skipped request: {error}");
                 continue;
             }
@@ -274,10 +274,10 @@ pub async fn refresh(
 
 #[derive(Debug, thiserror::Error)]
 pub enum TokenEndpointError {
-    /// Spotify отклонил сам грант — нужен новый вход через браузер.
+    /// Spotify rejected the grant itself — a new browser login is needed.
     #[error("Spotify rejected the token request ({status}): {detail}")]
     Rejected { status: u16, detail: String },
-    /// Сервер не ответил — грант, возможно, ещё действует.
+    /// The server did not answer — the grant may still be valid.
     #[error("Token request failed: {0}")]
     Unreachable(String),
 }
@@ -301,20 +301,20 @@ fn decode_token_response(
     status: reqwest::StatusCode,
     text: &str,
 ) -> std::result::Result<TokenResponse, TokenEndpointError> {
-    // 429/408 — «подождите», а не отказ: грант остаётся
+    // 429/408 — "please wait", not a refusal: the grant stays
     if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status == reqwest::StatusCode::REQUEST_TIMEOUT {
         return Err(TokenEndpointError::Unreachable(format!("Spotify asks to wait ({status})")));
     }
     if status.is_client_error() {
         let value = serde_json::from_str::<serde_json::Value>(text).ok();
-        // описание ошибки и битое тело могут содержать секреты: только известные классы, без текста ответа
+        // the error description and a broken body may contain secrets: only known classes, no response text
         let detail = match value.as_ref().and_then(|value| value["error"].as_str()) {
             Some("invalid_grant") => "the grant expired or was revoked — sign in again",
             Some("invalid_client") | Some("unauthorized_client") => "check the Client ID of the Spotify app",
             Some("invalid_scope") => "Spotify didn't accept the requested permissions",
             Some("access_denied") => "access was declined",
             Some(_) => "sign in again and check the Spotify application settings",
-            // 4xx без кода OAuth (прокси, CDN) — не отказ гранта
+            // a 4xx without an OAuth code (proxy, CDN) is not a grant refusal
             None => return Err(TokenEndpointError::Unreachable(format!("Spotify answered {status}"))),
         };
         return Err(TokenEndpointError::Rejected {
@@ -332,13 +332,13 @@ fn decode_token_response(
     })
 }
 
-/// Грант Web API; сериализуется только внутри защищённого хранилища.
+/// A Web API grant; serialized only inside the secure store.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct StoredToken {
     pub client_id: String,
     pub access_token: String,
     pub refresh_token: String,
-    /// Unix-секунды.
+    /// Unix seconds.
     pub expires_at: u64,
     #[serde(default)]
     pub scope: String,
@@ -371,7 +371,7 @@ impl StoredToken {
         now_secs() >= self.expires_at
     }
 
-    /// Грант покрывает все `scopes`. Расширить его может только браузер, не refresh.
+    /// The grant covers all `scopes`. Only the browser can widen it, not a refresh.
     pub fn has_scopes(&self, scopes: &[&str]) -> bool {
         let granted: Vec<&str> = self.scope.split_whitespace().collect();
         scopes.iter().all(|scope| granted.contains(scope))
@@ -382,7 +382,7 @@ impl StoredToken {
         serde_json::from_str(&text).ok()
     }
 
-    // только для тестов; хранение — в credentials.rs
+    // for tests only; storage — in credentials.rs
     #[cfg(test)]
     pub fn save(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
@@ -395,13 +395,13 @@ impl StoredToken {
         Ok(())
     }
 
-    // только для тестов; хранение — в credentials.rs
+    // for tests only; storage — in credentials.rs
     #[cfg(test)]
     pub fn remove(path: &Path) {
         let _ = std::fs::remove_file(path);
     }
 
-    // только для тестов; хранение — в credentials.rs
+    // for tests only; storage — in credentials.rs
     #[cfg(test)]
     pub fn migrate_legacy(legacy: &Path, shared: &Path, personal: &Path) -> Result<()> {
         let Some(token) = Self::load(legacy) else {

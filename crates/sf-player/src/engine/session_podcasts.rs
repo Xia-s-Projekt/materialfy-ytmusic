@@ -1,11 +1,11 @@
-//! Подкасты через сессию librespot (без квоты Web API), в форме ответов Web API.
+//! Podcasts through the librespot session (without the Web API quota), in the form of Web API responses.
 //!
-//! Проверено вживую (2026-10):
-//! - шоу — spclient metadata/4/show (SHOW_V4): шапка и URI всех выпусков, новые сверху (у большого шоу
-//!   ~2800 выпусков и ~100 КБ); названий выпусков там нет — подробности берутся пачками EPISODE_V4.
-//!   SHOW_V4_BASE (шапка без выпусков) отвечает 404, поэтому для библиотеки — тоже SHOW_V4;
-//! - сохранённые шоу — набор коллекции «show», «Ваши выпуски» — «listenlater» (session_collection);
-//! - места остановки (resume point) в метаданных нет: его даёт GraphQL-шлюз (sf-services).
+//! Verified live (2026-10):
+//! - a show — spclient metadata/4/show (SHOW_V4): the header and the URIs of all episodes, newest first (for a big show
+//!   ~2800 episodes and ~100 KB); the episode titles are not there — the details are fetched in EPISODE_V4 batches.
+//!   SHOW_V4_BASE (the header without episodes) answers 404, so the library uses SHOW_V4 too;
+//! - saved shows — the "show" collection set, "Your episodes" — "listenlater" (session_collection);
+//! - the resume points are not in the metadata: the GraphQL gateway provides them (sf-services).
 use std::collections::{BTreeSet, HashMap};
 
 use librespot_core::{Session, SpotifyUri, spotify_id::SpotifyId};
@@ -20,33 +20,33 @@ use sf_api::models::{Episode, Image, Page, PlayableItem, Show};
 use super::session_collection::{self, CollectionItem};
 use super::session_reads::{self, Failure, IMAGE_HOST};
 
-/// Выпусков в одном пакетном запросе EPISODE_V4 (≈1 КБ на выпуск).
+/// Episodes in a single EPISODE_V4 batch request (≈1 KB per episode).
 const EPISODE_BATCH: usize = 50;
-/// Шоу в одном пакетном запросе SHOW_V4: каждое несёт весь список выпусков.
+/// Shows in a single SHOW_V4 batch request: each one carries the whole episode list.
 const SHOW_BATCH: usize = 20;
 
-/// Шоу как /shows/{id} (без страницы выпусков) и URI всех его выпусков, новые сверху.
+/// A show as /shows/{id} (without the episode page) and the URIs of all its episodes, newest first.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ShowOverview {
     pub show: Show,
     pub episodes: Vec<String>,
-    /// Аудиокнига: librespot её не играет.
+    /// An audiobook: librespot does not play it.
     pub audiobook: bool,
 }
 
-/// Шоу по id.
+/// A show by id.
 pub async fn show(session: &Session, id: &str) -> Result<ShowOverview, Failure> {
     let uri = SpotifyId::from_base62(id).map(|id| SpotifyUri::Show { id }).map_err(|_| invalid_id())?.to_uri();
     match show_batch(session, std::slice::from_ref(&uri)).await?.remove(&uri) {
         Some(Some(overview)) => Ok(overview),
-        // Spotify ответил, что шоу нет (404/451): так же ответил бы и Web API
+        // Spotify answered that the show does not exist (404/451): the Web API would answer the same
         Some(None) => Err(not_found()),
         None => Err(Failure::Retry(anyhow::anyhow!("no metadata answer for {uri}"))),
     }
 }
 
-/// Шапка и страница выпусков (`offset`, не больше `limit`), как /shows/{id} и /shows/{id}/episodes.
-/// Выпуска, которого Spotify больше не отдаёт, на странице нет — как у Web API.
+/// The header and a page of episodes (`offset`, no more than `limit`), like /shows/{id} and /shows/{id}/episodes.
+/// An episode Spotify no longer returns is not on the page — same as with the Web API.
 pub async fn show_page(
     session: &Session,
     id: &str,
@@ -63,24 +63,24 @@ pub async fn show_page(
     Ok((overview.show, page(items, total, offset, limit)))
 }
 
-/// Выпуск по id: с id и названием шоу, без места остановки.
+/// An episode by id: with the show's id and name, without a resume point.
 pub async fn episode(session: &Session, id: &str) -> Result<Episode, Failure> {
     let uri = SpotifyId::from_base62(id).map(|id| SpotifyUri::Episode { id }).map_err(|_| invalid_id())?;
     match session_reads::metadata(session, std::iter::once(&uri)).await?.remove(&uri.to_uri()) {
         Some(PlayableItem::Episode(episode)) => Ok(episode),
-        // Spotify ответил, что выпуска нет (404/451): так же ответил бы и Web API
+        // Spotify answered that the episode does not exist (404/451): the Web API would answer the same
         _ => Err(not_found()),
     }
 }
 
-/// Выпуски по URI, в том же порядке; выпуска, которого Spotify не отдаёт, нет. Иные сбои — Retry.
+/// Episodes by URI, in the same order; an episode Spotify does not return is absent. Other failures — Retry.
 pub async fn episodes(session: &Session, uris: &[String]) -> Result<Vec<Episode>, Failure> {
     let parsed: Vec<SpotifyUri> = uris
         .iter()
         .filter_map(|uri| SpotifyUri::from_uri(uri).ok())
         .filter(|uri| matches!(uri, SpotifyUri::Episode { .. }))
         .collect();
-    // пачки по очереди: страница — одна-две пачки; поток пачек здесь не даёт будущему быть Send
+    // batches in order: a page is one or two batches; a stream of batches would not let the future be Send
     let mut found: HashMap<String, PlayableItem> = HashMap::new();
     for chunk in parsed.chunks(EPISODE_BATCH) {
         found.extend(session_reads::metadata(session, chunk.iter()).await?);
@@ -94,7 +94,7 @@ pub async fn episodes(session: &Session, uris: &[String]) -> Result<Vec<Episode>
         .collect())
 }
 
-/// Шоу по URI пачками SHOW_V4; шоу, которого Spotify не отдаёт, в ответе нет.
+/// Shows by URI in SHOW_V4 batches; a show Spotify does not return is not in the response.
 pub async fn shows(session: &Session, uris: &[String]) -> Result<HashMap<String, ShowOverview>, Failure> {
     let uris: Vec<String> = uris.iter().filter(|uri| uri.starts_with("spotify:show:")).cloned().collect();
     let mut shows = HashMap::new();
@@ -104,7 +104,7 @@ pub async fn shows(session: &Session, uris: &[String]) -> Result<HashMap<String,
     Ok(shows)
 }
 
-/// Сохранённые шоу (набор «show»), новые сверху, с временем добавления. Аудиокниги отмечены.
+/// Saved shows (the "show" set), newest first, with the time added. Audiobooks are marked.
 pub async fn saved_shows(session: &Session) -> Result<Vec<(CollectionItem, ShowOverview)>, Failure> {
     let items = session_collection::collection_all(session, session_collection::SET_SHOW)
         .await
@@ -114,7 +114,7 @@ pub async fn saved_shows(session: &Session) -> Result<Vec<(CollectionItem, ShowO
     Ok(items.into_iter().filter_map(|item| found.remove(&item.uri).map(|show| (item, show))).collect())
 }
 
-/// «Ваши выпуски» (набор «listenlater»), новые сверху, с временем добавления.
+/// "Your episodes" (the "listenlater" set), newest first, with the time added.
 pub async fn saved_episodes(session: &Session) -> Result<Vec<(CollectionItem, Episode)>, Failure> {
     let items = session_collection::collection_all(session, session_collection::SET_LISTEN_LATER)
         .await
@@ -125,7 +125,7 @@ pub async fn saved_episodes(session: &Session) -> Result<Vec<(CollectionItem, Ep
     Ok(items.into_iter().filter_map(|item| found.remove(&item.uri).map(|episode| (item, episode))).collect())
 }
 
-/// Ответ SHOW_V4 по URI: None — Spotify ответил, что шоу нет (404/451). URI без ответа в карте нет.
+/// The SHOW_V4 response by URI: None — Spotify answered that the show does not exist (404/451). A URI without a response is not in the map.
 async fn show_batch(session: &Session, uris: &[String]) -> Result<HashMap<String, Option<ShowOverview>>, Failure> {
     let mut request = BatchedEntityRequest::new();
     for uri in uris {
@@ -170,7 +170,7 @@ async fn show_batch(session: &Session, uris: &[String]) -> Result<HashMap<String
     Ok(shows)
 }
 
-/// Запись SHOW_V4 → шоу Web API и URI выпусков (каждый один раз, в порядке записи).
+/// An SHOW_V4 record → a Web API show and the episode URIs (each once, in record order).
 fn overview(message: &librespot_protocol::metadata::Show) -> Option<ShowOverview> {
     let show = SessionShow::try_from(message).ok()?;
     let mut seen = BTreeSet::new();
@@ -197,7 +197,7 @@ fn overview(message: &librespot_protocol::metadata::Show) -> Option<ShowOverview
     })
 }
 
-/// Выпуск без шоу (или без его id) получает ссылку на `show`.
+/// An episode with no show (or no show id) gets a reference to `show`.
 fn attach_show(episode: &mut Episode, show: &Show) {
     match &mut episode.show {
         Some(own) if !own.id.is_empty() => {
@@ -218,7 +218,7 @@ fn attach_show(episode: &mut Episode, show: &Show) {
     }
 }
 
-/// URI на странице `offset`/`limit`.
+/// The URIs on the `offset`/`limit` page.
 fn window(uris: &[String], offset: u32, limit: u32) -> &[String] {
     let start = (offset as usize).min(uris.len());
     let end = start.saturating_add(limit as usize).min(uris.len());
@@ -261,9 +261,9 @@ mod tests {
     fn message() -> librespot_protocol::metadata::Show {
         let mut message = librespot_protocol::metadata::Show::new();
         message.set_gid(gid(1));
-        message.set_name("Шоу".into());
-        message.set_publisher("Автор".into());
-        message.set_description("Описание".into());
+        message.set_name("Show".into());
+        message.set_publisher("Author".into());
+        message.set_description("Description".into());
         message.set_explicit(true);
         let mut image = ImageMessage::new();
         image.set_file_id(vec![0xab; 20]);
@@ -286,8 +286,8 @@ mod tests {
         let id = SpotifyId::from_raw(&gid(1)).unwrap().to_base62();
         assert_eq!(overview.show.id, id);
         assert_eq!(overview.show.uri, format!("spotify:show:{id}"));
-        assert_eq!(overview.show.name, "Шоу");
-        assert_eq!(overview.show.publisher, "Автор");
+        assert_eq!(overview.show.name, "Show");
+        assert_eq!(overview.show.publisher, "Author");
         assert!(overview.show.explicit);
         assert_eq!(overview.show.images[0].url, format!("{IMAGE_HOST}{}", "ab".repeat(20)));
         assert_eq!(overview.show.images[0].width, Some(640));
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn an_episode_without_its_show_links_to_the_page_show() {
-        let show = Show { id: "s".into(), uri: "spotify:show:s".into(), name: "Шоу".into(), ..Default::default() };
+        let show = Show { id: "s".into(), uri: "spotify:show:s".into(), name: "Show".into(), ..Default::default() };
         let mut bare = Episode::default();
         attach_show(&mut bare, &show);
         assert_eq!(bare.show.as_ref().map(|own| own.id.as_str()), Some("s"));
@@ -319,6 +319,6 @@ mod tests {
         };
         attach_show(&mut named, &show);
         let own = named.show.unwrap();
-        assert_eq!((own.id.as_str(), own.name.as_str()), ("x", "Шоу"));
+        assert_eq!((own.id.as_str(), own.name.as_str()), ("x", "Show"));
     }
 }

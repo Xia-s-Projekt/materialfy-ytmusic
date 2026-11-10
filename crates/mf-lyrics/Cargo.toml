@@ -1,6 +1,6 @@
 [package]
 name = "mf-lyrics"
-description = "Синхронные тексты: Spotify, NetEase, Musixmatch, LRCLIB; разбор LRC, кэш"
+description = "Synced lyrics: Spotify, NetEase, Musixmatch, LRCLIB; LRC parsing, cache"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

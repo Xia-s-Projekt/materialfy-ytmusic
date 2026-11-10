@@ -3,16 +3,16 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Плашка пульта: «Играет на {имя} · Этот компьютер работает как пульт · Слушать здесь» (primary 18 %).
-// Вариант lost (устройство пропало) — errorContainer, «Продолжить с m:ss на этом компьютере?».
-// Сама читает Player/Devices и сама прячется, когда музыка играет здесь.
+// Remote control badge: "Playing on {name} · This computer works as a remote · Listen here" (primary 18 %).
+// The lost variant (the device is gone) — errorContainer, "Continue from m:ss on this computer?".
+// It reads Player/Devices itself and hides itself when music plays here.
 Item {
     id: root
 
     property string variant: Player.deviceLost === true ? "lost" : "normal"   // "normal" | "lost"
     readonly property bool lost: variant === "lost"
     readonly property bool shown: Player.hasTrack && (Player.remote === true || Player.deviceLost === true)
-    // этот компьютер ещё не умеет играть — вместо переноса ведём на настройку воспроизведения
+    // this computer cannot play yet — instead of transferring, we lead to the playback settings
     readonly property bool needsSetup: Player.localState === "unavailable" || Player.localState === "failed"
 
     property string _name: ""
@@ -53,7 +53,7 @@ Item {
     }
     Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsDefault } }
 
-    // normal ↔ lost: цвет — переходом, текст — сквозным затуханием
+    // normal ↔ lost: the colour transitions, the text cross-fades
     onLostChanged: if (visible && !(Theme.reducedMotion === true)) textSwap.restart()
     SequentialAnimation {
         id: textSwap
@@ -61,7 +61,7 @@ Item {
         NumberAnimation { target: texts; property: "opacity"; to: 1; duration: Theme.motion.effectsDefault }
     }
 
-    // узкое место (правая панель очереди): кнопка уходит под текст, текст переносится
+    // tight spot (the queue's right panel): the button moves under the text, the text wraps
     readonly property bool stacked: width < 400
 
     Rectangle {
@@ -125,7 +125,7 @@ Item {
                 }
             }
 
-            // Кнопка: tonal в обычном виде, «залитая» цветом текста плашки — в lost
+            // Button: tonal in the normal state, filled with the badge's text colour in lost
             Item {
                 id: action
                 readonly property bool moving: Player.transferring === true

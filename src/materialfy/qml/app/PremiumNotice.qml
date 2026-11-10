@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Плашка «Нужен Spotify Premium» (информация, а не ошибка — tertiaryContainer).
-// compact — сжатый вид для меню устройств.
+// Banner "Spotify Premium required" (information, not an error — tertiaryContainer).
+// compact — condensed view for the device menu.
 Rectangle {
     id: root
 
@@ -17,7 +17,7 @@ Rectangle {
 
     function _premium() { Qt.openUrlExternally("https://music.youtube.com") }
 
-    // ---- Сжатый вид ----
+    // ---- Condensed view ----
     RowLayout {
         id: small
         visible: root.compact
@@ -59,7 +59,7 @@ Rectangle {
         }
     }
 
-    // ---- Полный вид ----
+    // ---- Full view ----
     ColumnLayout {
         id: full
         visible: !root.compact
@@ -112,8 +112,8 @@ Rectangle {
             }
         }
 
-        // Что работает, а что нет
-        // чипы и кнопки — в колонке текста, правее значка
+        // What works and what does not
+        // chips and buttons — into the text column, to the right of the icon
         Flow {
             Layout.fillWidth: true
             Layout.leftMargin: 64
@@ -160,7 +160,7 @@ Rectangle {
         }
     }
 
-    // Кнопки цвета плашки (Md3/Button красит в primary, на tertiaryContainer это спорит с плашкой)
+    // Buttons in the banner color (Md3/Button tints them primary, which clashes with the banner on tertiaryContainer)
     component TextAction: Item {
         id: act
         property string text

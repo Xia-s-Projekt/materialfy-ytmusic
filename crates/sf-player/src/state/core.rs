@@ -1,6 +1,6 @@
-//! Ядро «что показано сейчас» (перенос логики spotifast/src/app.rs без egui): цель Local/Remote,
-//! очередь по правилам docs/_reference/queue.md, оптимистичные удержания (intent/pending/seq), опрос /me/player.
-//! Синхронное и без ввода-вывода: команды и ответы меняют состояние, наружу уходят [`Effect`]; актор их исполняет.
+//! The core of "what is shown right now" (a port of the logic from spotifast/src/app.rs without egui): the Local/Remote target,
+//! the queue per the rules in docs/_reference/queue.md, optimistic holds (intent/pending/seq), polling /me/player.
+//! Synchronous and I/O-free: commands and responses change the state, [`Effect`]s go outward; the actor executes them.
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -31,25 +31,25 @@ pub(crate) const QUEUE_RECHECK: Duration = Duration::from_millis(QUEUE_RECHECK_M
 pub(crate) const QUEUE_ADD_DEBOUNCE: Duration = Duration::from_millis(QUEUE_ADD_DEBOUNCE_MS);
 pub(crate) const SESSION_REFRESH: Duration = Duration::from_secs(30);
 pub(crate) const SESSION_SAVE_DELAY: Duration = Duration::from_secs(2);
-/// Тишина после последнего движения ползунка громкости до Volume (librespot сообщает Connect-клиентам).
+/// The silence after the last volume slider movement before Volume (librespot reports it to Connect clients).
 pub(crate) const VOLUME_SETTLE: Duration = Duration::from_millis(150);
-/// Сколько ждать подтверждения переноса на устройство.
+/// How long to wait for confirmation of a transfer to a device.
 pub(crate) const TRANSFER_TIMEOUT: Duration = Duration::from_secs(8);
-/// Как часто перечитывать очередь, пока играет музыка и окно видно.
+/// How often to re-read the queue while music is playing and the window is visible.
 const QUEUE_REFRESH: Duration = Duration::from_secs(30);
 const PENDING_ADD_LIFETIME: Duration = Duration::from_secs(30);
 const TRACK_CACHE_LIMIT: usize = 2000;
 const KNOWN_CONTEXTS: usize = 200;
-/// Сколько ждать обещанный движок (ключи из хранилища, проверка /me, подключение librespot).
+/// How long to wait for a promised engine (keys from storage, the /me check, the librespot connection).
 const LOCAL_EXPECT_HOLD: Duration = Duration::from_secs(45);
-/// Сколько играет текущий трек, прежде чем тянуть следующую песню: сначала пусть скачается он сам.
+/// How long the current track plays before the next song is fetched: let this one download first.
 const PRELOAD_AFTER_MS: u32 = 3_000;
-/// Опросы без устройства, после которых удалённое устройство считается пропавшим.
+/// Polls without a device, after which a remote device is considered gone.
 const LOST_AFTER_POLLS: u8 = 2;
 
 pub const MAX_LIST: usize = 500;
 
-/// Команды Web API для удалённого устройства (и чтения для обоих режимов).
+/// Web API commands for a remote device (and reads for both modes).
 #[derive(Clone, Debug, PartialEq)]
 pub enum RemoteAction {
     Play,
@@ -82,13 +82,13 @@ pub enum ApiCall {
     Playback { seq: u64 },
     Queue { seq: u64 },
     Remote { action: RemoteAction, device: Option<String> },
-    /// `shuffle` — сначала включить перемешивание, затем играть (одним упорядоченным обменом)
+    /// `shuffle` — turn on shuffle first, then play (in a single ordered exchange)
     Play { device: Option<String>, request: PlayRequest, shuffle: bool },
     Transfer { device: String, play: bool },
     AddMany { request: u64, uris: Vec<String>, device: Option<String> },
-    /// все треки альбома по порядку (все страницы) или ошибка
+    /// all album tracks in order (all pages) or an error
     AlbumTracks { request: u64, id: String },
-    /// строка трека/выпуска по URI: списки Web API не всегда кладут её в кэш ядра, а кликнутый трек нужен сразу
+    /// a track/episode row by URI: Web API lists do not always put it in the core's cache, and a clicked track is needed immediately
     TrackInfo { request: u64, uri: String },
 }
 
@@ -108,16 +108,16 @@ pub enum Effect {
     Engine(PlayerCommand),
     Api(ApiCall),
     Notice(String),
-    /// пересоздать сессию librespot с подхватом воспроизведения
+    /// recreate the librespot session while carrying over playback
     Reconnect,
-    /// скачать обложку текущего трека ("" — обложки нет)
+    /// download the current track's cover art ("" — there is no cover art)
     Cover(String),
     Save(Box<SessionData>),
     Started(Box<TrackStartedLite>),
     Ended(Box<TrackEndedLite>),
 }
 
-/// TrackStarted/TrackEnded без Debug/PartialEq-ограничений внешних типов.
+/// TrackStarted/TrackEnded without the Debug/PartialEq bounds on external types.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrackStartedLite {
     pub track: TrackItem,
@@ -154,13 +154,13 @@ impl From<TrackEndedLite> for TrackEnded {
     }
 }
 
-/// Состояние /me/player (уже без serde-моделей, кроме устройства).
+/// The /me/player state (already without serde models, except for the device).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RemoteState {
     pub device: Option<Device>,
     pub repeat: RepeatMode,
     pub shuffle: bool,
-    /// канонический URI контекста
+    /// the canonical URI of the context
     pub context_uri: Option<String>,
     pub progress_ms: Option<u32>,
     pub is_playing: bool,
@@ -193,7 +193,7 @@ impl RemoteState {
 pub struct FetchedQueue {
     pub current: Option<TrackItem>,
     pub next: Vec<TrackItem>,
-    /// играющий контекст с названием, если источник его знает (карточка «Играет из …»)
+    /// the playing context with a name, if the source knows it (the "Playing from …" card)
     pub context: Option<PlayContext>,
 }
 
@@ -231,11 +231,11 @@ pub struct QueueData {
     pub next: Vec<QItem>,
 }
 
-/// Ручная очередь, которую вернуть в движок, перезапущенный по настройкам, когда он заиграет тот же трек.
+/// The manual queue to return to an engine restarted for settings once it plays the same track.
 struct Requeue {
     track: String,
     uris: Vec<String>,
-    /// новый движок готов: состояния старого больше не считаются
+    /// the new engine is ready: the old one's states no longer count
     armed: bool,
 }
 
@@ -243,7 +243,7 @@ struct AssumedContext {
     uri: String,
     shuffle: Option<bool>,
     at: Instant,
-    /// список URI, показанный этим контекстом (радио): пока играет его трек, контекст держится и на паузе
+    /// the URI list shown by this context (radio): while its track plays, the context is held even when paused
     tracks: Vec<String>,
 }
 
@@ -258,7 +258,7 @@ pub(crate) struct TrackIntent {
     pub position_ms: u32,
     pub at: Instant,
     pub confirmation: TrackConfirmation,
-    /// что играло здесь, когда трек выбрали: его обновления (догрузилась обложка, длительность) намерение не снимают
+    /// what was playing here when the track was selected: its updates (the cover art arrived, the duration) do not clear the intent
     pub from_uri: Option<String>,
 }
 
@@ -273,9 +273,9 @@ pub(crate) struct QueueShufflePending {
 pub(crate) struct PendingQueueAdd {
     pub item: TrackItem,
     pub at: Instant,
-    /// позиция в manual_queue; сдвигается, когда уходит строка выше
+    /// a position in manual_queue; it shifts when a row above leaves
     pub manual_index: usize,
-    /// удалённая запись и место в ней, пока Spotify не принял эту копию
+    /// a remote entry and its place in it, until Spotify has accepted this copy
     pub write: Option<(u64, usize)>,
 }
 
@@ -284,7 +284,7 @@ pub(crate) struct PendingAlbumQueue {
     target: Target,
 }
 
-/// Перенос воспроизведения: None — сюда (librespot Transfer), Some — на устройство.
+/// Moving playback: None — here (librespot Transfer), Some — to a device.
 #[derive(Clone, Debug)]
 pub(crate) struct Transfer {
     pub to: Option<String>,
@@ -301,7 +301,7 @@ struct Listening {
     position_ms: u32,
 }
 
-/// Что показано как текущее (плеер-бар, NowPlaying).
+/// What is shown as current (the player bar, NowPlaying).
 #[derive(Clone, Debug, PartialEq)]
 pub struct NowPlaying {
     pub local: bool,
@@ -316,7 +316,7 @@ pub struct NowPlaying {
     pub volume: u16,
     pub can_control: bool,
     pub can_set_volume: bool,
-    /// трек прошлой сессии на паузе
+    /// the previous session's track, paused
     pub resuming: bool,
 }
 
@@ -327,7 +327,7 @@ impl NowPlaying {
 }
 
 pub struct Core {
-    // --- локальный движок ---
+    // --- local engine ---
     pub local_ready: bool,
     pub local_playback: LocalPlayback,
     pub local_device_id: Option<String>,
@@ -339,14 +339,14 @@ pub struct Core {
     pub autoplay: bool,
     unavailable_at: Vec<Instant>,
     last_unavailable_reconnect: Option<Instant>,
-    /// громкость, которую движок ещё не подтвердил
+    /// the volume the engine has not confirmed yet
     pub(crate) pending_local_volume: Option<(u16, Instant)>,
     pub(crate) pending_local_position: Option<(u32, Instant)>,
-    /// громкость этого ПК (настройка), 0..=65535
+    /// this PC's volume (a setting), 0..=65535
     pub volume: u16,
     volume_settle: Option<(u16, Instant)>,
 
-    // --- удалённое ---
+    // --- remote ---
     pub remote: Option<RemoteSnapshot>,
     pub(crate) remote_polled_at: Instant,
     pub(crate) remote_poll_pending: bool,
@@ -362,24 +362,24 @@ pub struct Core {
     pub(crate) pending_remote_position: Option<(u32, Instant)>,
     pub(crate) pending_remote_volume: Option<(u8, Instant)>,
 
-    // --- удержания ---
+    // --- holds ---
     pub(crate) intent_track: Option<TrackIntent>,
     pub(crate) optimistic_playing: Option<(bool, Instant)>,
     assumed_context: Option<AssumedContext>,
     pub(crate) shuffle_wanted: bool,
     pub(crate) shuffle_set_at: Option<Instant>,
     pub(crate) queued_play: Option<PlayRequest>,
-    /// вход обещал поднять движок (воспроизведение на ПК разрешено): запуск до подключения ждёт его
+    /// sign-in promised to bring up the engine (playback on this PC is allowed): a start before connecting waits for it
     local_expected: Option<Instant>,
     queue_start_pending: Option<Target>,
     last_now_playing_uri: Option<String>,
     last_now_playing_sequence: u64,
-    /// контекст последнего запуска (подпись и обложка от вызывающего)
+    /// the last start's context (the label and cover art from the caller)
     context_info: PlayContext,
-    /// подписи и обложки уже запускавшихся контекстов (по URI)
+    /// the labels and cover art of contexts already started (by URI)
     known_contexts: HashMap<String, PlayContext>,
 
-    // --- очередь ---
+    // --- queue ---
     pub queue: Option<QueueData>,
     pub(crate) queue_loading: bool,
     queue_fetched_at: Option<Instant>,
@@ -387,7 +387,7 @@ pub struct Core {
     pub(crate) queue_recheck_at: Option<Instant>,
     pub(crate) queue_stale_retries: u32,
     queue_cleared: Option<(HashSet<String>, Instant)>,
-    /// (трек, который играет, следующая песня) — что уже заказано вперёд: на новом треке вооружаемся заново
+    /// (the playing track, the next song) — what has already been ordered ahead: on a new track we arm ourselves again
     preloaded: Option<(String, String)>,
     pub(crate) queue_shuffle_pending: Option<QueueShufflePending>,
     pub(crate) queue_reorder_pending: Option<Instant>,
@@ -400,7 +400,7 @@ pub struct Core {
     next_uid: u64,
     current_uid: Option<(String, u64)>,
 
-    // --- возобновление ---
+    // --- resume ---
     pub resume_context: Option<String>,
     pub resume_track: Option<String>,
     pub resume_position_ms: u32,
@@ -411,10 +411,10 @@ pub struct Core {
     pub(crate) last_session_save: Instant,
     persist: bool,
 
-    // --- прочее ---
+    // --- misc ---
     tracks: HashMap<String, TrackItem>,
     track_order: Vec<String>,
-    /// Запрошенные строки по URI (последний запрос побеждает: старый ответ уже не нужен).
+    /// Requested rows by URI (the last request wins: the old answer is no longer needed).
     info_requests: HashMap<String, u64>,
     pub error_text: String,
     pub levels_wanted: bool,
@@ -444,7 +444,7 @@ impl Core {
             volume: crate::volume_to_u16(volume),
             volume_settle: None,
             remote: None,
-            // первый опрос — сразу
+            // the first poll — immediately
             remote_polled_at: now.checked_sub(REMOTE_POLL_UNSEEN).unwrap_or(now),
             remote_poll_pending: false,
             remote_poll_seq: 0,
@@ -535,14 +535,14 @@ impl Core {
         QItem { uid: self.uid(), track }
     }
 
-    // ---- кэш треков ---------------------------------------------------------------------------
+    // ---- track cache ---------------------------------------------------------------------------
 
     pub fn remember(&mut self, track: &TrackItem) {
         if track.uri.is_empty() {
             return;
         }
         let known = self.tracks.get(&track.uri);
-        // строка-заглушка без имени не вытесняет известные данные
+        // an unnamed placeholder row does not evict known data
         if known.is_some_and(|known| !known.title.is_empty()) && track.title.is_empty() {
             return;
         }
@@ -555,7 +555,7 @@ impl Core {
                 }
             }
         }
-        // пришла настоящая строка — запрос больше не нужен; безымянная заглушка его не отменяет
+        // a real row has arrived — the request is no longer needed; an unnamed placeholder does not cancel it
         if !track.title.is_empty() {
             self.info_requests.remove(&track.uri);
         }
@@ -566,13 +566,13 @@ impl Core {
         self.tracks.get(uri)
     }
 
-    // ---- цель и «что показано» -----------------------------------------------------------------
+    // ---- target and "what is shown" -----------------------------------------------------------------
 
     pub fn remote_fresh(&self) -> Option<&RemoteSnapshot> {
         self.remote.as_ref().filter(|remote| remote.received_at.elapsed() < REMOTE_FRESH)
     }
 
-    /// Куда идут команды: этот ПК или удалённое устройство.
+    /// Where commands go: this PC or a remote device.
     pub fn target(&self) -> Target {
         if self.local_ready && self.local.is_active() {
             return Target::Local;
@@ -606,12 +606,12 @@ impl Core {
         }
     }
 
-    /// Контекст, показанный как играющий, включая ещё не подтверждённый запуск.
+    /// The context shown as playing, including a not yet confirmed start.
     pub fn playing_context_uri(&self) -> Option<String> {
         let remote = self.remote.as_ref().and_then(|remote| remote.state.context_uri.clone());
         if let Some(assumed) = &self.assumed_context {
             let held = assumed.at.elapsed() < ASSUMED_CONTEXT_HOLD;
-            // ответ опроса, начатого до запуска, ещё рассказывает старую историю
+            // the answer to a poll started before the start still tells the old story
             let contradicted = self.remote.as_ref().is_some_and(|snapshot| {
                 snapshot.received_at > assumed.at
                     && snapshot.state.context_uri.as_ref().is_some_and(|uri| *uri != assumed.uri)
@@ -625,7 +625,7 @@ impl Core {
         remote
     }
 
-    /// Трек, показанный текущим, включая недавний неподтверждённый запуск.
+    /// The track shown as current, including a recent unconfirmed start.
     pub fn current_track_uri(&self) -> Option<String> {
         if self.intent_held()
             && let Some(intent) = &self.intent_track
@@ -635,8 +635,8 @@ impl Core {
         self.now_playing().map(|now| now.track.uri)
     }
 
-    /// Намерение ещё держится: короткое удержание, а пока движок грузит выбранный трек — до потолка (холодный
-    /// старт бывает дольше шести секунд, и на экране появлялся прошлый трек, будто клик не сработал).
+    /// The intent is still held: a short hold, and while the engine loads the selected track — up to a ceiling (a cold
+    /// start is sometimes longer than six seconds, and the previous track would appear on screen as if the click did nothing).
     fn intent_held(&self) -> bool {
         let Some(intent) = &self.intent_track else { return false };
         if self.queued_play.is_some() || intent.at.elapsed() < PLAYBACK_HOLD {
@@ -660,9 +660,9 @@ impl Core {
         });
     }
 
-    /// Метки выбранного трека нужны сразу, а у списков Web API их нет в кэше: экран тогда переключался на
-    /// безымянную строку только вместе со звуком. Один запрос на URI, повторный только после ответа.
-    /// Строка очереди может быть безымянной заглушкой — такую спрашиваем, как и отсутствующую.
+    /// The selected track's labels are needed immediately, and Web API lists do not have them in the cache: the screen would then switch to
+    /// an unnamed row only along with the audio. One request per URI, a repeat only after an answer.
+    /// A queue row may be an unnamed placeholder — we ask about that one just like a missing one.
     fn want_track_info(&mut self, uri: &str) {
         let known = self.tracks.get(uri).is_some_and(|track| !track.title.is_empty());
         if uri.is_empty() || known || self.info_requests.contains_key(uri) {
@@ -675,7 +675,7 @@ impl Core {
     }
 
     fn handle_track_info(&mut self, request: u64, uri: String, result: Result<TrackItem, ApiError>) {
-        // пока ждали, трек уже пришёл с другой стороны — ответ не нужен
+        // while we waited, the track already arrived from the other side — the answer is not needed
         if self.info_requests.get(&uri).copied() != Some(request) {
             return;
         }
@@ -686,9 +686,9 @@ impl Core {
         }
     }
 
-    /// Локальный движок — источник истины: настоящая смена трека побеждает догадку очереди. Настоящая — это
-    /// выбранный трек или любой другой, кроме игравшего до выбора (Spotify мог подменить трек версией для своего
-    /// рынка). Обновление прежнего трека — не она: иначе на экране мелькал предыдущий трек, пока грузится новый.
+    /// The local engine is the source of truth: a real track change beats the queue's guess. A real one is
+    /// the selected track or any other track except the one playing before the selection (Spotify may have substituted a version for its own
+    /// market). An update to the previous track is not one: otherwise the previous track would flash on screen while the new one loads.
     fn reconcile_local_track_intent(&mut self, reported: Option<&str>) {
         let settled = self.intent_track.as_ref().is_some_and(|intent| {
             matches!(intent.confirmation, TrackConfirmation::Local)
@@ -699,7 +699,7 @@ impl Core {
         }
     }
 
-    /// Опрос, начатый до команды, намерение не снимает; одно несовпадение терпим и переспрашиваем.
+    /// A poll started before a command does not clear the intent; one mismatch is tolerated and we ask again.
     pub(crate) fn reconcile_remote_track_intent(&mut self, poll: u64, reported: Option<&str>) {
         let mut settled = false;
         let mut recheck = false;
@@ -743,9 +743,9 @@ impl Core {
         let mut now = self.cached_track_preview(&intent.uri, intent.position_ms)?;
         let actual = self.now_playing_live();
         now.local = matches!(intent.confirmation, TrackConfirmation::Local);
-        // Смена трека на этом ПК: пока движок его не отдал, играет не он — и показывать «играет» нельзя,
-        // иначе строка идёт вперёд, а звука нет. Оптимистичный ответ нужен только паузе/продолжению
-        // того же трека, который уже звучит.
+        // A track change on this PC: until the engine has handed it over, it is not what is playing — and we must not show "playing",
+        // otherwise the row moves forward but there is no sound. An optimistic answer is needed only for pause/resume
+        // of the same track that is already sounding.
         let switching = now.local && actual.as_ref().is_none_or(|live| live.track.uri != intent.uri);
         now.playing = if switching {
             false
@@ -771,7 +771,7 @@ impl Core {
         Some(now)
     }
 
-    /// Это устройство как DeviceItem (librespot на этом ПК).
+    /// This device as a DeviceItem (librespot on this PC).
     fn this_device(&self, active: bool) -> Option<DeviceItem> {
         let id = self.local_device_id.clone()?;
         Some(DeviceItem {
@@ -791,7 +791,7 @@ impl Core {
         state.device.as_ref().map(|device| map::device(device, self.local_device_id.as_deref()))
     }
 
-    /// Что устройство действительно играет, здесь или где-то ещё.
+    /// What the device is really playing, here or somewhere else.
     pub(crate) fn now_playing_live(&self) -> Option<NowPlaying> {
         if self.local.is_active() && self.local_transfer_sequence != Some(self.local.track_sequence) {
             let track = self.local.track.as_ref()?;
@@ -818,7 +818,7 @@ impl Core {
                 track: item,
                 position_ms,
                 playing,
-                // Playback держится Playing на время загрузки следующего трека; спиннер — по loading
+                // Playback stays Playing while the next track loads; the spinner follows loading
                 loading: self.local.loading,
                 repeat: self.local.repeat,
                 volume: self.local.volume,
@@ -830,7 +830,7 @@ impl Core {
         let Some(remote) = self.remote_fresh() else {
             return self.lost_preview();
         };
-        // снимок про этот ПК при пустом движке может описывать уже остановленное
+        // a snapshot about this PC with an empty engine may describe something already stopped
         if self.local_device_id.is_some() && remote.state.device_id() == self.local_device_id.as_deref() {
             return None;
         }
@@ -873,7 +873,7 @@ impl Core {
         })
     }
 
-    /// Пропавшее устройство: последний трек на паузе, чтобы предложить продолжить здесь.
+    /// A vanished device: the last track paused, so we can offer to continue here.
     fn lost_preview(&self) -> Option<NowPlaying> {
         if !self.device_lost {
             return None;
@@ -938,14 +938,14 @@ impl Core {
         })
     }
 
-    /// Плеер-бар показывает трек прошлой сессии без живого воспроизведения.
+    /// The player bar shows the previous session's track without live playback.
     pub fn resume_only(&self) -> bool {
         self.resume_track.is_some() && self.now_playing_live().is_none()
     }
 
-    // ---- локальный движок -------------------------------------------------------------------------
+    // ---- local engine -------------------------------------------------------------------------
 
-    /// Движок скоро будет (старт с разрешённым воспроизведением) или уже не будет.
+    /// The engine will exist soon (a start with playback allowed) or will no longer exist.
     pub fn expect_local(&mut self, expected: bool) {
         if expected {
             self.local_expected = Some(Instant::now());
@@ -1011,7 +1011,7 @@ impl Core {
     pub fn handle_local(&mut self, state: LocalState) {
         if self.local_transfer_sequence.is_some_and(|sequence| sequence != state.track_sequence) {
             self.local_transfer_sequence = None;
-            // перенос сюда подтверждён
+            // a transfer here is confirmed
             if self.transfer.as_ref().is_some_and(|transfer| transfer.to.is_none()) {
                 self.transfer = None;
             }
@@ -1020,7 +1020,7 @@ impl Core {
         let reconnected = state.connected && !self.local.connected;
         if state.shuffle != self.local.shuffle && self.shuffle_set_at.is_none_or(|at| at.elapsed() > Duration::from_secs(5))
         {
-            // смена shuffle другим клиентом
+            // a shuffle change by another client
             self.shuffle_wanted = state.shuffle;
         }
         if state.playback != self.local.playback {
@@ -1037,8 +1037,8 @@ impl Core {
         if let Some(error) = &state.error
             && self.local.error.as_deref() != Some(error.as_str())
         {
-            // Недоступный трек librespot пропускает сам (spirc: Unavailable текущего → следующий), и без
-            // объяснения это выглядит как самовольная смена песни. Называем трек и говорим, что дальше.
+            // librespot skips an unavailable track by itself (spirc: Unavailable current → next), and without
+            // an explanation it looks like an arbitrary song change. We name the track and say what comes next.
             let text = match error.strip_prefix(crate::engine::player::UNAVAILABLE) {
                 Some(uri) => {
                     let uri = uri.trim().trim_start_matches(':').trim();
@@ -1052,10 +1052,10 @@ impl Core {
                 None => engine_error_text(error),
             };
             self.notice(text);
-            // Испорченная сессия librespot лечится новой (воспроизведение подхватывается с той же позиции):
-            // ключ не выдан — сразу (Spotify перестаёт выдавать ключи этой сессии, у новой они есть: в РФ без
-            // VPN — минут через десять); «недоступно» — после трёх подряд (один бывает и по делу: регион).
-            // Раньше проверялся старый текст ошибки, которого движок уже не пишет, — переподключения не было.
+            // A broken librespot session is cured with a new one (playback is picked up from the same position):
+            // the key was not issued — immediately (Spotify stops issuing keys for this session, a new one has them: in Russia without
+            // a VPN — after about ten minutes); "unavailable" — after three in a row (one can happen for a real reason: the region).
+            // An old error text that the engine no longer writes used to be checked — so there were no reconnects.
             let key_refused = error == crate::engine::player::AUDIO_KEY_REFUSED;
             if key_refused || error.starts_with(crate::engine::player::UNAVAILABLE) {
                 let now = Instant::now();
@@ -1108,8 +1108,8 @@ impl Core {
         self.requeue_after_restart();
     }
 
-    /// Перезапуск движка по настройкам: что загрузить в новый (контекст или список, трек, позиция, режимы).
-    /// None — пусть движок подхватит сам (один трек). Ручная очередь вернётся в новый движок на том же треке.
+    /// An engine restart for settings: what to load into the new one (context or list, track, position, modes).
+    /// None — let the engine pick it up itself (a single track). The manual queue will return to the new engine on the same track.
     pub(crate) fn prepare_restart(&mut self) -> Option<LoadSpec> {
         self.requeue = None;
         if !self.local.is_active() {
@@ -1161,7 +1161,7 @@ impl Core {
         }
     }
 
-    /// Громкость, которую движок ещё не подтвердил (пока держится удержание).
+    /// The volume the engine has not confirmed yet (while the hold is still in place).
     fn held_local_volume(&mut self, reported: u16) -> Option<u16> {
         match self.pending_local_volume {
             Some((volume, at)) if volume != reported && at.elapsed() < OPTIMISTIC_HOLD => Some(volume),
@@ -1172,9 +1172,9 @@ impl Core {
         }
     }
 
-    /// Трек сменился (подтверждённо): потребление очереди, точка возобновления, история.
+    /// The track changed (confirmed): queue consumption, the resume point, history.
     pub(crate) fn on_now_playing_changed(&mut self) {
-        // очередь и сессия следуют за подтверждённым воспроизведением, а не за оптимистичным показом
+        // the queue and the session follow confirmed playback, not the optimistic display
         let Some(now) = self.now_playing_live() else {
             return;
         };
@@ -1186,7 +1186,7 @@ impl Core {
         self.session_dirty = true;
         let queue_already_updated = self.queue_start_pending.take().as_ref() == Some(&self.target());
         let repeating = same_uri && new_occurrence && now.repeat == RepeatMode::Track;
-        // сохранённая очередь возвращается только с тем же треком
+        // the saved queue is only restored with the same track
         if !self.resume_queue.is_empty() {
             let queued = std::mem::take(&mut self.resume_queue);
             if now.local && self.resume_track.as_deref() == Some(now.uri()) {
@@ -1199,8 +1199,8 @@ impl Core {
                 self.queue_recheck_at = Some(Instant::now() + QUEUE_RECHECK);
             }
         }
-        // старт контекста может начать тот же трек, что голова ручной очереди, не потребляя её;
-        // явные пропуски уже сняли свои строки — здесь только непрошеный переход
+        // starting a context can start the same track as the head of the manual queue without consuming it;
+        // explicit skips have already removed their rows — here only an unrequested transition
         if !queue_already_updated && !repeating {
             self.consume_manual_queue_head(&now.track.uri);
         }
@@ -1226,11 +1226,11 @@ impl Core {
         let track = now.track.clone();
         self.remember(&track);
         self.start_listening(&now);
-        // свежая очередь при смене трека
+        // a fresh queue on a track change
         self.refresh_queue(true);
     }
 
-    // ---- история ----------------------------------------------------------------------------------
+    // ---- history ----------------------------------------------------------------------------------
 
     fn start_listening(&mut self, now: &NowPlaying) {
         self.finish_listening(false);
@@ -1270,7 +1270,7 @@ impl Core {
         })));
     }
 
-    /// Учёт прослушивания: только подтверждённое воспроизведение.
+    /// Listening accounting: confirmed playback only.
     fn note_listening(&mut self) {
         let live = self.now_playing_live();
         let Some(listening) = &mut self.listening else {
@@ -1299,11 +1299,11 @@ impl Core {
         })
     }
 
-    // ---- таймеры ----------------------------------------------------------------------------------
+    // ---- timers ----------------------------------------------------------------------------------
 
     pub fn poll_interval(&self) -> Duration {
         let unseen = !self.app_active && !self.now_playing().is_some_and(|now| now.playing);
-        // нигде ничего не играет: часто спрашивать не о чем (своё «Играть» опрашивает сразу, poll_remote_soon)
+        // nothing is playing anywhere: there is nothing to ask about often (our own "Play" polls immediately, poll_remote_soon)
         let silent = !self.now_playing().is_some_and(|now| now.playing || now.loading);
         match self.target() {
             Target::Local if self.local.is_active() => REMOTE_POLL_IDLE,
@@ -1313,7 +1313,7 @@ impl Core {
         }
     }
 
-    /// Ближайший момент, когда tick что-то сделает.
+    /// The nearest moment when tick will do something.
     pub fn next_deadline(&self) -> Instant {
         let mut due = self.remote_polled_at + self.poll_interval();
         if self.remote_poll_pending {
@@ -1334,7 +1334,7 @@ impl Core {
         due
     }
 
-    /// Нужен ли частый пересчёт снимка (позиция идёт, держатся удержания).
+    /// Whether the snapshot needs frequent recomputation (the position is moving, holds are in place).
     pub fn animating(&self) -> bool {
         self.now_playing().is_some_and(|now| now.playing || now.loading)
             || self.intent_track.is_some()
@@ -1348,7 +1348,7 @@ impl Core {
 
     pub fn tick(&mut self) {
         let now = Instant::now();
-        // движок вот-вот поднимется: состояние скоро придёт из кластера сессии, а не из Web API
+        // the engine is about to come up: the state will soon come from the session cluster, not the Web API
         let engine_coming = !self.local_ready
             && (self.local_coming() || matches!(self.local_playback, LocalPlayback::Connecting));
         if !self.remote_poll_pending && !engine_coming && self.remote_polled_at.elapsed() >= self.poll_interval() {
@@ -1385,8 +1385,8 @@ impl Core {
         {
             self.optimistic_playing = None;
         }
-        // Выбранный трек держится на экране, пока движок его грузит, а не 6 с по часам: холодный старт дольше,
-        // и на экране появлялся прошлый трек, будто клик не сработал. Потолок — чтобы спиннер не висел вечно.
+        // The selected track stays on screen while the engine loads it, not for 6 s by the clock: a cold start is longer,
+        // and the previous track would appear on screen as if the click did nothing. The ceiling — so the spinner does not hang forever.
         if self.intent_track.is_some() && !self.intent_held() {
             self.intent_track = None;
         }
@@ -1399,7 +1399,7 @@ impl Core {
         if self.pending_remote_volume.is_some_and(|(_, at)| at.elapsed() >= OPTIMISTIC_HOLD) {
             self.pending_remote_volume = None;
         }
-        // очередь могла измениться с другого устройства
+        // the queue may have changed from another device
         if self.app_active
             && !self.queue_loading
             && self.now_playing().is_some_and(|now| now.playing)
@@ -1408,7 +1408,7 @@ impl Core {
             self.refresh_queue(false);
         }
         self.note_listening();
-        // точка возобновления движется, пока играет музыка
+        // the resume point moves while music plays
         if self.now_playing().is_some_and(|now| now.playing) && self.last_session_save.elapsed() > SESSION_REFRESH {
             self.session_dirty = true;
         }
@@ -1419,7 +1419,7 @@ impl Core {
         self.check_shown_track();
     }
 
-    /// Новая обложка при смене показанного трека; направление анимации.
+    /// New cover art when the shown track changes; the animation direction.
     fn check_shown_track(&mut self) {
         let shown = self.now_playing();
         let uri = shown.as_ref().map(|now| now.track.uri.clone());
@@ -1427,26 +1427,26 @@ impl Core {
             return;
         }
         self.shown_uri = uri;
-        // пустой URL — обложки нет (тема возвращается к своей)
+        // an empty URL — there is no cover art (the theme goes back to its own)
         let url = shown
             .map(|now| if now.track.cover_large.is_empty() { now.track.cover } else { now.track.cover_large })
             .unwrap_or_default();
         self.effects.push(Effect::Cover(url));
     }
 
-    /// Тянет следующую песню очереди заранее, пока играет текущая: переход (или Next) тогда начинается без
-    /// ожидания загрузки — librespot держит впереди только один трек, поэтому заказываем голову очереди, а на
-    /// новом треке вооружаемся заново. На удалённом устройстве загрузкой распоряжается оно само.
+    /// Fetches the queue's next song ahead of time while the current one plays: the transition (or Next) then starts without
+    /// waiting for a load — librespot only keeps one track ahead, so we order the head of the queue, and on
+    /// a new track we arm ourselves again. On a remote device it manages the loading itself.
     fn preload_next_track(&mut self) {
         if !matches!(self.target(), Target::Local) {
             return;
         }
-        // движок, а не оптимистичный превью: пока трек ещё качается, «играет» врёт
+        // the engine, not the optimistic preview: while the track is still downloading, "playing" lies
         let Some(now) = self.now_playing_live() else {
             return;
         };
-        // пока трек сам ещё качается, вперёд не заказываем — иначе следующая песня отбирает полосу
-        // у той, что вот-вот зазвучит, и старт затягивается на ровном месте
+        // while the track itself is still downloading, we do not order ahead — otherwise the next song steals the bandwidth
+        // from the one that is about to sound, and the start drags on for no reason
         if !now.playing || now.loading || now.position_ms < PRELOAD_AFTER_MS {
             return;
         }
@@ -1475,7 +1475,7 @@ impl Core {
         self.api(ApiCall::Playback { seq: self.remote_poll_seq });
     }
 
-    /// Следующий опрос — не позже чем через 700 мс, каким бы ни был интервал.
+    /// The next poll — no later than 700 ms from now, whatever the interval.
     pub(crate) fn poll_remote_soon(&mut self) {
         let now = Instant::now();
         self.remote_polled_at = now
@@ -1485,7 +1485,7 @@ impl Core {
 
     pub fn refresh_queue(&mut self, force: bool) {
         if self.resume_only() && self.queue.is_some() {
-            // нигде ничего не играет; на экране сохранённая очередь — запрос вернул бы меньше
+            // nothing is playing anywhere; the saved queue is on screen — a request would return less
             return;
         }
         if self.queue_loading && !force {
@@ -1497,12 +1497,12 @@ impl Core {
         self.api(ApiCall::Queue { seq: self.queue_seq });
     }
 
-    // ---- очередь ----------------------------------------------------------------------------------
+    // ---- queue ----------------------------------------------------------------------------------
 
-    /// Клик по строке «Далее»: играет сразу, строки выше уходят (N×Next).
+    /// A click on a "Next" row: it plays immediately, the rows above go away (N×Next).
     pub(crate) fn play_queue_item(&mut self, index: usize, uri: String) {
         if self.resume_only() {
-            // живой очереди нет — играем показанные строки списком
+            // there is no live queue — we play the shown rows as a list
             let uris: Vec<String> = self
                 .queue
                 .as_ref()
@@ -1519,7 +1519,7 @@ impl Core {
         let mut skips = index + 1;
         let mut consumed: Vec<String> = Vec::new();
         if let Some(queue) = &mut self.queue {
-            // клик называет песню: если строки сдвинулись, песня важнее номера
+            // the click names a song: if the rows have shifted, the song matters more than the number
             let position = match queue.next.get(index) {
                 Some(item) if item.uri() == uri => Some(index),
                 _ => queue.next.iter().position(|item| item.uri() == uri),
@@ -1564,7 +1564,7 @@ impl Core {
         }
     }
 
-    /// Сколько первых строк «Далее» поставил пользователь (секция manual).
+    /// How many of the first "Next" rows the user placed (the manual section).
     pub fn queued_rows_len(&self) -> usize {
         let manual = if self.manual_queue.is_empty() && self.resume_only() {
             &self.resume_queue
@@ -1577,7 +1577,7 @@ impl Core {
         }
     }
 
-    /// Только у локального плеера очередь можно переписать (ClearQueue + AddToQueue).
+    /// Only a local player's queue can be rewritten (ClearQueue + AddToQueue).
     pub fn queue_locally_reorderable(&self) -> bool {
         self.local.is_active() && matches!(self.target(), Target::Local)
     }
@@ -1586,14 +1586,14 @@ impl Core {
         self.queue_locally_reorderable() && self.queued_rows_len() > 0
     }
 
-    /// «Очистить»: только ручные строки; контекст остаётся.
+    /// "Clear": manual rows only; the context remains.
     pub fn clear_queue(&mut self) {
         if !matches!(self.target(), Target::Local) {
             return;
         }
         self.pending_album_queues.clear();
         self.last_album_queue = None;
-        // каждая песня записана и в manual_queue, и в pending — берём большее из двух чисел
+        // every song is written both in manual_queue and in pending — we take the larger of the two numbers
         let mut counts: HashMap<String, usize> = HashMap::new();
         for uri in &self.manual_queue {
             *counts.entry(uri.clone()).or_insert(0) += 1;
@@ -1626,14 +1626,14 @@ impl Core {
             self.queue_cleared = Some((cleared, Instant::now()));
         }
         self.engine(PlayerCommand::ClearQueue);
-        // свежий запрос уберёт строки, добавленные с других устройств
+        // a fresh request will remove rows added from other devices
         self.queue_recheck_at = Some(Instant::now() + QUEUE_RECHECK);
         self.notice(mf_i18n::t("Queue cleared"));
     }
 
-    /// Next: голова «Далее» сразу становится текущей (если очередь «заякорена» на текущий трек).
+    /// Next: the head of "Next" immediately becomes current (if the queue is "anchored" to the current track).
     fn pop_queue_head(&mut self) {
-        // восстановленная или старая очередь ничего не говорит о том, куда попадёт Next
+        // a restored or old queue says nothing about where Next will land
         let current = self.current_track_uri();
         let Some(queue) = &mut self.queue else {
             return;
@@ -1646,7 +1646,7 @@ impl Core {
         let uri = item.uri().to_owned();
         let track = item.track.clone();
         queue.current = Some(item);
-        // у строки уже есть данные песни — плеер-бар назовёт её сразу
+        // the row already has the song's data — the player bar will name it immediately
         self.tracks.entry(uri.clone()).or_insert(track);
         self.consume_manual_queue_head(&uri);
         self.queue_start_pending = Some(self.target());
@@ -1673,34 +1673,34 @@ impl Core {
         self.session_dirty = true;
     }
 
-    /// Ответ очереди старше последнего локального изменения?
+    /// Is the queue response older than the last local change?
     pub(crate) fn queue_fetch_is_stale(&self, fetched: &FetchedQueue) -> bool {
         if self.queue_stale_retries >= QUEUE_STALE_RETRIES {
             return false;
         }
         let fetched_current = fetched.current.as_ref().map(|item| item.uri.as_str());
-        // недавний запуск или Next должен уже быть текущей строкой ответа
+        // a recent start or Next should already be the current row of the response
         if let Some(intent) = &self.intent_track
             && (intent.at.elapsed() < PLAYBACK_HOLD || self.queued_play.is_some())
             && fetched_current != Some(intent.uri.as_str())
         {
             return true;
         }
-        // при локальном воспроизведении текущая строка ответа обязана совпасть с движком
+        // with local playback the response's current row must match the engine
         if self.local.is_active()
             && let Some(track) = &self.local.track
             && fetched_current.is_some_and(|uri| uri != track.uri)
         {
             return true;
         }
-        // очищенная строка всё ещё сверху — очистка не дошла
+        // the cleared row is still at the top — the clear has not landed
         if let Some((cleared, at)) = &self.queue_cleared
             && at.elapsed() < PLAYBACK_HOLD
             && fetched.next.first().is_some_and(|item| cleared.contains(&item.uri))
         {
             return true;
         }
-        // прежний порядок контекста сразу после переключения shuffle
+        // the previous context order right after a shuffle toggle
         if let Some(pending) = &self.queue_shuffle_pending
             && pending.at.elapsed() < PLAYBACK_HOLD
             && fetched_current == pending.current_uri.as_deref()
@@ -1713,7 +1713,7 @@ impl Core {
                 return true;
             }
         }
-        // локальная перестановка оптимистична — ответ должен её догнать
+        // a local reorder is optimistic — the response must catch up to it
         if let Some(at) = self.queue_reorder_pending
             && at.elapsed() < PLAYBACK_HOLD
             && !fetched
@@ -1728,7 +1728,7 @@ impl Core {
         false
     }
 
-    /// Принятый ответ очереди с сохранением uid уже показанных строк.
+    /// An accepted queue response, preserving the uids of already shown rows.
     fn adopt_queue(&mut self, fetched: FetchedQueue) -> QueueData {
         let old: Vec<QItem> = self
             .queue
@@ -1745,7 +1745,7 @@ impl Core {
                 Some(i) => {
                     used[i] = true;
                     cursor = i + 1;
-                    // ответ может не знать имени, которое уже показано (оптимистичная строка)
+                    // the response may not know a name that is already shown (an optimistic row)
                     let track = if track.title.is_empty() && !old[i].track.title.is_empty() {
                         old[i].track.clone()
                     } else {
@@ -1763,10 +1763,10 @@ impl Core {
 
     fn handle_queue(&mut self, seq: u64, result: Result<FetchedQueue, ApiError>) {
         if seq != self.queue_seq {
-            // новый запрос уже ушёл — этот ответ устарел
+            // a new request has already gone out — this response is stale
             return;
         }
-        // пока идут записи в очередь, частичные чтения не принимаются
+        // while queue writes are in flight, partial reads are not accepted
         let target = self.target();
         let writing_queue = self.pending_queue_batches.values().any(|batch| *batch == target);
         if writing_queue || result.as_ref().is_ok_and(|fetched| self.queue_fetch_is_stale(fetched)) {
@@ -1797,9 +1797,9 @@ impl Core {
         }
     }
 
-    // ---- добавление в очередь ------------------------------------------------------------------------
+    // ---- adding to the queue ------------------------------------------------------------------------
 
-    /// «В очередь» одной песни (альбом — целиком).
+    /// "Add to queue" of a single song (an album — in full).
     pub fn add_to_queue(&mut self, uri: String, label: String) {
         if uri_kind(&uri) == Some("album") {
             self.queue_album(uri, label);
@@ -1815,7 +1815,7 @@ impl Core {
         self.queue_one(uri, label, true);
     }
 
-    /// Тот же URI в пределах 1,5 с — это двойной клик, а не вторая просьба.
+    /// The same URI within 1.5 s — that is a double click, not a second request.
     fn queued_moments_ago(&mut self, uri: &str) -> bool {
         self.expire_pending_queue_adds();
         self.pending_queue_adds
@@ -1899,7 +1899,7 @@ impl Core {
         }
     }
 
-    /// Несколько песен за раз: повторы внутри пакета сохраняются, один тост.
+    /// Several songs at once: repeats within the batch are kept, one toast.
     pub fn queue_many(&mut self, songs: Vec<TrackItem>) {
         let repeats: Vec<bool> = songs.iter().map(|song| self.queued_moments_ago(&song.uri)).collect();
         let mut count = 0;
@@ -1922,7 +1922,7 @@ impl Core {
         self.notice(mf_i18n::tf("Added to queue: {0}", &[&songs]));
     }
 
-    /// librespot умеет только дописывать и очищать: перестановка = ClearQueue + AddToQueue каждой.
+    /// librespot can only append and clear: a reorder = ClearQueue + AddToQueue of each.
     fn resync_local_queue(&mut self) {
         self.engine(PlayerCommand::ClearQueue);
         for uri in self.manual_queue.clone() {
@@ -1930,7 +1930,7 @@ impl Core {
                 self.engine(PlayerCommand::AddToQueue(uri));
             }
         }
-        // запрос, ушедший до перестановки, устарел; каждая перестановка получает полный запас попыток
+        // a request sent before the reorder is stale; each reorder gets a full budget of attempts
         self.queue_seq += 1;
         self.queue_stale_retries = 0;
         self.queue_reorder_pending = Some(Instant::now());
@@ -1966,7 +1966,7 @@ impl Core {
         });
         let uri = item.uri.clone();
         if self.queue.is_none() && self.now_playing().is_some() {
-            // очередь ещё не прочитана — ручная строка видна сразу
+            // the queue has not been read yet — the manual row is visible immediately
             self.queue = Some(QueueData::default());
         }
         if self.queue.is_some() {
@@ -1996,7 +1996,7 @@ impl Core {
         self.api(ApiCall::AddMany { request, uris, device });
     }
 
-    /// Откатить только отклонённые копии; принятые, более поздние и копии контекста остаются.
+    /// Roll back only the rejected copies; accepted, later ones, and context copies remain.
     fn remove_failed_queue_adds(&mut self, request: u64, added: usize) {
         let mut indexes: Vec<usize> = self
             .pending_queue_adds
@@ -2027,7 +2027,7 @@ impl Core {
         }
     }
 
-    /// Показать первые `queued_len` строк в порядке manual_queue — в том, что отдан движку.
+    /// Show the first `queued_len` rows in manual_queue order — as handed to the engine.
     fn show_manual_queue_order(&mut self, queued_len: usize) {
         let Some(queue) = &mut self.queue else {
             return;
@@ -2048,7 +2048,7 @@ impl Core {
         queue.next.splice(0..0, ordered);
     }
 
-    /// Строка для оптимистичного показа: из кэша, из очереди или заглушка с подписью.
+    /// A row for the optimistic display: from the cache, from the queue, or a placeholder with a label.
     fn optimistic_queue_item(&self, uri: &str, label: &str) -> TrackItem {
         if let Some(track) = self.tracks.get(uri) {
             return track.clone();
@@ -2077,7 +2077,7 @@ impl Core {
         self.pending_queue_adds.retain(|addition| addition.at.elapsed() < PENDING_ADD_LIFETIME);
     }
 
-    /// Вернуть на место ожидающие добавления, которых нет в (запаздывающем) ответе.
+    /// Put back the pending additions that are not in the (lagging) response.
     pub(crate) fn reconcile_pending_queue(&mut self) {
         self.expire_pending_queue_adds();
         if self.pending_queue_adds.is_empty() {
@@ -2087,7 +2087,7 @@ impl Core {
             return;
         };
         let fetched: HashSet<String> = queue.next.iter().map(|item| item.uri().to_owned()).collect();
-        // уже пришедшая или уже играющая песня больше не ожидается
+        // a song that has already arrived or is already playing is no longer awaited
         let current = self.current_track_uri();
         self.pending_queue_adds
             .retain(|addition| !fetched.contains(&addition.item.uri) && current.as_deref() != Some(addition.item.uri.as_str()));
@@ -2102,7 +2102,7 @@ impl Core {
         }
     }
 
-    /// Перестановка внутри «Далее в очереди»: `to` — итоговый индекс (как ListChange::Move).
+    /// A reorder within "Next in queue": `to` — the final index (like ListChange::Move).
     pub fn move_manual(&mut self, from: usize, to: usize) {
         if !self.queue_locally_reorderable() {
             return;
@@ -2115,7 +2115,7 @@ impl Core {
             let uri = self.manual_queue.remove(from);
             let at = to.min(self.manual_queue.len());
             self.manual_queue.insert(at, uri);
-            // ожидающие добавления сдвигаются так же, как строки, на которые они указывают
+            // pending additions shift the same way as the rows they point at
             for addition in &mut self.pending_queue_adds {
                 if addition.manual_index == from {
                     addition.manual_index = at;
@@ -2131,7 +2131,7 @@ impl Core {
         self.resync_local_queue();
     }
 
-    /// Вставка в позицию «Далее в очереди» (только локально, иначе — в конец, как «В очередь»).
+    /// Insert at the "Next in queue" position (local only, otherwise — at the end, like "Add to queue").
     pub fn insert_manual(&mut self, items: Vec<TrackItem>, position: usize) {
         if !self.queue_locally_reorderable() {
             self.queue_many(items);
@@ -2173,9 +2173,9 @@ impl Core {
         }
     }
 
-    // ---- запуск ----------------------------------------------------------------------------------
+    // ---- start ----------------------------------------------------------------------------------
 
-    /// Запуск списка/контекста. `shuffle_first` — включить перемешивание до старта.
+    /// Starting a list/context. `shuffle_first` — turn on shuffle before the start.
     pub fn play_request(&mut self, request: PlayRequest, shuffle_first: bool) {
         let mut request = request;
         self.queue_shuffle_pending = None;
@@ -2194,7 +2194,7 @@ impl Core {
             && !shuffle
             && context.starts_with("spotify:playlist:")
         {
-            // плейлист по порядку — с начала, а не с места, где его оставил плеер
+            // a playlist in order — from the beginning, not from where the player left it
             request.offset_position = Some(0);
         }
         let mut keys: Vec<String> = Vec::new();
@@ -2224,7 +2224,7 @@ impl Core {
             Some(uri) => self.expect_track(uri, request.position_ms),
             None => self.intent_track = None,
         }
-        // контекст сразу показан играющим; Spotify догонит
+        // the context is shown as playing right away; Spotify will catch up
         self.assumed_context = Some(AssumedContext {
             uri: request.context_uri.clone().unwrap_or_default(),
             shuffle: shuffle.then_some(true),
@@ -2235,7 +2235,7 @@ impl Core {
         self.direction = 1;
         match self.target() {
             Target::Local if !self.local.connected => {
-                // движок переподключается — запрос ждёт его
+                // the engine is reconnecting — the request waits for it
                 self.queued_play = Some(request);
             }
             Target::Local => {
@@ -2256,7 +2256,7 @@ impl Core {
                 self.optimistic_playing = Some((true, Instant::now()));
             }
             Target::Remote(None) => {
-                // никогда не просим Spotify играть «нигде»: ждём движок или просим выбрать устройство
+                // we never ask Spotify to play "nowhere": we wait for the engine or ask to choose a device
                 if matches!(self.local_playback, LocalPlayback::Connecting) || self.local_coming() {
                     self.queued_play = Some(request);
                 } else {
@@ -2270,7 +2270,7 @@ impl Core {
         }
     }
 
-    /// Контекст, который показывать для запуска (подпись/обложка от вызывающего).
+    /// The context to show for a start (the label/cover art from the caller).
     pub fn set_context_info(&mut self, context: PlayContext) {
         if let Some(uri) = context.context_uri.clone().filter(|uri| !uri.is_empty())
             && (!context.title.is_empty() || !context.cover.is_empty())
@@ -2283,7 +2283,7 @@ impl Core {
         self.context_info = context;
     }
 
-    /// Название контекста, узнанное вместе с очередью: дополняет известное, не перекрывая подпись вызывающего.
+    /// A context name learned along with the queue: it supplements what is known without overriding the caller's label.
     pub(crate) fn learn_context(&mut self, context: PlayContext) {
         let Some(uri) = context.context_uri.clone().filter(|uri| !uri.is_empty()) else {
             return;
@@ -2306,7 +2306,7 @@ impl Core {
         self.known_contexts.insert(uri, context);
     }
 
-    /// Список треков из модели QML начиная с `row`.
+    /// A list of tracks from the QML model starting at `row`.
     pub fn play_items(&mut self, items: Vec<TrackItem>, row: usize, context: PlayContext) {
         let Some(chosen) = items.get(row).cloned() else {
             return;
@@ -2333,7 +2333,7 @@ impl Core {
                 if let Some(uri) = assumed
                     && self.assumed_context.is_some()
                 {
-                    // радио играет показанные песни, а показан контекстом — станция
+                    // radio plays the shown songs, while the context shows a station
                     self.assumed_context = Some(AssumedContext {
                         uri,
                         shuffle: self.shuffle_wanted.then_some(true),
@@ -2345,7 +2345,7 @@ impl Core {
         }
     }
 
-    /// «Перемешать»: shuffle on и старт со случайного доступного трека.
+    /// "Shuffle": shuffle on and start from a random available track.
     pub fn shuffle_from(&mut self, items: Vec<TrackItem>, context: PlayContext) {
         let available: Vec<usize> = (0..items.len()).filter(|&i| playable(&items[i])).collect();
         if available.is_empty() {
@@ -2371,7 +2371,7 @@ impl Core {
         }
     }
 
-    /// Контекст по URI с трека `offset_uri` или с начала; `shuffle` — задать режим перед стартом.
+    /// A context by URI from the `offset_uri` track or from the beginning; `shuffle` — set the mode before the start.
     pub fn play_context(&mut self, context: PlayContext, offset_uri: Option<String>, shuffle: Option<bool>) {
         let Some(uri) = context.context_uri.clone().filter(|uri| !uri.is_empty()) else {
             return;
@@ -2398,7 +2398,7 @@ impl Core {
         if let Some(uri) = assumed
             && self.assumed_context.is_some()
         {
-            // список играет как URI, а показан контекстом (радио, страница)
+            // the list plays as a URI, but is shown as a context (radio, a page)
             self.assumed_context = Some(AssumedContext {
                 uri,
                 shuffle: self.shuffle_wanted.then_some(true),
@@ -2408,7 +2408,7 @@ impl Core {
         }
     }
 
-    /// Выпуск с позиции; играющий выпуск не отправляется на старую точку.
+    /// An episode from a position; a playing episode is not sent back to an old point.
     pub fn play_episode(&mut self, uri: String, position_ms: i64) {
         let mut request = PlayRequest::tracks(vec![uri.clone()]).starting_at_index(0);
         if self.now_playing().is_none_or(|now| now.track.uri != uri) && position_ms > 0 {
@@ -2418,7 +2418,7 @@ impl Core {
         self.play_request(request, false);
     }
 
-    /// Продолжить трек прошлой сессии.
+    /// Continue the previous session's track.
     fn resume_last(&mut self) -> bool {
         let Some(track) = self.resume_track.clone() else {
             return false;
@@ -2432,7 +2432,7 @@ impl Core {
         true
     }
 
-    /// Пропавшее устройство: продолжить здесь с последнего удалённого снимка.
+    /// A vanished device: continue here from the last remote snapshot.
     fn resume_lost_here(&mut self) -> bool {
         let Some(lost) = self.lost.clone() else {
             return false;
@@ -2459,13 +2459,13 @@ impl Core {
         true
     }
 
-    // ---- транспорт ----------------------------------------------------------------------------------
+    // ---- transport ----------------------------------------------------------------------------------
 
     pub fn toggle_play(&mut self) {
         if self.device_lost && self.resume_lost_here() {
             return;
         }
-        // пока грузится следующий трек, строка показывает «не играет», но движок ещё играет: клик — пауза
+        // while the next track loads, the row shows "not playing", but the engine is still playing: a click is a pause
         let playing = self.now_playing().map(|now| {
             now.playing
                 || (now.local
@@ -2480,7 +2480,7 @@ impl Core {
                 if self.local.is_active() {
                     self.engine(PlayerCommand::Toggle);
                 } else {
-                    // локально ничего не играет: продолжить здесь удалённое или прошлую сессию
+                    // nothing is playing locally: continue the remote or previous session here
                     if let Some(remote) = self.remote_fresh()
                         && let Some(item) = &remote.state.item
                     {
@@ -2500,7 +2500,7 @@ impl Core {
             }
             Target::Remote(device) => {
                 if device.is_none() && self.remote_fresh().is_none() {
-                    // нигде ничего не известно (свежий старт до готовности движка) — прошлая сессия
+                    // nothing is known anywhere (a fresh start before the engine is ready) — the previous session
                     if !self.resume_last() {
                         self.notice(mf_i18n::t("Choose a track, album or playlist"));
                     }
@@ -2535,7 +2535,7 @@ impl Core {
             self.step_resume(true);
             return;
         }
-        // голова очереди сразу становится текущей; без цели — не трогаем
+        // the head of the queue immediately becomes current; without a target — we do not touch it
         let target = self.target();
         if !matches!(target, Target::Remote(None)) || self.remote_fresh().is_some() {
             self.pop_queue_head();
@@ -2557,7 +2557,7 @@ impl Core {
             }
             return;
         }
-        // Next назвал свою цель заранее; Previous её отменяет
+        // Next named its target in advance; Previous cancels it
         self.intent_track = None;
         self.queue_start_pending = Some(self.target());
         self.direction = -1;
@@ -2567,7 +2567,7 @@ impl Core {
         }
     }
 
-    /// Шаг по сохранённой очереди без воспроизведения (Next/Previous до первого Play).
+    /// A step through the saved queue without playback (Next/Previous before the first Play).
     fn step_resume(&mut self, forward: bool) -> bool {
         let Some(current) = self.resume_track.clone() else {
             return false;
@@ -2613,7 +2613,7 @@ impl Core {
     }
 
     pub fn seek(&mut self, position_ms: u32) {
-        // под треком прошлой сессии ползунок двигает точку, с которой начнётся Play
+        // under the previous session's track the slider moves the point from which Play will start
         if self.now_playing_live().is_none() && self.resume_track.is_some() {
             self.resume_position_ms = position_ms;
             self.session_dirty = true;
@@ -2642,7 +2642,7 @@ impl Core {
         self.now_playing().is_none_or(|now| now.can_set_volume)
     }
 
-    /// Громкость: локально сразу (VolumePreview), Volume и удалённый PUT — после 150 мс тишины.
+    /// Volume: locally immediately (VolumePreview), Volume and the remote PUT — after 150 ms of silence.
     pub fn set_volume(&mut self, volume: u16) {
         match self.target() {
             Target::Local => {
@@ -2702,7 +2702,7 @@ impl Core {
                 self.local.shuffle = shuffle;
                 self.engine(PlayerCommand::Shuffle(shuffle));
             }
-            // без устройства режим просто запоминается для следующего Play
+            // without a device the mode is simply remembered for the next Play
             Target::Remote(None) if self.remote_fresh().is_none() => {}
             Target::Remote(device) => {
                 if let Some(remote) = self.remote.as_mut() {
@@ -2736,7 +2736,7 @@ impl Core {
         }
     }
 
-    /// Удалённая команда; без активного устройства запрос не шлётся.
+    /// A remote command; without an active device the request is not sent.
     fn remote(&mut self, action: RemoteAction, device: Option<String>) {
         if device.is_none() && self.remote_fresh().is_none() {
             self.notice(mf_i18n::t("Nothing is playing. Choose something to play first"));
@@ -2747,10 +2747,10 @@ impl Core {
 
     // ---- Connect ---------------------------------------------------------------------------------------
 
-    /// Перенести воспроизведение на этот ПК.
+    /// Move playback to this PC.
     pub fn transfer_here(&mut self, _play: bool) {
         if self.device_lost {
-            // забирать нечего: продолжить с последнего удалённого снимка
+            // there is nothing to take: continue from the last remote snapshot
             self.resume_lost_here();
             return;
         }
@@ -2760,7 +2760,7 @@ impl Core {
         }
         self.selected_device = None;
         if !self.local.is_active() {
-            // Connect переносит всё состояние активного устройства, включая очередь
+            // Connect transfers the active device's entire state, including the queue
             let from = self
                 .remote_fresh()
                 .and_then(|remote| remote.state.device.as_ref())
@@ -2780,7 +2780,7 @@ impl Core {
         self.poll_remote_soon();
     }
 
-    /// Перенести на устройство Connect (PUT /me/player).
+    /// Move to a Connect device (PUT /me/player).
     pub fn transfer_to(&mut self, device: String, play: bool) {
         if Some(device.as_str()) == self.local_device_id.as_deref() {
             self.transfer_here(play);
@@ -2802,7 +2802,7 @@ impl Core {
         self.app_active = active;
     }
 
-    /// Выход из аккаунта: всё, что относится к аккаунту, забыть.
+    /// Sign-out: forget everything that belongs to the account.
     pub fn reset_account(&mut self) {
         self.pending_album_queues.clear();
         self.pending_queue_batches.clear();
@@ -2830,7 +2830,7 @@ impl Core {
         self.session_dirty = true;
     }
 
-    // ---- ответы Web API --------------------------------------------------------------------------------
+    // ---- Web API responses --------------------------------------------------------------------------------
 
     pub fn handle_api(&mut self, reply: ApiReply) {
         match reply {
@@ -2937,7 +2937,7 @@ impl Core {
 
     fn handle_playback_state(&mut self, seq: u64, result: Result<Option<RemoteState>, ApiError>) {
         if seq != self.remote_poll_seq {
-            // опоздавший старый опрос описывает прошлое
+            // a late old poll describes the past
             return;
         }
         self.remote_poll_pending = false;
@@ -2951,7 +2951,7 @@ impl Core {
                 return;
             }
         };
-        // устройство пропало? два опроса подряд без него
+        // the device is gone? two polls in a row without it
         let showing_remote = self.remote.as_ref().is_some_and(|remote| {
             remote.state.item.is_some() && remote.state.device_id() != self.local_device_id.as_deref()
         });
@@ -2978,14 +2978,14 @@ impl Core {
             && previous != current
             && self.shuffle_set_at.is_none_or(|at| at.elapsed() > Duration::from_secs(5))
         {
-            // смена shuffle с другого устройства
+            // a shuffle change from another device
             self.shuffle_wanted = current;
         }
         if let Some(device) = self.remote.as_ref().and_then(|remote| remote.state.device.clone())
             && let Some(id) = device.id.clone()
         {
             self.known_devices.insert(id.clone(), device.name.clone());
-            // перенос подтверждён: активным стало нужное устройство
+            // the transfer is confirmed: the needed device became active
             if let Some(transfer) = &self.transfer
                 && transfer.to.as_deref() == Some(id.as_str())
                 && device.is_active
@@ -3009,7 +3009,7 @@ impl Core {
         }
     }
 
-    // ---- сессия ----------------------------------------------------------------------------------
+    // ---- session ----------------------------------------------------------------------------------
 
     pub fn session_data(&mut self) -> SessionData {
         if let Some(now) = self.now_playing() {
@@ -3025,7 +3025,7 @@ impl Core {
             context,
             track,
             position_ms: self.resume_position_ms,
-            // ни разу не возобновлённая очередь переносится дальше как есть
+            // a queue that has never been resumed is carried on as is
             manual: if self.resume_queue.is_empty() { self.manual_queue.clone() } else { self.resume_queue.clone() },
             rows: self
                 .queue
@@ -3068,15 +3068,15 @@ impl Core {
         self.queue = Some(QueueData { current: Some(current), next });
     }
 
-    // ---- снимок ------------------------------------------------------------------------------------
+    // ---- snapshot ------------------------------------------------------------------------------------
 
-    /// Контекст для карточки «Играет из …».
+    /// The context for the "Playing from …" card.
     pub fn shown_context(&self) -> PlayContext {
         let uri = self.playing_context_uri().or_else(|| self.resume_only().then(|| self.resume_context.clone()).flatten());
         match uri {
             Some(uri) => {
-                // Запуск по одному URI (плитка «Слушать», Player.playContext) приходит без подписи —
-                // такой context_info не перекрывает известную подпись и название играющего альбома
+                // A start by a single URI (the "Listen" tile, Player.playContext) arrives without a label —
+                // such a context_info does not override a known label and the playing album's name
                 let started = self.context_info.context_uri.as_deref() == Some(uri.as_str());
                 if started && !self.context_info.title.is_empty() {
                     return self.context_info.clone();
@@ -3097,7 +3097,7 @@ impl Core {
                 context
             }
             None => {
-                // список без контекста (поиск, история) — подпись от вызывающего, пока список играет
+                // a list without a context (search, history) — the caller's label, while the list plays
                 let list = self.local_list.is_some()
                     || self.assumed_context.as_ref().is_some_and(|assumed| {
                         assumed.uri.is_empty() && assumed.at.elapsed() < ASSUMED_CONTEXT_HOLD
@@ -3111,7 +3111,7 @@ impl Core {
         }
     }
 
-    /// Строки Player.queue: current → manual → context.
+    /// Player.queue rows: current → manual → context.
     pub fn queue_rows(&mut self) -> Vec<QueueRow> {
         let mut rows = Vec::new();
         let now = self.now_playing();
@@ -3142,7 +3142,7 @@ impl Core {
         rows
     }
 
-    /// Найти строку «Далее» по uid (индекс в queue.next и URI).
+    /// Find a "Next" row by uid (an index in queue.next and a URI).
     pub fn find_row(&self, uid: u64) -> Option<(usize, String)> {
         let queue = self.queue.as_ref()?;
         queue.next.iter().position(|item| item.uid == uid).map(|index| (index, queue.next[index].track.uri.clone()))
@@ -3157,9 +3157,9 @@ impl Core {
     }
 }
 
-// ---- свободные функции (перенос из app.rs) -----------------------------------------------------
+// ---- free functions (ported from app.rs) -----------------------------------------------------
 
-/// Индекс после ручных строк и до строк контекста.
+/// The index after the manual rows and before the context rows.
 pub fn end_of_queued_rows(rows: &[QItem], manual: &[String]) -> usize {
     end_of(rows.iter().map(QItem::uri), manual)
 }
@@ -3190,7 +3190,7 @@ fn playable(item: &TrackItem) -> bool {
     item.available && !item.play_uri().is_empty() && matches!(uri_kind(&item.play_uri()), Some("track" | "episode"))
 }
 
-/// Только играбельные строки; индекс выбранной (или следующей доступной) в этом списке.
+/// Playable rows only; the index of the selected (or next available) one in that list.
 fn playable_list(items: &[TrackItem], row: usize) -> (Vec<String>, usize) {
     let mut uris = Vec::new();
     let mut index = None;
@@ -3207,7 +3207,7 @@ fn playable_list(items: &[TrackItem], row: usize) -> (Vec<String>, usize) {
     (uris, index)
 }
 
-/// Один трек — как контекст (чтобы автоплей шёл от него); список с выбранной строкой не грузится перемешанным.
+/// A single track — like a context (so autoplay runs from it); a list with a selected row is not loaded shuffled.
 pub fn local_load(request: &PlayRequest, shuffle: bool) -> LoadSpec {
     let single_song = request.context_uri.is_none() && request.uris.len() == 1 && request.uris[0].contains(":track:");
     if single_song {
@@ -3218,7 +3218,7 @@ pub fn local_load(request: &PlayRequest, shuffle: bool) -> LoadSpec {
             ..LoadSpec::default()
         };
     }
-    // librespot перемешивает список и потом не находит выбранную строку — грузим ровно, shuffle после
+    // librespot shuffles the list and then cannot find the selected row — we load it straight, shuffle after
     let chosen = request.offset_uri.is_some() || request.offset_position.is_some();
     let list = request.context_uri.is_none();
     LoadSpec {
@@ -3234,7 +3234,7 @@ pub fn local_load(request: &PlayRequest, shuffle: bool) -> LoadSpec {
     }
 }
 
-/// Последний трек простого списка доигран — сид автоплея.
+/// The last track of a simple list has been played — the autoplay seed.
 pub fn autoplay_seed(list: Option<&[String]>, autoplay: bool, before: &LocalState, after: &LocalState) -> Option<String> {
     if !autoplay || !after.connected || after.playback != Playback::Stopped || before.playback != Playback::Playing {
         return None;
@@ -3247,7 +3247,7 @@ pub fn autoplay_seed(list: Option<&[String]>, autoplay: bool, before: &LocalStat
     near_end.then(|| track.uri.clone())
 }
 
-/// Не больше 500 URI, начиная с выбранной строки.
+/// No more than 500 URIs, starting from the selected row.
 pub fn cap_uris(uris: &[String], index: u32) -> (Vec<String>, u32) {
     if uris.len() <= MAX_LIST {
         return (uris.to_vec(), index);
@@ -3269,7 +3269,7 @@ fn error_is_no_device(error: Option<&str>) -> bool {
     error.is_some_and(|error| error == crate::engine::sink::NO_DEVICE)
 }
 
-/// Ошибка движка (LocalState.error — непереведённый английский, его сравнивает ядро) → текст интерфейса.
+/// An engine error (LocalState.error — untranslated English, the core compares it) → interface text.
 fn engine_error_text(error: &str) -> String {
     use crate::engine::{player, sink};
     if error == sink::NO_DEVICE {

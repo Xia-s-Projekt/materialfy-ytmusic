@@ -2,9 +2,9 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Меню по правому клику островка и виджета в панели задач: трек (любимые, плейлист, очередь, радио,
-// ссылка, переходы), управление воспроизведением, окно. Действия с треком выполняет главное окно
-// (Main.qml trackMenuAction) — те же, что в меню трека внутри приложения. Кладётся в окно: anchors.fill.
+// Right-click menu of the island and the taskbar widget: track (favorites, playlist, queue, radio,
+// link, navigation), playback control, window. Track actions are performed by the main window
+// (Main.qml trackMenuAction) — the same as in the in-app track menu. Placed in the window: anchors.fill.
 Item {
     id: root
 
@@ -92,12 +92,12 @@ Item {
             case "addqueue":
             case "radio:track":
             case "repeat":
-                // делаются на месте — окно поднимать незачем
+                // are performed in place — no need to raise the window
                 if (root.mainWindow)
                     root.mainWindow.trackMenuAction(id, Player.track, item)
                 break
             default:
-                // переходы, новый плейлист — в главном окне; добавить в плейлист и ссылки — тоже через него
+                // navigation, new playlist — in the main window; add to playlist and links — also through it
                 if (id.startsWith("goto:") || id === "playlist:new")
                     WindowShell.raiseMain()
                 if (root.mainWindow)

@@ -1,5 +1,5 @@
-//! Модели Web API → нейтральные элементы md3-model для QML.
-//! Размеры обложек (how-it-connects.md): сетки/строки — ~300 px, шапки — 640 px.
+//! Web API models → neutral md3-model items for QML.
+//! Cover sizes (how-it-connects.md): grids/rows — ~300 px, headers — 640 px.
 use md3_model as m;
 
 use crate::models;
@@ -8,12 +8,12 @@ use crate::util::{strip_html, uri_id, uri_kind};
 pub const COVER_PX: u32 = 300;
 pub const COVER_LARGE_PX: u32 = 640;
 
-/// URL обложки ближайшего размера, "" — нет.
+/// Cover URL of the nearest size, "" — none.
 pub fn cover(images: &[models::Image], px: u32) -> String {
     models::pick_image(images, px).unwrap_or_default().to_owned()
 }
 
-/// id из поля или из URI нужного вида.
+/// id from the field or from a URI of the right kind.
 fn id_or_uri(id: Option<&str>, uri: &str, kind: &str) -> String {
     id.filter(|id| !id.is_empty())
         .or_else(|| (uri_kind(uri) == Some(kind)).then(|| uri_id(uri)).flatten())
@@ -31,7 +31,7 @@ fn uri_or(uri: &str, kind: &str, id: &str) -> String {
     }
 }
 
-/// «2024-03-15» → 2024; нет даты или мусор → 0.
+/// "2024-03-15" → 2024; no date or garbage → 0.
 fn year(date: Option<&str>) -> i64 {
     date.and_then(|date| date.get(..4)).and_then(|year| year.parse().ok()).unwrap_or(0)
 }
@@ -77,7 +77,7 @@ pub fn track_item(track: &models::Track) -> m::TrackItem {
     }
 }
 
-/// Выпуск как строка трека (isEpisode = true).
+/// An episode as a track row (isEpisode = true).
 pub fn episode_track(episode: &models::Episode) -> m::TrackItem {
     let show = episode.show.as_ref();
     let show_name = show.map(|show| show.name.clone()).unwrap_or_default();
@@ -106,7 +106,7 @@ pub fn episode_track(episode: &models::Episode) -> m::TrackItem {
     }
 }
 
-/// Обложка выпуска, иначе — шоу.
+/// The episode's cover, otherwise the show's.
 fn episode_covers(episode: &models::Episode, show: Option<&models::Show>) -> (String, String) {
     let images = if episode.images.is_empty() {
         show.map(|show| show.images.as_slice()).unwrap_or_default()
@@ -116,7 +116,7 @@ fn episode_covers(episode: &models::Episode, show: Option<&models::Show>) -> (St
     (cover(images, COVER_PX), cover(images, COVER_LARGE_PX))
 }
 
-/// Элемент плейлиста/очереди/истории: трек или выпуск; локальные файлы → None.
+/// A playlist/queue/history item: a track or an episode; local files → None.
 pub fn playable_item(item: &models::PlayableItem) -> Option<m::TrackItem> {
     match item {
         models::PlayableItem::Track(track) if track.is_local || uri_kind(&track.uri) == Some("local") => None,
@@ -125,7 +125,7 @@ pub fn playable_item(item: &models::PlayableItem) -> Option<m::TrackItem> {
     }
 }
 
-/// Строка плейлиста с addedAt/addedBy (у Web API в added_by только id пользователя).
+/// A playlist row with addedAt/addedBy (in the Web API added_by carries only the user id).
 pub fn playlist_entry(entry: &models::PlaylistItem) -> Option<m::TrackItem> {
     if entry.is_local {
         return None;
@@ -136,7 +136,7 @@ pub fn playlist_entry(entry: &models::PlaylistItem) -> Option<m::TrackItem> {
     Some(item)
 }
 
-/// «Любимые»: трек с временем добавления.
+/// "Liked": a track with the time it was added.
 pub fn saved_track(saved: &models::SavedTrack) -> m::TrackItem {
     let mut item = track_item(&saved.track);
     item.added_at = saved.added_at.clone().unwrap_or_default();
@@ -173,7 +173,7 @@ pub fn album_item(album: &models::Album) -> m::AlbumItem {
     }
 }
 
-/// AlbumData.info: duration — сумма треков (`tracks`, иначе вложенная страница альбома).
+/// AlbumData.info: duration is the sum of the tracks (`tracks`, otherwise the album's nested page).
 pub fn album_info(album: &models::Album, tracks: &[models::Track]) -> m::AlbumInfo {
     let nested = album.tracks.as_ref().map(|page| page.items.as_slice()).unwrap_or_default();
     let tracks = if tracks.is_empty() { nested } else { tracks };
@@ -201,8 +201,8 @@ pub fn album_info(album: &models::Album, tracks: &[models::Track]) -> m::AlbumIn
     }
 }
 
-/// Строка правообладателя с префиксом по типу: C → «© …», P → «℗ …». Свои префиксы текста («(P) 2013 …»,
-/// «℗ 2013 …», «© …») снимаются, чтобы знак не повторялся; пустой текст — пустая строка.
+/// A copyright line with a prefix by type: C → "© …", P → "℗ …". The text's own prefixes ("(P) 2013 …",
+/// "℗ 2013 …", "© …") are stripped so the sign is not repeated; empty text is an empty string.
 pub fn copyright_line(kind: &str, text: &str) -> String {
     let mut rest = text.trim();
     loop {
@@ -223,7 +223,7 @@ pub fn copyright_line(kind: &str, text: &str) -> String {
     format!("{mark} {rest}")
 }
 
-/// Строки правообладателей (тип, текст) — без пустых и повторов, © перед ℗.
+/// Copyright lines (type, text) — without empty ones and duplicates, © before ℗.
 pub fn copyright_lines<'a>(items: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<String> {
     let mut lines: Vec<(u8, String)> = Vec::new();
     for (kind, text) in items {
@@ -258,7 +258,7 @@ pub fn artist_info(artist: &models::Artist, followed: bool) -> m::ArtistInfo {
     m::ArtistInfo { item: artist_item(artist), listeners: 0, followed, ..Default::default() }
 }
 
-/// `me` — id аккаунта (для ownerId/canEdit; права из rootlist уточняет LibraryService).
+/// `me` — the account id (for ownerId/canEdit; LibraryService refines the rights from rootlist).
 pub fn playlist_item(playlist: &models::Playlist, me: Option<&m::AccountId>) -> m::PlaylistItem {
     let playlist_id = id_or_uri(Some(&playlist.id), &playlist.uri, "playlist");
     let owned = me.is_some_and(|me| playlist.owned_by(me.as_str()));
@@ -299,7 +299,7 @@ pub fn show_item(show: &models::Show) -> m::ShowItem {
     }
 }
 
-/// `show` — когда выпуск пришёл без вложенного шоу (страница шоу).
+/// `show` — when the episode arrived without a nested show (the show page).
 pub fn episode_item(episode: &models::Episode, show: Option<&models::Show>) -> m::EpisodeItem {
     let show = episode.show.as_ref().or(show);
     let episode_id = id_or_uri(Some(&episode.id), &episode.uri, "episode");
@@ -323,7 +323,7 @@ pub fn episode_item(episode: &models::Episode, show: Option<&models::Show>) -> m
     }
 }
 
-/// `this_device_id` — id Connect-устройства этого ПК (isThisComputer).
+/// `this_device_id` — the id of this PC's Connect device (isThisComputer).
 pub fn device_item(device: &models::Device, this_device_id: Option<&str>) -> m::DeviceItem {
     let id = device.id.clone().unwrap_or_default();
     m::DeviceItem {

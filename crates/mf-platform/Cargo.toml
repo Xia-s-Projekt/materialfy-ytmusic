@@ -1,6 +1,6 @@
 [package]
 name = "mf-platform"
-description = "Платформа: каталоги, настройки, MPRIS и единственный экземпляр"
+description = "Platform: catalogs, settings, MPRIS and a single instance"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

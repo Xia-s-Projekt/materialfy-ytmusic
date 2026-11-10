@@ -1,15 +1,15 @@
 import QtQuick
 
-// Индикатор загрузки MD3 Expressive: фигура морфится по кругу пресетов и вращается.
-// Работает только пока виден (running && visible), иначе не тратит кадры.
+// MD3 Expressive loading indicator: the shape morphs through a cycle of presets and rotates.
+// It only runs while visible (running && visible), otherwise it costs no frames.
 Item {
     id: root
 
     property bool running: true
-    property bool contained: false        // подложка-круг (вариант «contained»)
+    property bool contained: false        // circular backing (the "contained" variant)
     property real size: 48
     property color color: contained ? Theme.fgPrimaryContainer : Theme.primary
-    // reduced motion — статичная фигура
+    // reduced motion — a static shape
     readonly property bool active: running && visible && Theme.reducedMotion !== true
 
     readonly property var sequence: ["cookie9", "pentagonish", "pill", "sunny", "cookie4", "circle", "flower6"]
@@ -32,8 +32,8 @@ Item {
         height: width
         color: root.color
         samples: 72
-        // программный рендер: фигуры сменяются без морфа, вращение — по часам Ticker (~30 Гц), а не в каждом
-        // кадре монитора: кадр там рисует процессор, а индикатор крутится всё время загрузки
+        // software rendering: shapes swap without a morph, rotation runs off the Ticker clock (~30 Hz) rather than every
+        // monitor frame: the CPU draws each frame there, and the indicator spins for the whole load
         duration: Theme.lowPower ? 0 : 500
         overshoot: 1.2
         shape: root._shapeAt(root._i)
@@ -61,7 +61,7 @@ Item {
 
     function _shapeAt(i) {
         const name = sequence[i]
-        // фигуры, которых нет в пресетах, описываем на месте
+        // shapes not in the presets are described inline
         if (name === "pentagonish")
             return { kind: "flower", n: 5, depth: 0.16, p: 3 }
         if (name === "pill")

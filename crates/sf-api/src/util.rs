@@ -1,4 +1,4 @@
-//! URI-хелперы Spotify и мелочи (перенос из spotifast/src/util.rs; форматирование — в QML).
+//! Spotify URI helpers and small things (ported from spotifast/src/util.rs; formatting lives in QML).
 
 pub fn uri_id(uri: &str) -> Option<&str> {
     uri.rsplit(':').next().filter(|id| !id.is_empty())
@@ -10,7 +10,7 @@ pub fn uri_kind(uri: &str) -> Option<&str> {
     parts.next()
 }
 
-/// Станция Spotify по треку, плейлисту, альбому или исполнителю.
+/// A Spotify station for a track, playlist, album or artist.
 pub fn station_uri(seed: &str) -> Option<String> {
     let kind = uri_kind(seed)?;
     let id = uri_id(seed)?;
@@ -18,7 +18,7 @@ pub fn station_uri(seed: &str) -> Option<String> {
         .then(|| format!("spotify:station:{kind}:{id}"))
 }
 
-/// Сид станции (обратное к station_uri).
+/// Station seed (the inverse of station_uri).
 pub fn station_seed(station: &str) -> Option<String> {
     let seed = format!("spotify:{}", station.strip_prefix("spotify:station:")?);
     station_uri(&seed).is_some().then_some(seed)
@@ -31,7 +31,7 @@ pub fn open_spotify_url(uri: &str) -> Option<String> {
     Some(format!("https://open.spotify.com/{kind}/{id}"))
 }
 
-/// Сид из QML-формы "artist:ID" | "track:ID" | "album:ID" | "playlist:ID" или полного URI → spotify:<kind>:<id>.
+/// A seed from the QML form "artist:ID" | "track:ID" | "album:ID" | "playlist:ID" or a full URI → spotify:<kind>:<id>.
 pub fn seed_uri(seed: &str) -> Option<String> {
     if seed.starts_with("spotify:") {
         return Some(seed.to_owned());
@@ -40,7 +40,7 @@ pub fn seed_uri(seed: &str) -> Option<String> {
     matches!(kind, "track" | "artist" | "album" | "playlist").then(|| format!("spotify:{kind}:{id}"))
 }
 
-/// Убирает HTML из описаний плейлистов/выпусков.
+/// Strips HTML from playlist/episode descriptions.
 pub fn strip_html(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut in_tag = false;
@@ -61,7 +61,7 @@ pub fn strip_html(text: &str) -> String {
         .replace("&gt;", ">")
 }
 
-/// Атомарная замена файла: запись во временный рядом + замена (на Windows — MoveFileEx).
+/// Atomic file replacement: write to a temporary file next to it + replace (MoveFileEx on Windows).
 pub fn replace_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
@@ -78,13 +78,13 @@ pub fn replace_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()>
     written
 }
 
-/// Атомарно ставит `temporary` на место `path`.
+/// Atomically puts `temporary` in place of `path`.
 #[cfg(not(windows))]
 pub fn move_over(temporary: &std::path::Path, path: &std::path::Path) -> std::io::Result<()> {
     std::fs::rename(temporary, path)
 }
 
-/// Атомарно ставит `temporary` на место `path`.
+/// Atomically puts `temporary` in place of `path`.
 #[cfg(windows)]
 pub fn move_over(temporary: &std::path::Path, path: &std::path::Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
@@ -92,7 +92,7 @@ pub fn move_over(temporary: &std::path::Path, path: &std::path::Path) -> std::io
 
     let temporary: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
     let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    // SAFETY: обе строки — нуль-терминированные UTF-16, живут до конца вызова.
+    // SAFETY: both strings are null-terminated UTF-16 and live until the end of the call.
     let moved = unsafe {
         MoveFileExW(temporary.as_ptr(), path.as_ptr(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)
     };

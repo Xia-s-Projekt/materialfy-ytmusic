@@ -4,11 +4,11 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// «Слушать на этом компьютере»: сессия librespot (scope streaming, ответ на 127.0.0.1:8898), после неё
-// компьютер — устройство Spotify Connect. С Premium это и есть основной вход (включается при входе);
-// отдельным шагом — только после входа без Premium (Web API). Без Web API «Отключить» = «Выйти».
-// Слева — hero по Auth.playbackState, справа — плашка Premium / «Применить» и параметры движка.
-// Уже 760 px — одна колонка.
+// "Listen on this computer": librespot session (streaming scope, response on 127.0.0.1:8898), after it
+// the computer is a Spotify Connect device. With Premium this is also the main entry point (enabled at login);
+// a separate step only after logging in without Premium (Web API). Without Web API "Disconnect" = "Sign out".
+// Left — hero driven by Auth.playbackState, right — Premium badge / "Apply" and engine parameters.
+// Already 760 px — single column.
 Page {
     id: page
     title: I18n.t("Playback")
@@ -17,7 +17,7 @@ Page {
     property string pst: Auth.playbackState
     property bool premium: Auth.premium === true
     property bool signedIn: Auth.state === "signedIn"
-    // вход только через сессию: отключить её — значит выйти
+    // login only through the session: disconnecting it means signing out
     readonly property bool sessionOnly: Auth.webState !== "ready" && Auth.personalState !== "ready"
     readonly property bool free: signedIn && (!premium || pst === "premiumRequired")
     readonly property string mode: !signedIn ? "signedOut"
@@ -47,7 +47,7 @@ Page {
         const tenths = Math.round(mb / 1024 * 10)
         return I18n.t("{0} GB", tenths % 10 ? I18n.decimal(tenths / 10, 1) : tenths / 10)
     }
-    // Тексты ошибок переведены в Rust — подсказку выбираем по стабильному коду (Auth.playbackErrorCode)
+    // Error texts are translated in Rust — the hint is picked by a stable code (Auth.playbackErrorCode)
     function _errorHint(text) {
         const code = text !== "" ? (Auth.playbackErrorCode ?? "") : ""
         if (code === "otherAccount") {
@@ -62,7 +62,7 @@ Page {
         return ""
     }
 
-    // Строка статуса и действия меняются сквозным затуханием
+    // The status line and the actions change with a cross-fade
     property string shownMode: mode
     onModeChanged: {
         if (_instant || !visible) {
@@ -89,7 +89,7 @@ Page {
         color: Qt.alpha(Theme.outlineVariant, 0.6)
     }
 
-    // Узкое окно, Free: плашка — над hero
+    // Narrow window, Free: the badge sits above the hero
     PremiumNotice {
         visible: !page.wide && page.free
         Layout.fillWidth: true
@@ -104,11 +104,11 @@ Page {
         // ================= Hero =================
         Rectangle {
             id: hero
-            // Free в одну колонку: вместо hero — плашка Premium сверху
+            // Free in a single column: the Premium badge on top instead of the hero
             visible: page.wide || !page.free
             Layout.alignment: Qt.AlignTop
             Layout.fillWidth: !page.wide
-            // в две колонки hero тянется до низа колонки настроек, действия прижаты к низу
+            // in two columns the hero stretches to the bottom of the settings column, the actions pinned to the bottom
             Layout.fillHeight: page.wide
             Layout.preferredWidth: page.wide ? 400 : -1
             implicitHeight: heroCol.implicitHeight + 48
@@ -194,7 +194,7 @@ Page {
                     lineHeight: 1.25
                 }
 
-                // Что даёт воспроизведение здесь
+                // What playing here gives you
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: 4
@@ -225,7 +225,7 @@ Page {
                     }
                 }
 
-                // Статус и действия по состоянию
+                // Status and actions by state
                 ColumnLayout {
                     id: status
                     Layout.fillWidth: true
@@ -233,7 +233,7 @@ Page {
                     visible: ["authorizing", "connecting", "done", "error"].indexOf(page.shownMode) >= 0
                     spacing: 12
 
-                    // Ждём браузер / подключаемся / подключено
+                    // Waiting for the browser / connecting / connected
                     Rectangle {
                         visible: page.shownMode === "authorizing" || page.shownMode === "connecting" || page.shownMode === "done"
                         Layout.fillWidth: true
@@ -317,7 +317,7 @@ Page {
                         }
                     }
 
-                    // Ошибка
+                    // Error
                     Rectangle {
                         visible: page.shownMode === "error"
                         Layout.fillWidth: true
@@ -417,7 +417,7 @@ Page {
                     Button {
                         visible: page.shownMode === "setup" || page.shownMode === "free" || page.shownMode === "error"
                         text: I18n.t("Later")
-                        height: 56      // по центру строки рядом с кнопкой size "m"
+                        height: 56      // centred on the line next to the size "m" button
                         style: "text"
                         onClicked: page._later()
                     }
@@ -425,7 +425,7 @@ Page {
             }
         }
 
-        // ================= Плашки и настройки =================
+        // ================= Badges and settings =================
         ColumnLayout {
             Layout.alignment: Qt.AlignTop
             Layout.fillWidth: true
@@ -441,7 +441,7 @@ Page {
                 shown: page.mode === "done" && Settings.engineRestartPending === true
             }
 
-            // Заголовок и плотная карточка строк с разделителями
+            // Heading and a dense card of rows with separators
             RowLayout {
                 spacing: 8
                 opacity: devCard.opacity
@@ -546,7 +546,7 @@ Page {
                         Row {
                             spacing: 12
                             Slider {
-                                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                                wheelEnabled: false     // the wheel scrolls the page instead of changing the setting
                                 id: cacheSlider
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: 168
@@ -557,7 +557,7 @@ Page {
                                 handleHeight: 28
                                 value: Settings.audioCacheMb
                                 valueText: v => page._cacheText(v)
-                                // сохраняем при отпускании, а не на каждом шаге перетаскивания
+                                // save on release, not on every drag step
                                 property int _pending: Settings.audioCacheMb
                                 onMoved: v => _pending = Math.round(v)
                                 onPressedChanged: if (!pressed && _pending !== Settings.audioCacheMb) Settings.audioCacheMb = _pending

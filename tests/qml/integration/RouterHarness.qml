@@ -1,11 +1,11 @@
-// Сценарии навигации Router на настоящем мосту (Md3-синглтоны из приложения):
+// Router navigation scenarios on the real bridge (Md3 singletons from the app):
 //   QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
 //     target/release/materialfy --offline --new-instance --qml tests/qml/integration/RouterHarness.qml
-// 1. Загрузка LibraryPage (дубликат метода prewarmEntry раньше валил весь файл).
-// 2. reset("settings") из плейлиста: settings — keepAlive-страница, её живой экземпляр в глубине
-//    стека; reset обязан заменить стек (depth 1, current settings), а не потеряться.
-// 3. Клик во время hover-прогрева той же страницы: прогрев повышается до forward-перехода.
-// Итог — SMOKE-RESULT PASS/FAIL.
+// 1. Loading LibraryPage (a duplicate of the prewarmEntry method used to bring down the whole file).
+// 2. reset("settings") from a playlist: settings is a keepAlive page whose live instance sits deep
+//    in the stack; reset must replace the stack (depth 1, current settings), not get lost.
+// 3. A click during hover-preloading of the same page: the preload is upgraded to a forward transition.
+// Result — SMOKE-RESULT PASS/FAIL.
 import QtQuick
 import QtQuick.Controls.Basic
 import Md3
@@ -33,8 +33,8 @@ ApplicationWindow {
         id: router
         anchors.fill: parent
         keepAliveSlots: 6
-        // settings обязана быть keepAlive-страницей: иначе сценарий 2 строит свежую страницу
-        // и проходит даже с ломаным reset (in-stack _kept путь не проверяется)
+        // settings must be a keepAlive page: otherwise scenario 2 builds a fresh page
+        // and passes even with a broken reset (the in-stack _kept path is not checked)
         keepAlive: ["home", "settings"]
         pages: ({
             home: Qt.resolvedUrl(Qt.resolvedUrl("../../../src/materialfy/qml/app/pages/HomePage.qml")),
@@ -45,7 +45,7 @@ ApplicationWindow {
         Component.onCompleted: reset("home")
     }
 
-    // Сценарий 1: LibraryPage грузится (мост Library настоящий)
+    // Scenario 1: LibraryPage loads (the Library bridge is real)
     Timer { interval: 400; running: true; onTriggered: {
         let loaded = false
         try {
@@ -58,9 +58,9 @@ ApplicationWindow {
         }
         check("library page compiles", loaded)
 
-        // Сценарий 2: reset на keepAlive-страницу, чей экземпляр жив в глубине стека.
-        // Предварительно открываем settings (уходит в _kept), возвращаемся на home, открываем
-        // плейлист, затем reset("settings").
+        // Scenario 2: reset to a keepAlive page whose instance is alive deep in the stack.
+        // First open settings (it goes into _kept), go back to home, open
+        // a playlist, then reset("settings").
         router.reset("home")
         Qt.callLater(runScenario2)
     } }
@@ -71,7 +71,7 @@ ApplicationWindow {
     }
     Timer { id: timerToScenario2b; interval: 1200; onTriggered: runScenario2b() }
     function runScenario2b() {
-        // settings инкубировалась асинхронно и живёт в _kept; уходим на home и в плейлист
+        // settings was incubated asynchronously and lives in _kept; go to home and into a playlist
         router.reset("home")
         router.push("playlist", { playlistId: "r", playlistTitle: "R", cover: "" })
         timerToScenario2c.restart()
@@ -79,7 +79,7 @@ ApplicationWindow {
     Timer { id: timerToScenario2c; interval: 900; onTriggered: runScenario2c() }
     function runScenario2c() {
         router.reset("settings")
-        // инкубация settings асинхронная — check после её завершения
+        // settings incubation is asynchronous — check after it completes
         timerToCheck2.restart()
 
     }

@@ -1,8 +1,8 @@
-//! Библиотека (исполнитель «services-core»): «Любимые треки» (liked.rs: кэш 15 мин, намерения поверх лагающих
-//! чтений), плейлисты из rootlist сессии (папки, права, шапки), редактирование плейлиста (сразу через сессию —
-//! data/playlist_session.rs, Web API — запасной путь; откат по ошибке),
-//! альбомы/исполнители/подкасты/выпуски, локальные закрепления и «не рекомендовать».
-//! Правила перенесены из spotifast (src/app.rs).
+//! The library (a "services-core" implementor): "Liked Songs" (liked.rs: 15 min cache, intents on top of lagging
+//! reads), playlists from the session's rootlist (folders, permissions, headers), playlist editing (straight through the session —
+//! data/playlist_session.rs, the Web API is a fallback path; rollback on error),
+//! albums/artists/podcasts/episodes, local pins and "do not recommend".
+//! The rules are ported from spotifast (src/app.rs).
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, Weak};
 
@@ -27,17 +27,17 @@ use sf_player::engine::session_playlists::Change;
 use crate::history::HistoryService;
 use crate::lock;
 
-/// Страница Liked Songs у Web API.
+/// The Liked Songs page at the Web API.
 pub const CHUNK: usize = 50;
 
-/// Запись в плейлист — не больше 100 URI за запрос.
+/// A write to a playlist — no more than 100 URIs per request.
 const WRITE_CHUNK: usize = 100;
-/// Потолок страниц одного плейлиста (по 50).
+/// The page ceiling for one playlist (50 at a time).
 const MAX_PLAYLIST_PAGES: u32 = 200;
-/// Потолок страниц раздела библиотеки.
+/// The page ceiling for a library section.
 const MAX_SECTION_PAGES: u32 = 100;
-/// Паузы перед самостоятельными повторами, когда раздел не загрузился ни через сессию, ни через
-/// Web API (сессия не ответила вовремя, Web API под 429): пустой список без повтора — тупик.
+/// Pauses before automatic retries when a section loaded neither through the session nor through the
+/// Web API (the session did not answer in time, the Web API under 429): an empty list with no retry — a dead end.
 const AUTO_RETRIES: [std::time::Duration; 2] =
     [std::time::Duration::from_secs(15), std::time::Duration::from_secs(60)];
 
@@ -45,11 +45,11 @@ const AUTO_RETRIES: [std::time::Duration; 2] =
 pub enum FeedbackKind {
     Like,
     Unlike,
-    /// локальный «не рекомендовать» (у Spotify нет API)
+    /// local "do not recommend" (Spotify has no API for it)
     Dislike,
 }
 
-/// Раздел библиотеки для items(kind, …).
+/// A library section for items(kind, …).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LibraryKind {
     #[default]
@@ -71,7 +71,7 @@ impl LibraryKind {
     }
 }
 
-/// Шапка плейлиста (PlaylistPage): описание, владелец, видимость, права, длительность.
+/// A playlist header (PlaylistPage): description, owner, visibility, permissions, duration.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PlaylistInfo {
     pub item: PlaylistItem,
@@ -79,28 +79,28 @@ pub struct PlaylistInfo {
     pub followed: bool,
 }
 
-// события короткоживущие (broadcast), упаковка трека в Box только усложнила бы сопоставление в мостах
+// events are short-lived (broadcast), boxing a track would only complicate matching in the bridges
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum LibraryEvent {
     Playlists(ListChange<PlaylistItem>),
     Liked(ListChange<TrackItem>),
     PlaylistTracks { id: PlaylistId, change: ListChange<TrackItem> },
-    /// изменилась шапка плейлиста (название/описание/обложка/видимость/права)
+    /// a playlist header changed (name/description/cover/visibility/permissions)
     PlaylistInfo(PlaylistId),
     Albums(ListChange<AlbumItem>),
     Artists(ListChange<ArtistItem>),
     Shows(ListChange<ShowItem>),
     Episodes(ListChange<EpisodeItem>),
-    /// дерево rootlist/закрепления/сортировка — перечитать entries()
+    /// the rootlist/pins/sort tree — re-read entries()
     EntriesChanged,
     LikesChanged,
-    /// сохранённость альбомов/шоу/выпусков/подписки
+    /// saved state of albums/shows/episodes/follows
     SavedChanged,
     ErrorChanged,
     PinsChanged,
     Notice(String),
-    /// для радио (стоп-лист) и истории
+    /// for radio (the stop-list) and history
     Feedback { kind: FeedbackKind, track: TrackItem },
 }
 
@@ -121,35 +121,35 @@ struct PlaylistPage {
     snapshot: String,
     complete: bool,
     loading: bool,
-    /// идущее чтение: отменяется закрытием экрана или явным обновлением (записи это не трогает)
+    /// a running read: cancelled by closing the screen or an explicit refresh (writes are not touched by this)
     read: Option<tokio::task::AbortHandle>,
     pending_writes: usize,
-    /// после записи перечитать (ошибка или чтение во время записи)
+    /// re-read after a write (an error or a read during the write)
     reload_after_write: bool,
-    /// snapshot_id из ответа последней записи: шапка со старым snapshot — устаревшая (перепроверка ≤ 3 раз)
+    /// snapshot_id from the last write's answer: a header with an old snapshot is stale (re-check ≤ 3 times)
     expected_snapshot: Option<String>,
 }
 
-/// Паузы перед перечитыванием шапки, пока Spotify не подтвердит snapshot записи.
+/// Pauses before re-reading the header until Spotify confirms the write's snapshot.
 const SNAPSHOT_RECHECKS: [std::time::Duration; 3] = [
     std::time::Duration::from_millis(1500),
     std::time::Duration::from_secs(3),
     std::time::Duration::from_secs(6),
 ];
 
-/// Что делать при открытии плейлиста (записи уже нет: её проверяет вызывающий).
+/// What to do when opening a playlist (there is no write any more: the caller checks it).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OpenAction {
-    /// кэш уже на месте и показан в модели — ни Reset, ни перечитывания
+    /// the cache is already in place and shown in the model — neither Reset nor a re-read
     Idle,
-    /// чтение уже идёт: не дублируем его и не сбрасываем модель, новому экрану остаётся Loading(true)
+    /// a read is already running: we do not duplicate it and do not reset the model, the new screen is left with Loading(true)
     Loading,
-    /// перечитать
+    /// re-read
     Fetch,
 }
 
 impl PlaylistPage {
-    /// Шапка этого экрана уже сверена со snapshot: страница не может устареть незаметно.
+    /// This screen's header is already checked against the snapshot: the page cannot go stale unnoticed.
     fn header_confirmed(&self) -> bool {
         self.header.as_ref().is_some_and(|h| {
             let snapshot = h.snapshot_id.clone().unwrap_or_default();
@@ -169,20 +169,20 @@ impl PlaylistPage {
     }
 }
 
-/// Тот же аккаунт и то же поколение страницы: ответ чтения ещё «свой».
+/// The same account and the same page generation: the read's answer is still "ours".
 fn same_read(state: &State, id: &PlaylistId, generation: u64, page_generation: u64) -> bool {
     state.generation == generation
         && state.pages.get(id).is_some_and(|page| page.generation == page_generation)
 }
 
-/// То же, и записи не начались: их оптимистичные строки перечитывание не трогает.
+/// The same, and no writes have started: their optimistic rows are not touched by a re-read.
 fn read_is_current(state: &State, id: &PlaylistId, generation: u64, page_generation: u64) -> bool {
     same_read(state, id, generation, page_generation)
         && state.pages.get(id).is_some_and(|page| page.pending_writes == 0)
 }
 
-/// Кэш плейлиста и его перезаливка в модель уходят кусками: первый — Reset, дальше — Append.
-/// Один гигантский Reset не готовится и не применяется целиком; порядок и повторы строк сохраняются.
+/// The playlist cache and its replay into the model go in chunks: the first is Reset, after that Append.
+/// One giant Reset is neither prepared nor applied whole; row order and repeats are preserved.
 fn cached_events(id: &PlaylistId, rows: &[TrackItem]) -> Vec<LibraryEvent> {
     rows.chunks(CHUNK)
         .enumerate()
@@ -214,12 +214,12 @@ struct State {
     playlists_loading: bool,
     rootlist: Option<Rootlist>,
     rootlist_loading: bool,
-    /// список плейлистов взят из rootlist сессии — Web API его уже не перезаписывает
+    /// the playlist list is taken from the session's rootlist — the Web API no longer overwrites it
     session_list: bool,
-    /// что загрузилось без сессии librespot (вход раньше движка, через Web API) — повторить, когда сессия встанет
+    /// what loaded without a librespot session (sign-in before the engine, through the Web API) — repeat once the session comes up
     liked_without_session: bool,
     sections_without_session: HashSet<Section>,
-    /// самостоятельных повторов после ошибки за этот вход; повтор ждёт своей паузы
+    /// automatic retries after an error for this sign-in; a retry waits for its pause
     auto_retries: usize,
     auto_retry_pending: bool,
     pages: HashMap<PlaylistId, PlaylistPage>,
@@ -237,26 +237,26 @@ struct State {
     pins_revision: u64,
     hidden: HashSet<String>,
 
-    /// загруженные обложки, ещё не подтверждённые Spotify (id плейлиста →)
+    /// loaded covers not yet confirmed by Spotify (playlist id →)
     uploaded_covers: HashMap<String, UploadedCover>,
-    /// плейлисты, чья обложка — наш коллаж из первых строк (своей нет): после правок он пересобирается
+    /// playlists whose cover is our collage of the first rows (they have none of their own): it is rebuilt after edits
     mosaics: HashSet<String>,
     cover_requests: u64,
 }
 
 struct UploadedCover {
     request: u64,
-    /// file:// локальной копии ("" — копия не записалась)
+    /// file:// of the local copy ("" — the copy was not written)
     local_url: String,
-    /// адреса картинок до загрузки и отвергнутые сравнением
+    /// picture addresses before loading and the ones rejected by comparison
     previous_urls: Vec<String>,
 }
 
-/// Перепроверки обложки после загрузки (Spotify обрабатывает картинку не сразу).
+/// Cover re-checks after loading (Spotify does not process the picture at once).
 const COVER_RECHECKS: [std::time::Duration; 3] =
     [std::time::Duration::from_secs(3), std::time::Duration::from_secs(8), std::time::Duration::from_secs(20)];
 
-/// Картинка целиком (≤ 20 МБ), через общий клиент с прокси.
+/// The whole picture (≤ 20 MB), through the shared client with the proxy.
 async fn fetch_bytes(http: &sf_api::Http, url: &str) -> Result<Vec<u8>, String> {
     let client = http.client()?;
     let response = client
@@ -295,7 +295,7 @@ fn now_seconds() -> i64 {
     jiff::Timestamp::now().as_second()
 }
 
-/// Строка плейлиста; локальный файл — недоступная строка (позиции совпадают с сервером).
+/// A playlist row; a local file is an unavailable row (positions match the server's).
 fn playlist_row(item: &models::PlaylistItem, collaborative: bool) -> Option<TrackItem> {
     let playable = item.playable()?;
     let mut row = match playable {
@@ -324,7 +324,7 @@ fn uri_kind(uri: &str) -> &str {
     sf_api::util::uri_kind(uri).unwrap_or("")
 }
 
-/// Папка rootlist и её прямые дети.
+/// A rootlist folder and its direct children.
 #[derive(Clone, Debug, Default)]
 struct Folder {
     id: String,
@@ -334,7 +334,7 @@ struct Folder {
     children: Vec<String>,
 }
 
-/// Дерево rootlist: корень и папки.
+/// The rootlist tree: the root and folders.
 fn folder_tree(rootlist: &Rootlist) -> (Vec<String>, HashMap<String, Folder>) {
     let mut root = Vec::new();
     let mut folders: HashMap<String, Folder> = HashMap::new();
@@ -348,8 +348,8 @@ fn folder_tree(rootlist: &Rootlist) -> (Vec<String>, HashMap<String, Folder>) {
                     None => root.push(key),
                 }
             }
-            // папка внутри самой себя или уже встреченная дала бы цикл (и бесконечную рекурсию в collect_placed):
-            // её содержимое идёт в уже известную папку, а при вложении в себя — в текущую
+            // a folder inside itself or one already met would give a cycle (and infinite recursion in collect_placed):
+            // its contents go into the already known folder, and when nested in itself — into the current one
             RootlistEntry::FolderStart { id, .. } if stack.contains(id) || folders.get(id).is_some_and(|f| !f.id.is_empty()) => {
                 let into = if stack.contains(id) { stack.last().cloned().unwrap_or_default() } else { id.clone() };
                 stack.push(into);
@@ -375,20 +375,20 @@ fn folder_tree(rootlist: &Rootlist) -> (Vec<String>, HashMap<String, Folder>) {
     (root, folders)
 }
 
-/// Сводка «последнее добавленное/обновлённое» из строк всех разделов: без папок, новые сверху.
+/// A "last added/updated" summary from the rows of every section: without folders, newest first.
 fn merge_recent(mut all: Vec<LibraryEntry>, limit: usize, pins: &[String]) -> Vec<LibraryEntry> {
     all.retain(|entry| entry.kind != "folder");
-    // «последнее касание»: у плейлиста это добавление, у исполнителя — прослушивание
+    // "last touch": for a playlist it is an addition, for an artist — a listen
     let touched = |entry: &LibraryEntry| entry.added_at.clone().max(entry.played_at.clone());
-    // закреплённые — первыми в порядке закрепления: поле строки есть у всех сразу, порядок задаёт только список
+    // pinned ones first in pin order: the row field is there for all of them at once, only the list sets the order
     let pin_rank = |entry: &LibraryEntry| {
         pins.iter()
             .position(|uri| *uri == entry.uri)
             .map_or(if entry.pinned { 0 } else { usize::MAX }, |rank| rank + 1)
     };
     all.sort_by_cached_key(|entry| (pin_rank(entry), std::cmp::Reverse(touched(entry))));
-    // у плейлистов не бывает added_at, поэтому они всегда последние и могли выпасть из обрезки целиком:
-    // сперва берём закреплённые и самую свежую строку каждого вида, остальное добираем по времени
+    // playlists never have added_at, so they are always last and could fall out of the trim entirely:
+    // we take the pinned ones and the freshest row of each kind first, the rest is made up by time
     let mut picked: Vec<LibraryEntry> = Vec::new();
     let mut seen = HashSet::new();
     let mut kinds = HashSet::new();
@@ -412,7 +412,7 @@ fn merge_recent(mut all: Vec<LibraryEntry>, limit: usize, pins: &[String]) -> Ve
     picked
 }
 
-/// Сортировка строк экрана «Библиотека» (закреплённые — первыми в порядке закрепления).
+/// Sorting the rows of the "Library" screen (pinned ones first, in pin order).
 fn sort_entries(entries: &mut [LibraryEntry], sort: &str, pins: &[String]) {
     let pin_rank = |entry: &LibraryEntry| pins.iter().position(|uri| *uri == entry.uri).unwrap_or(usize::MAX);
     let liked_first = |entry: &LibraryEntry| entry.kind != "liked";
@@ -473,7 +473,7 @@ impl State {
         self.playlists_raw.iter().find(|pl| pl.id == id)
     }
 
-    /// Пересобрать строки плейлистов; изменение для модели.
+    /// Rebuild the playlist rows; a change for the model.
     fn rebuild_playlists(&mut self) -> Option<LibraryEvent> {
         let rows: Vec<PlaylistItem> = self.playlists_raw.iter().map(|pl| self.playlist_item(pl)).collect();
         let change = list_change(&self.playlists, &rows);
@@ -507,7 +507,7 @@ impl State {
         })
     }
 
-    /// Пересобрать «Любимые треки» из намерений; события для моделей.
+    /// Rebuild "Liked Songs" from the intents; events for the models.
     fn sync_liked(&mut self) -> Vec<LibraryEvent> {
         let mut events = Vec::new();
         self.liked.sync_view(&mut self.liked_view);
@@ -558,8 +558,8 @@ impl State {
         }
     }
 
-    /// Сохранённое — из прочитанных разделов; намерение снимается, когда чтение его подтвердило
-    /// (снятие — только по полному разделу).
+    /// Saved — from the sections that were read; an intent is cleared once a read confirmed it
+    /// (clearing — only on a full section).
     fn rebuild_saved(&mut self, complete: bool) {
         let mut saved: HashSet<String> = self.albums.iter().map(|(_, item)| item.uri.clone()).collect();
         saved.extend(self.artists.iter().map(|item| item.uri.clone()));
@@ -586,7 +586,7 @@ impl State {
         if item.track_count > 0 {
             subtitle.push_str(&format!(" · {}", mf_i18n::n(item.track_count, "{0} track", "{0} tracks")));
         }
-        // DJ — не плейлист: у него нет списка треков, он только запускается (как кнопка)
+        // DJ is not a playlist: it has no track list, it only starts (like a button)
         let dj = item.uri == crate::data::home_feed::DJ_URI;
         LibraryEntry {
             kind: if dj { "dj".to_owned() } else { "playlist".to_owned() },
@@ -672,8 +672,8 @@ impl State {
 }
 
 impl LibraryService {
-    /// SignedIn → refresh, SignedOut → очистка (поздние ответы старого аккаунта отбрасываются).
-    /// history — сортировка «Недавно прослушанные» и LibraryEntry.played_at (recent_contexts).
+    /// SignedIn → refresh, SignedOut → clear (late answers from the old account are discarded).
+    /// history — the "Recently played" sort and LibraryEntry.played_at (recent_contexts).
     pub fn new(
         rt: Handle,
         auth: Arc<AuthService>,
@@ -728,8 +728,8 @@ impl LibraryService {
                         if !service.player.local_playback().is_ready() {
                             continue;
                         }
-                        // аккаунт сессии вход ставит по тому же событию — может и чуть позже этого
-                        // слушателя; без него перечитывание через сессию молча не начнётся
+                        // sign-in sets the session account on the same event — possibly a little later than this
+                        // listener; without it the re-read through the session would silently never start
                         service.spawn(|service| async move {
                             let api = service.auth.api();
                             for _ in 0..20 {
@@ -741,7 +741,7 @@ impl LibraryService {
                             service.reload_with_session();
                             let wanted = {
                                 let state = lock(&service.state);
-                                // список с диска (library_cache) — тоже повод: свежий rootlist заменит его
+                                // the list from disk (library_cache) — also a reason: a fresh rootlist will replace it
                                 state.account.is_some() && (state.rootlist.is_none() || !state.session_list)
                                     && !state.rootlist_loading
                             };
@@ -769,7 +769,7 @@ impl LibraryService {
         });
     }
 
-    /// Фоновое обновление: запасной Web API уступает страницам и не идёт в сеть, пока он ограничен.
+    /// A background refresh: the fallback Web API yields to pages and does not hit the network while it is limited.
     fn spawn_background<F>(&self, task: impl FnOnce(Arc<Self>) -> F + Send + 'static)
     where
         F: std::future::Future<Output = ()> + Send + 'static,
@@ -804,7 +804,7 @@ impl LibraryService {
         lock(&self.state).generation == generation
     }
 
-    /// Новый аккаунт (или выход): всё старое — сбросить, поздние ответы — отбросить.
+    /// A new account (or sign-out): drop everything old, discard late answers.
     fn switch_account(&self, account: Option<String>) {
         let events = {
             let mut state = lock(&self.state);
@@ -862,8 +862,8 @@ impl LibraryService {
         self.load_all(true);
     }
 
-    /// Раздел не загрузился ни через сессию, ни через Web API: ошибка (с «Повторить») уже на экране,
-    /// а через паузу — повтор сам, не больше AUTO_RETRIES раз за вход.
+    /// A section loaded neither through the session nor through the Web API: the error (with "Retry") is already on screen,
+    /// and after a pause the retry happens by itself, no more than AUTO_RETRIES times per sign-in.
     fn retry_later(&self, generation: u64) {
         let pause = {
             let mut state = lock(&self.state);
@@ -905,14 +905,14 @@ impl LibraryService {
         let ids: Vec<PlaylistId> = lock(&self.state).pages.keys().cloned().collect();
         if force {
             for id in ids {
-                // явное обновление: идущие чтения перезапускаются, готовый кэш перечитывается
+                // an explicit refresh: running reads are restarted, the ready cache is re-read
                 self.refresh_playlist(id);
             }
         }
     }
 
-    /// Сессия встала: что загрузилось без неё (через Web API), перечитать через неё — один раз; плейлисты
-    /// дочитывает load_rootlist. Раздел, который ещё грузится, повторится по своему окончанию.
+    /// The session came up: whatever loaded without it (through the Web API) is re-read through it — once; playlists
+    /// are finished by load_rootlist. A section that is still loading will repeat when it finishes.
     fn reload_with_session(&self) {
         if route::account_session(&self.auth.api(), &self.player).is_none() {
             return;
@@ -938,7 +938,7 @@ impl LibraryService {
         }
     }
 
-    // --- «Любимые треки» ---------------------------------------------------------------------
+    // --- "Liked Songs" -----------------------------------------------------------------------
 
     fn load_liked(&self, force: bool) {
         let (generation, account) = {
@@ -978,7 +978,7 @@ impl LibraryService {
             }
             let events = lock(&service.state).sync_liked();
             service.send(events);
-            // сначала коллекция сессии (без квоты Web API); не смогла — дальше Web API с того же места
+            // the session collection first (no Web API quota); if it failed — the Web API next, from the same place
             let mut feed: Option<LikedFeed> = None;
             let mut feed_opened = false;
             loop {
@@ -1030,7 +1030,7 @@ impl LibraryService {
                             events.extend(state.sync_liked());
                             drop(state);
                             service.send(events);
-                            // сессия встала, пока шёл Web API, — повторить через неё
+                            // the session came up while the Web API was running — repeat through it
                             service.reload_with_session();
                             service.retry_later(generation);
                             return;
@@ -1086,7 +1086,7 @@ impl LibraryService {
     pub fn liked_loading(&self) -> bool {
         lock(&self.state).liked_loading
     }
-    /// По id трека или URI (рыночные дубли одной записи — один лайк).
+    /// By a track's id or URI (market duplicates of one record — one like).
     pub fn is_liked(&self, track_id_or_uri: &str) -> bool {
         lock(&self.state).is_liked(&known::track_uri(track_id_or_uri))
     }
@@ -1094,7 +1094,7 @@ impl LibraryService {
         lock(&self.state).likes_revision
     }
 
-    /// Оптимистично: UI сразу, откат + Notice при ошибке.
+    /// Optimistically: the UI at once, rollback + Notice on error.
     pub fn toggle_like(&self, track: TrackItem) {
         if track.is_episode {
             self.toggle_saved(track.play_uri());
@@ -1162,7 +1162,7 @@ impl LibraryService {
         });
     }
 
-    /// Локальный стоп-лист (HiddenTracks) + Feedback{Dislike}; если трек играет — next().
+    /// The local stop-list (HiddenTracks) + Feedback{Dislike}; if the track is playing — next().
     pub fn dislike(&self, track: TrackItem) {
         let uri = track.play_uri();
         let list = {
@@ -1189,7 +1189,7 @@ impl LibraryService {
         lock(&self.state).hidden.contains(uri)
     }
 
-    // --- плейлисты ---------------------------------------------------------------------------
+    // --- playlists ---------------------------------------------------------------------------
 
     fn load_playlists(&self) {
         let generation = {
@@ -1205,7 +1205,7 @@ impl LibraryService {
         self.send([LibraryEvent::Playlists(ListChange::Loading(true))]);
         self.spawn_background(move |service| async move {
             let api = service.auth.api();
-            // сначала rootlist сессии: шапки, папки и права одним чтением, без квоты Web API
+            // the session's rootlist first: headers, folders and permissions in one read, no Web API quota
             if let Some(library) = playlist_session::library(&api, &service.player, playlist_session::SESSION_WAIT).await {
                 service.adopt_library(library, generation);
                 return;
@@ -1280,8 +1280,8 @@ impl LibraryService {
         });
     }
 
-    /// Список плейлистов, дерево папок и права (приглашения) — из rootlist сессии librespot (сессия
-    /// подключилась, когда список уже взял Web API).
+    /// The playlist list, the folder tree and permissions (invitations) — from the librespot session's rootlist (the session
+    /// connected after the list was already taken by the Web API).
     fn load_rootlist(&self) {
         let generation = {
             let mut state = lock(&self.state);
@@ -1305,8 +1305,8 @@ impl LibraryService {
         });
     }
 
-    /// Принять список из rootlist: чего у сессии нет (имя владельца, коллаж), берётся из прежних шапок;
-    /// затем коллажи для плейлистов без своей обложки.
+    /// Accept the list from rootlist: what the session lacks (owner name, collage) is taken from the previous headers;
+    /// then collages for playlists without their own cover.
     fn adopt_library(&self, library: playlist_session::Library, generation: u64) {
         let (events, coverless, cached) = {
             let mut state = lock(&self.state);
@@ -1323,7 +1323,7 @@ impl LibraryService {
             let coverless: Vec<String> =
                 raw.iter().filter(|pl| pl.images.is_empty() && pl.track_total() > 0).map(|pl| pl.id.clone()).collect();
             state.playlists_raw = raw;
-            // дерево уходит на диск: когда сессия в следующий раз будет подниматься, библиотека уже видна
+            // the tree goes to disk: the next time the session comes up, the library is already visible
             let cached = library_cache::CachedLibrary::new(
                 library.rootlist.entries.clone(),
                 state.playlists_raw.clone(),
@@ -1353,8 +1353,8 @@ impl LibraryService {
         });
     }
 
-    /// Пока сессия поднимается (это может занять десятки секунд), показать дерево плейлистов с диска.
-    /// Свежий rootlist из сессии придёт позже и заменит его.
+    /// While the session comes up (it can take tens of seconds), show the playlist tree from disk.
+    /// A fresh rootlist from the session will arrive later and replace it.
     fn hydrate_from_cache(&self) {
         let (account, generation) = {
             let state = lock(&self.state);
@@ -1372,11 +1372,11 @@ impl LibraryService {
         });
     }
 
-    /// Принять кэш как список из сессии: те же события, дерево без прав на добавление (их даёт сессия).
+    /// Accept the cache as a list from the session: the same events, the tree without add permissions (the session gives them).
     fn adopt_cached(&self, cached: library_cache::CachedLibrary, generation: u64) {
         let events = {
             let mut state = lock(&self.state);
-            // сессия успела ответить первой — её список свежее кэша
+            // the session managed to answer first — its list is fresher than the cache
             if state.generation != generation || state.rootlist.is_some() {
                 return;
             }
@@ -1391,7 +1391,7 @@ impl LibraryService {
         self.send(events);
     }
 
-    /// Коллажи обложек (как у Web API) для плейлистов без своей обложки — через сессию.
+    /// Cover collages (as the Web API does) for playlists without their own cover — through the session.
     async fn fill_mosaics(&self, ids: Vec<String>, generation: u64) {
         use futures::StreamExt as _;
         let api = self.auth.api();
@@ -1432,9 +1432,9 @@ impl LibraryService {
         }
     }
 
-    /// Плейлист без своей обложки: коллаж из обложек первых строк `rows` (как у Web API) — и заново
-    /// после правок, когда первые строки сменились. Своя обложка (картинка в шапке) и только что
-    /// загруженная не трогаются.
+    /// A playlist without its own cover: a collage of the first `rows` covers (as the Web API does) — and again
+    /// after edits, when the first rows changed. Its own cover (the picture in the header) and a just
+    /// loaded one are not touched.
     fn refresh_mosaic(&self, id: &PlaylistId, rows: &[TrackItem]) {
         let events = {
             let mut state = lock(&self.state);
@@ -1480,13 +1480,13 @@ impl LibraryService {
         lock(&self.state).playlists_loading
     }
 
-    /// Открыть плейлист (сессия librespot для чужих, Web API для своих) → PlaylistTracks.
-    /// Без дублей: чтение уже идёт — не перезапускается; кэш уже показан — ни Reset, ни сети.
+    /// Open a playlist (a librespot session for others' playlists, the Web API for one's own) → PlaylistTracks.
+    /// Without duplicates: a read is already running — it is not restarted; the cache is already shown — neither Reset nor network.
     pub fn load_playlist(&self, id: PlaylistId) {
         self.open_playlist(id, false);
     }
 
-    /// Явное обновление (кнопка «Обновить», перечитывание после правок): идущее чтение отменяется.
+    /// An explicit refresh (the "Refresh" button, a re-read after edits): the running read is cancelled.
     pub fn refresh_playlist(&self, id: PlaylistId) {
         self.open_playlist(id, true);
     }
@@ -1511,8 +1511,8 @@ impl LibraryService {
             }
             (generation, page.generation, page.rows.is_empty(), account, action)
         };
-        // новому экрану (и модели, созданной позже чтения) нужно видеть, что чтение идёт; при Idle
-        // чтения нет — погасить зависший loading, если он остался от пропущенных событий
+        // a new screen (and a model created after the read) needs to see that a read is running; on Idle
+        // there is no read — clear a stuck loading if it is left over from missed events
         let loading = action != OpenAction::Idle;
         self.send([LibraryEvent::PlaylistTracks { id: id.clone(), change: ListChange::Loading(loading) }]);
         if action == OpenAction::Loading {
@@ -1525,7 +1525,7 @@ impl LibraryService {
                 service.fetch_playlist(task_id, generation, page_generation, cached_needed, account).await;
             }
         });
-        // чтение запоминается под своей генерацией: заменить его может только более новое
+        // a read is remembered under its own generation: only a newer one can replace it
         let mut state = lock(&self.state);
         if let Some(page) = state.pages.get_mut(&id)
             && page.generation == page_generation
@@ -1537,7 +1537,7 @@ impl LibraryService {
         }
     }
 
-    /// Экран закрылся: отменить чтение, которое больше никому не нужно (записи и воспроизведение не трогает).
+    /// The screen closed: cancel a read nobody needs any more (writes and playback are not touched).
     pub fn cancel_playlist(&self, id: &PlaylistId) {
         let mut state = lock(&self.state);
         let Some(page) = state.pages.get_mut(id) else { return };
@@ -1553,17 +1553,17 @@ impl LibraryService {
         }
         page.generation += 1;
         page.loading = false;
-        // loading при complete=true — это явное обновление (force) или перечитывание после правки;
-        // отмена не должна прятать намерение: иначе следующее открытие покажет старый кэш как Idle
+        // loading with complete=true is an explicit refresh (force) or a re-read after an edit;
+        // cancelling must not hide an intent: otherwise the next open shows the old cache as Idle
         page.complete = false;
         let event = LibraryEvent::PlaylistTracks { id: id.clone(), change: ListChange::Loading(false) };
         drop(state);
         self.send([event]);
     }
 
-    /// Модель моста может не видеть готовый кэш сервиса (новый мост, пропущенные события): перезалить
-    /// его кусками. События уходят в очередь под блокировкой состояния — чтение, начавшееся параллельно,
-    /// допишет свои куски после, устаревший Reset не догонит свежие строки.
+    /// A bridge's model may not see the service's ready cache (a new bridge, missed events): replay
+    /// it in chunks. Events go into a queue under the state lock — a read that started in parallel
+    /// will append its chunks after, a stale Reset will not catch up with the fresh rows.
     pub fn replay_playlist(&self, id: &PlaylistId) {
         let state = lock(&self.state);
         let Some(page) = state.pages.get(id) else { return };
@@ -1583,7 +1583,7 @@ impl LibraryService {
         account: String,
     ) {
         let service = self;
-        // быстрая проверка перед ожиданием сети; принятие шапок/страниц/финала сверяется ещё раз под тем же блоком
+        // a quick check before waiting for the network; accepting headers/pages/the final is checked again under the same lock
         let still = |service: &Self| {
             let state = lock(&service.state);
             read_is_current(&state, &id, generation, page_generation)
@@ -1597,7 +1597,7 @@ impl LibraryService {
                     return;
                 }
                 known::remember(cached.items.iter());
-                // кэш уходит кусками (первый Reset, дальше Append), а не одним гигантским Reset
+                // the cache goes in chunks (the first Reset, after that Append), not one giant Reset
                 {
                     let mut state = lock(&service.state);
                     if !read_is_current(&state, &id, generation, page_generation) {
@@ -1607,8 +1607,8 @@ impl LibraryService {
                     page.rows = cached.items.clone();
                     page.snapshot = cached.snapshot;
                     let events = cached_events(&id, &cached.items);
-                    // под той же блокировкой: replay шлёт синхронно под lock — окно между
-                    // unlock и send дало бы дубли поверх свежих строк
+                    // under the same lock: replay sends synchronously under lock — the window between
+                    // unlock and send would give duplicates on top of the fresh rows
                     service.send(events);
                 };
             }
@@ -1647,7 +1647,7 @@ impl LibraryService {
             if !still(&service) {
                 return;
             }
-            // ответ со snapshot до нашей записи не должен вернуть строки, которые запись уже изменила
+            // an answer with a snapshot from before our write must not return rows the write already changed
             let confirmed = {
                 let mut state = lock(&service.state);
                 if !read_is_current(&state, &id, generation, page_generation) {
@@ -1773,7 +1773,7 @@ impl LibraryService {
     pub fn playlist_info(&self, id: &PlaylistId) -> Option<PlaylistInfo> {
         lock(&self.state).playlist_info(id.as_str())
     }
-    /// Свой, совместный или по приглашению (rootlist).
+    /// Own, collaborative or by invitation (rootlist).
     pub fn can_edit(&self, id: &PlaylistId) -> bool {
         let state = lock(&self.state);
         state.header(id.as_str()).is_some_and(|header| state.can_edit_raw(&header))
@@ -1783,7 +1783,7 @@ impl LibraryService {
         lock(&self.state).header(id.as_str()).map(|header| header.name).unwrap_or_default()
     }
 
-    /// Строки для оптимистичной вставки: известные или дочитанные из каталога.
+    /// Rows for an optimistic insert: known ones or ones finished from the catalog.
     async fn resolve_rows(&self, uris: &[String], hint: Option<&TrackItem>) -> Vec<TrackItem> {
         let mut rows = Vec::with_capacity(uris.len());
         let unknown: Vec<String> = uris
@@ -1825,7 +1825,7 @@ impl LibraryService {
         rows
     }
 
-    /// Треки и выпуски по URI одной-двумя пачками метаданных сессии (без квоты Web API); чего нет — пусто.
+    /// Tracks and episodes by URI in one or two session metadata batches (no Web API quota); what is missing — empty.
     async fn session_rows(&self, uris: &[String]) -> HashMap<String, TrackItem> {
         let mut rows = HashMap::new();
         if uris.is_empty() {
@@ -1857,15 +1857,15 @@ impl LibraryService {
         rows
     }
 
-    /// Начать запись: оптимистичные строки (если плейлист загружен) и счётчик записей; delta — изменение
-    /// числа треков для незагруженного плейлиста.
+    /// Start a write: optimistic rows (if the playlist is loaded) and a write counter; delta — the change
+    /// in the track count for an unloaded playlist.
     fn begin_write(&self, id: &PlaylistId, delta: i64, edit: impl FnOnce(&mut Vec<TrackItem>)) -> Vec<LibraryEvent> {
         let mut state = lock(&self.state);
         let mut events = Vec::new();
         let page = state.pages.entry(id.clone()).or_default();
         page.pending_writes += 1;
         if page.loading {
-            // идущее чтение прервётся записью — перечитать после неё
+            // a running read will be interrupted by the write — re-read after it
             page.reload_after_write = true;
         }
         if page.complete || !page.rows.is_empty() {
@@ -1894,7 +1894,7 @@ impl LibraryService {
         events
     }
 
-    /// Закончить запись: новый snapshot или перечитать.
+    /// Finish a write: a new snapshot or a re-read.
     fn end_write(&self, id: &PlaylistId, result: Result<Option<String>, ApiError>, success: Option<String>) {
         let mosaic: Option<Option<Vec<TrackItem>>>;
         let reload = {
@@ -1917,7 +1917,7 @@ impl LibraryService {
                 }
             }
             let reload = page.pending_writes == 0 && std::mem::take(&mut page.reload_after_write);
-            // коллаж из первых строк — по строкам после правки (известны все) или заново через сессию
+            // the collage of the first rows — from the rows after the edit (all are known) or again through the session
             mosaic = (result.is_ok() && page.pending_writes == 0 && !reload).then(|| page.complete.then(|| page.rows.clone()));
             if page.pending_writes == 0 && !reload && page.complete && !page.snapshot.is_empty() {
                 let account = state.account.clone().unwrap_or_default();
@@ -1960,7 +1960,7 @@ impl LibraryService {
             None => {}
         }
         if reload {
-            // после записи: кэш уже не «актуален» — перечитать принудительно
+            // after the write: the cache is no longer "current" — re-read forcibly
             self.refresh_playlist(id.clone());
         }
     }
@@ -2065,16 +2065,16 @@ impl LibraryService {
         let uri = track.play_uri();
         self.add_rows(id, vec![uri], None, Some(track), true);
     }
-    /// Добавить в конец (AddTracksPanel); дубли разрешены.
+    /// Add at the end (AddTracksPanel); duplicates are allowed.
     pub fn add_tracks(&self, id: PlaylistId, uris: Vec<String>) {
         self.add_rows(id, uris, None, None, false);
     }
-    /// Вставить на позицию (Web API `position`; «Вернуть» после удаления строк).
+    /// Insert at a position (Web API `position`; "Undo" after removing rows).
     pub fn insert_tracks(&self, id: PlaylistId, uris: Vec<String>, position: usize) {
         self.add_rows(id, uris, Some(position), None, false);
     }
 
-    /// (uri, позиция) — по snapshot_id. Web API снимает все вхождения URI — строки снимаются так же.
+    /// (uri, position) — by snapshot_id. The Web API removes every occurrence of a URI — rows are removed the same way.
     pub fn remove_tracks(&self, id: PlaylistId, rows: Vec<(String, usize)>) {
         let mut uris: Vec<String> = Vec::new();
         for (uri, _) in rows {
@@ -2140,8 +2140,8 @@ impl LibraryService {
                     page.is_some_and(|page| page.pending_writes == 1),
                 )
             };
-            // позиции — в строках, которые видел пользователь: их ревизия — база (сервер перебазирует),
-            // если до переноса нет других незаконченных записей
+            // positions are in the rows the user saw: their revision is the base (the server rebases),
+            // if there are no other unfinished writes before the move
             let r#move = Change::Move { from: from as u32, insert_before, snapshot: snapshot.clone().filter(|_| alone) };
             let result = match playlist_session::change(&api, &service.player, id.as_str(), r#move).await {
                 Some(result) => result,
@@ -2161,7 +2161,7 @@ impl LibraryService {
         });
     }
 
-    /// Новый плейлист в начале библиотеки.
+    /// A new playlist at the start of the library.
     async fn create(&self, title: &str) -> Result<models::Playlist, ApiError> {
         let api = self.auth.api();
         let playlist = match playlist_session::create(&api, &self.player, title, false).await {
@@ -2224,7 +2224,7 @@ impl LibraryService {
         });
     }
 
-    /// Создать из списка URI (очередь, радио).
+    /// Create from a list of URIs (queue, radio).
     pub fn create_playlist_from(&self, title: String, uris: Vec<String>) {
         let title = if title.trim().is_empty() { mf_i18n::t("New playlist") } else { title.trim().to_owned() };
         let generation = self.generation();
@@ -2262,7 +2262,7 @@ impl LibraryService {
         });
     }
 
-    /// Поменять шапку оптимистично; ошибка — вернуть как было.
+    /// Change the header optimistically; on error — put it back as it was.
     fn edit_details(&self, id: PlaylistId, name: Option<String>, description: Option<String>, public: Option<bool>) {
         let change = |playlist: &mut models::Playlist| {
             if let Some(name) = &name {
@@ -2297,8 +2297,8 @@ impl LibraryService {
         self.spawn(move |service| async move {
             let api = service.auth.api();
             let access = api.playlist_access(id.as_str());
-            // название/описание — шапка плейлиста, видимость — строка rootlist; любая часть не вышла через
-            // сессию — всё через Web API (запись повторяемая)
+            // name/description — the playlist header, visibility — the rootlist row; if any part failed through the
+            // session — everything through the Web API (the write is repeatable)
             let in_session = async {
                 if name.is_some() || description.is_some() {
                     let details = Change::Details { name: name.clone(), description: description.clone(), collaborative: None };
@@ -2369,9 +2369,9 @@ impl LibraryService {
         self.edit_details(id, None, None, Some(public));
     }
 
-    /// JPEG ≤ 256 КБ (sf_api::playlist_cover), путь из FileDialog QML. После загрузки обложка видна сразу
-    /// (локальная копия); картинка Spotify принимается, только когда её пиксели совпали с выбранной
-    /// (до 3 перепроверок, как в spotifast).
+    /// JPEG ≤ 256 KB (sf_api::playlist_cover), a path from the QML FileDialog. Once loaded the cover is visible at once
+    /// (the local copy); Spotify's picture is accepted only when its pixels match the chosen one
+    /// (up to 3 re-checks, as in spotifast).
     pub fn upload_cover(&self, id: PlaylistId, path: std::path::PathBuf) {
         let path = match path.to_str().and_then(|text| text.strip_prefix("file:///").or(text.strip_prefix("file://"))) {
             Some(rest) if cfg!(windows) => std::path::PathBuf::from(rest),
@@ -2440,7 +2440,7 @@ impl LibraryService {
         });
     }
 
-    /// Перечитывать шапку, пока Spotify не отдаст картинку с теми же пикселями (≤ 3 раз).
+    /// Re-read the header until Spotify returns a picture with the same pixels (≤ 3 times).
     async fn confirm_cover(&self, id: PlaylistId, generation: u64, request: u64, cover: sf_api::playlist_cover::Cover) {
         let api = self.auth.api();
         let pending = |service: &Self| {
@@ -2486,7 +2486,7 @@ impl LibraryService {
                         upload.previous_urls.extend(header.images.iter().map(|image| image.url.clone()));
                     }
                 }
-                // проверить не удалось — остаётся загруженная обложка
+                // the check failed — the loaded cover stays
                 Err(error) => {
                     tracing::debug!("playlist cover not verified: {error}");
                     return;
@@ -2495,7 +2495,7 @@ impl LibraryService {
         }
     }
 
-    /// Обложка в списке и шапке: подтверждённая шапка Spotify или локальная копия загрузки.
+    /// The cover in the list and the header: Spotify's confirmed header or the local copy of the upload.
     fn send_playlist_cover(&self, id: &PlaylistId, header: Option<models::Playlist>) {
         let events = {
             let mut state = lock(&self.state);
@@ -2562,7 +2562,7 @@ impl LibraryService {
         });
     }
 
-    /// Отписаться (для своего — «удалить»).
+    /// Unfollow (for one's own — "delete").
     pub fn unfollow_playlist(&self, id: PlaylistId) {
         let uri = id.uri();
         let (removed, own, events) = {
@@ -2631,7 +2631,7 @@ impl LibraryService {
         });
     }
 
-    // --- альбомы, исполнители, подкасты --------------------------------------------------
+    // --- albums, artists, podcasts -------------------------------------------------------
 
     fn load_section(&self, section: Section) {
         let generation = {
@@ -2663,12 +2663,12 @@ impl LibraryService {
             if result.is_err() {
                 service.retry_later(generation);
             }
-            // сессия встала, пока шёл Web API, — повторить через неё
+            // the session came up while the Web API was running — repeat through it
             service.reload_with_session();
         });
     }
 
-    /// Обновить раздел из готовых строк; событие для модели.
+    /// Refresh a section from the ready rows; an event for the model.
     fn put_section(
         &self,
         section: Section,
@@ -2750,7 +2750,7 @@ impl LibraryService {
                         (saved.added_at.clone().unwrap_or_default(), item)
                     }));
                     if !matches!(next, Some(n) if n > offset) || done == MAX_SECTION_PAGES {
-                        // аудиокниги librespot не играет
+                        // librespot does not play audiobooks
                         if let Some(session) = self.player.session() {
                             let uris: Vec<String> = shows.iter().map(|(_, show)| show.uri.clone()).collect();
                             if let Ok(books) =
@@ -2832,7 +2832,7 @@ impl LibraryService {
         Ok(())
     }
 
-    /// Альбомы и подписки — из коллекции сессии одним чтением; false — спросить Web API.
+    /// Albums and follows — from the session collection in one read; false — ask the Web API.
     async fn session_section(&self, section: Section, generation: u64) -> bool {
         let (api, player) = (self.auth.api(), &self.player);
         match section {
@@ -2879,8 +2879,8 @@ impl LibraryService {
         }
     }
 
-    /// Подкасты (набор «show», без аудиокниг) и «Ваши выпуски» («listenlater») — из коллекции сессии;
-    /// false — спросить Web API.
+    /// Podcasts (the "show" set, without audiobooks) and "Your episodes" ("listenlater") — from the session collection;
+    /// false — ask the Web API.
     async fn session_podcasts(&self, section: Section, generation: u64) -> bool {
         let (api, player) = (self.auth.api(), &self.player);
         match section {
@@ -2946,7 +2946,7 @@ impl LibraryService {
     pub fn episodes(&self) -> Vec<EpisodeItem> {
         lock(&self.state).episodes.clone()
     }
-    /// Альбом/шоу/выпуск/исполнитель (подписка) сохранён.
+    /// An album/show/episode/artist (follow) is saved.
     pub fn is_saved(&self, uri: &str) -> bool {
         lock(&self.state).is_saved(uri)
     }
@@ -2954,7 +2954,7 @@ impl LibraryService {
         lock(&self.state).saved_revision
     }
 
-    /// Сохранить/удалить (альбом, шоу, выпуск) или подписаться/отписаться (исполнитель).
+    /// Save/delete (album, show, episode) or follow/unfollow (artist).
     pub fn toggle_saved(&self, uri: String) {
         let kind = uri_kind(&uri).to_owned();
         match kind.as_str() {
@@ -3039,10 +3039,10 @@ impl LibraryService {
         });
     }
 
-    // --- экран «Библиотека» ----------------------------------------------------------------
+    // --- the "Library" screen --------------------------------------------------------------
 
-    /// Строки раздела: owner — "all" | "mine" | "followed" | "collab"; sort — как Settings.librarySort.
-    /// Плейлисты: сначала «Любимые треки» и закреплённые, папки rootlist как kind=folder.
+    /// Section rows: owner — "all" | "mine" | "followed" | "collab"; sort — as in Settings.librarySort.
+    /// Playlists: "Liked Songs" and pinned ones first, rootlist folders as kind=folder.
     pub fn entries(&self, kind: LibraryKind, owner: &str, sort: &str) -> Vec<LibraryEntry> {
         let times = self.history.context_times();
         let state = lock(&self.state);
@@ -3166,8 +3166,8 @@ impl LibraryService {
         entries
     }
 
-    /// Последние добавленные или обновлённые строки всех разделов — для боковой панели.
-    /// Папки остаются в дереве плейлистов: в «последних» они только мешают.
+    /// The last added or updated rows of every section — for the side panel.
+    /// Folders stay in the playlist tree: in "recent" they only get in the way.
     pub fn recent_entries(&self, limit: usize) -> Vec<LibraryEntry> {
         let mut all = Vec::new();
         for kind in [LibraryKind::Playlists, LibraryKind::Albums, LibraryKind::Artists, LibraryKind::Shows] {
@@ -3197,7 +3197,7 @@ impl LibraryService {
             .collect()
     }
 
-    /// Явная сортировка догружает страницы: (загружено, всего).
+    /// An explicit sort loads more pages: (loaded, total).
     pub fn loading_pages(&self) -> (u32, u32) {
         let state = lock(&self.state);
         let (done, total) = state
@@ -3207,7 +3207,7 @@ impl LibraryService {
         if total == 0 || done >= total { (0, 0) } else { (done, total) }
     }
 
-    // --- закрепления (локально, SettingKey::Pins) -------------------------------------------
+    // --- pins (local, SettingKey::Pins) -----------------------------------------------------
 
     pub fn is_pinned(&self, uri: &str) -> bool {
         lock(&self.state).pins.iter().any(|pin| pin == uri)
@@ -3245,7 +3245,7 @@ impl LibraryService {
     }
 }
 
-/// Коллаж, который Spotify сам нарисовал плейлисту без своей обложки (Web API отдаёт его как обложку).
+/// A collage Spotify itself drew for a playlist without its own cover (the Web API returns it as the cover).
 fn spotify_mosaic(images: &[models::Image]) -> bool {
     !images.is_empty() && images.iter().all(|image| image.url.starts_with("https://mosaic.scdn.co/"))
 }
@@ -3260,7 +3260,7 @@ fn collect_placed_from<'a>(
     placed: &mut HashSet<&'a str>,
     seen: &mut HashSet<&'a str>,
 ) {
-    // цикл папок (A внутри B внутри A) не уводит в бесконечную рекурсию
+    // a folder cycle (A inside B inside A) does not lead to infinite recursion
     if !seen.insert(folder.id.as_str()) {
         return;
     }
@@ -3275,7 +3275,7 @@ fn collect_placed_from<'a>(
     }
 }
 
-/// Убрать снятое с сохранения из своего раздела.
+/// Remove what was unsaved from one's own section.
 fn remove_saved(state: &mut State, uri: &str) -> Option<LibraryEvent> {
     state.saved.remove(uri);
     if let Some(at) = state.albums.iter().position(|(_, item)| item.uri == uri) {
@@ -3297,7 +3297,7 @@ fn remove_saved(state: &mut State, uri: &str) -> Option<LibraryEvent> {
     None
 }
 
-/// Для тестов: страница сохранённых треков.
+/// For tests: the saved tracks page.
 #[cfg(test)]
 fn saved_page(offset: u32, count: u32, total: u32) -> models::Page<SavedTrack> {
     models::Page {
@@ -3355,19 +3355,19 @@ mod tests {
     #[test]
     fn liked_and_pins_lead_every_sort() {
         let mut entries = vec![
-            entry("playlist", "Б", "spotify:playlist:b"),
-            entry("playlist", "А", "spotify:playlist:a"),
-            entry("playlist", "В", "spotify:playlist:c"),
+            entry("playlist", "B", "spotify:playlist:b"),
+            entry("playlist", "A", "spotify:playlist:a"),
+            entry("playlist", "C", "spotify:playlist:c"),
             entry("liked", "Liked Songs", "spotify:user:me:collection"),
         ];
         sort_entries(&mut entries, "alpha", &["spotify:playlist:c".to_owned()]);
         let titles: Vec<&str> = entries.iter().map(|e| e.title.as_str()).collect();
-        assert_eq!(titles, ["Liked Songs", "В", "А", "Б"]);
+        assert_eq!(titles, ["Liked Songs", "C", "A", "B"]);
     }
 
     #[test]
     fn recent_entries_merge_every_kind_newest_first() {
-        // у плейлиста added_at не бывает — так его и оставляем
+        // a playlist never has added_at — so we leave it as it is
         let playlist = entry("playlist", "playlist", "spotify:playlist:p");
         let mut album = entry("album", "album", "spotify:album:a");
         album.added_at = "2026-09-01T00:00:00Z".into();
@@ -3378,7 +3378,7 @@ mod tests {
         let titles: Vec<&str> = merged.iter().map(|e| e.title.as_str()).collect();
         assert_eq!(titles, ["album", "artist", "playlist"], "newest first, folders dropped");
         assert_eq!(merge_recent(vec![entry("album", "only", "u")], 0, &[]).len(), 0, "limit is honoured");
-        // закреплённое — первым, даже если добавлено давно
+        // pinned — first, even if added long ago
         let mut old = entry("playlist", "pinned", "spotify:playlist:pin");
         old.added_at = "2020-01-01T00:00:00Z".into();
         let mut new = entry("album", "fresh", "spotify:album:new");
@@ -3386,7 +3386,7 @@ mod tests {
         let merged = merge_recent(vec![new, old], 10, &["spotify:playlist:pin".to_owned()]);
         let titles: Vec<&str> = merged.iter().map(|e| e.title.as_str()).collect();
         assert_eq!(titles, ["pinned", "fresh"], "pins lead the summary");
-        // два закреплённых — в порядке закрепления, а не по времени (поле pinned у обоих истинно)
+        // two pinned ones — in pin order, not by time (the pinned field is true for both)
         let mut pin_b = entry("album", "pin b", "spotify:album:b");
         pin_b.pinned = true;
         pin_b.added_at = "2026-09-01T00:00:00Z".into();
@@ -3397,7 +3397,7 @@ mod tests {
         let merged = merge_recent(vec![pin_b, pin_a], 10, &pins);
         let titles: Vec<&str> = merged.iter().map(|e| e.title.as_str()).collect();
         assert_eq!(titles, ["pin a", "pin b"], "pinned rows keep the pin order");
-        // закрепление полем строки («Любимые») тоже ведёт сводку
+        // pinning by the row field ("Liked") also drives the summary
         let mut liked = entry("liked", "Liked Songs", "spotify:user:me:collection");
         liked.pinned = true;
         let mut fresh = entry("album", "fresh", "spotify:album:fresh");
@@ -3409,7 +3409,7 @@ mod tests {
 
     #[test]
     fn recent_entries_keep_a_playlist_without_added_at() {
-        // у плейлиста added_at пустой: он всегда последний по времени и раньше выпадал из обрезки целиком
+        // a playlist has an empty added_at: it is always last by time and used to fall out of the trim entirely
         let mut all = vec![entry("playlist", "playlist", "spotify:playlist:p")];
         for day in 1..=50 {
             let mut album = entry("album", &format!("album {day}"), &format!("spotify:album:{day}"));
@@ -3439,9 +3439,9 @@ mod tests {
         let rootlist = Rootlist {
             entries: vec![
                 RootlistEntry::Playlist("spotify:playlist:a".into()),
-                RootlistEntry::FolderStart { id: "f1".into(), name: "Рок".into() },
+                RootlistEntry::FolderStart { id: "f1".into(), name: "Rock".into() },
                 RootlistEntry::Playlist("spotify:playlist:b".into()),
-                RootlistEntry::FolderStart { id: "f2".into(), name: "Старое".into() },
+                RootlistEntry::FolderStart { id: "f2".into(), name: "Old".into() },
                 RootlistEntry::Playlist("spotify:playlist:c".into()),
                 RootlistEntry::FolderEnd,
                 RootlistEntry::FolderEnd,
@@ -3524,13 +3524,13 @@ mod tests {
 
     #[test]
     fn reopening_a_ready_playlist_does_not_refetch_or_reset() {
-        // Без подтверждённой шапки (snapshot не сверялся) готовая страница перечитывается:
-        // дешёвая проверка snapshot ловит изменения с других устройств.
+        // Without a confirmed header (the snapshot was not checked) a ready page is re-read:
+        // a cheap snapshot check catches changes from other devices.
         let (id, state) = page_with("spotify:playlist:a", true, false, false);
         assert_eq!(state.pages[&id].open_action(false), OpenAction::Fetch);
         assert_eq!(state.pages[&id].open_action(true), OpenAction::Fetch);
 
-        // Шапка сверена со snapshot и треки на месте — повторное открытие ничего не делает.
+        // The header is checked against the snapshot and the tracks are in place — a repeated open does nothing.
         let (id, mut state) = page_with("spotify:playlist:a", true, false, false);
         let page = state.pages.get_mut(&id).unwrap();
         page.snapshot = "snap".into();
@@ -3548,7 +3548,7 @@ mod tests {
         let (id, state) = page_with("spotify:playlist:a", false, true, false);
         assert_eq!(state.pages[&id].open_action(false), OpenAction::Loading);
         assert_eq!(state.pages[&id].open_action(true), OpenAction::Fetch);
-        // чтение, помеченное перечитыванием после записи, тоже продолжается
+        // a read marked as a re-read after a write also continues
         let (id, state) = page_with("spotify:playlist:a", false, true, true);
         assert_eq!(state.pages[&id].open_action(true), OpenAction::Fetch);
     }
@@ -3565,13 +3565,13 @@ mod tests {
     fn stale_generation_or_a_started_write_drops_the_answer() {
         let (id, mut state) = page_with("spotify:playlist:a", false, true, false);
         state.generation = 2;
-        assert!(!read_is_current(&state, &id, 1, 1), "смена аккаунта сбрасывает чтение");
+        assert!(!read_is_current(&state, &id, 1, 1), "an account change resets the read");
         let (id, mut state) = page_with("spotify:playlist:a", false, true, false);
         state.pages.get_mut(&id).unwrap().generation = 7;
-        assert!(!read_is_current(&state, &id, 1, 1), "новое чтение страницы сбрасывает старое");
+        assert!(!read_is_current(&state, &id, 1, 1), "a new page read resets the old one");
         let (id, mut state) = page_with("spotify:playlist:a", false, true, false);
         state.pages.get_mut(&id).unwrap().pending_writes = 1;
-        assert!(!read_is_current(&state, &id, 1, 1), "начавшаяся запись прерывает чтение");
+        assert!(!read_is_current(&state, &id, 1, 1), "a started write interrupts the read");
         let (id, state) = page_with("spotify:playlist:a", false, true, false);
         assert!(read_is_current(&state, &id, 0, 0));
         assert!(same_read(&state, &id, 0, 0));
@@ -3582,25 +3582,25 @@ mod tests {
         let id = PlaylistId::from_uri_or_id("spotify:playlist:a");
         let track = |i: usize| TrackItem { uri: format!("spotify:track:{i}"), ..Default::default() };
         let mut rows: Vec<TrackItem> = (0..CHUNK + 3).map(track).collect();
-        rows.push(track(0)); // повтор в конце должен дойти до модели
-        rows.insert(1, track(2)); // повтор в начале
+        rows.push(track(0)); // the repeat at the end must reach the model
+        rows.insert(1, track(2)); // the repeat at the start
         let events = cached_events(&id, &rows);
-        assert_eq!(events.len(), 2, "по куску CHUNK");
+        assert_eq!(events.len(), 2, "CHUNK at a time");
         let mut delivered: Vec<String> = Vec::new();
         for event in &events {
             match event {
                 LibraryEvent::PlaylistTracks { change: ListChange::Reset(chunk), .. } => {
-                    assert!(delivered.is_empty(), "Reset только первым куском");
+                    assert!(delivered.is_empty(), "Reset by the first chunk only");
                     delivered.extend(chunk.iter().map(|r| r.uri.clone()));
                 }
                 LibraryEvent::PlaylistTracks { change: ListChange::Append(chunk), .. } => {
                     delivered.extend(chunk.iter().map(|r| r.uri.clone()));
                 }
-                _ => panic!("только Reset/Append"),
+                _ => panic!("only Reset/Append"),
             }
         }
         let source: Vec<&str> = rows.iter().map(|r| r.uri.as_str()).collect();
-        assert_eq!(delivered, source, "порядок и повторы сохраняются");
+        assert_eq!(delivered, source, "order and repeats are preserved");
         assert!(matches!(&events[0], LibraryEvent::PlaylistTracks { change: ListChange::Reset(_), .. }));
     }
 }

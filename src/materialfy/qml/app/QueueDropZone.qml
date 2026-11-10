@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import Md3
 
-// Пунктирная зона «Перетащите трек сюда — он заиграет следующим». active — над ней несут трек.
+// Dashed zone "Drag a track here — it will play next". active — a track is being dragged over it.
 Item {
     id: root
 

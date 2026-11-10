@@ -1,6 +1,6 @@
-// Auth — зеркало AuthService: свойства из снимка (watch), сигналы-факты — из событий.
-// Основной вход — сессия librespot (браузер, :8898, Premium): с ним и медиатека, и звук здесь.
-// Вход Web API (:8989) необязателен: «ускорить медиатеку» и вход без Premium.
+// Auth - a mirror of AuthService: properties from the snapshot (watch), fact signals - from events.
+// The main login - a librespot session (browser, :8898, Premium): with it both the library and the sound are here.
+// Web API login (:8989) is optional: "speed up the library" and login without Premium.
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
@@ -24,14 +24,14 @@ pub mod qobject {
         #[qobject]
         #[qproperty(QString, state, READ, NOTIFY = state_changed)]
         #[qproperty(QString, error_text, cxx_name = "errorText", READ, NOTIFY = error_changed)]
-        /// стабильный код errorText для подсказок (текст переведён): "" | "free" | "cancelled" | "portBusy" |
+        /// a stable errorText code for hints (the text is translated): "" | "free" | "cancelled" | "portBusy" |
         /// "noResponse" | "accountMismatch" | "otherAccount" | "audioKey"
         #[qproperty(QString, error_code, cxx_name = "errorCode", READ, NOTIFY = error_changed)]
         #[qproperty(QString, auth_url, cxx_name = "authUrl", READ, NOTIFY = auth_url_changed)]
         #[qproperty(i32, auth_port, cxx_name = "authPort", READ, NOTIFY = auth_url_changed)]
         #[qproperty(QString, playback_state, cxx_name = "playbackState", READ, NOTIFY = playback_changed)]
         #[qproperty(QString, playback_error, cxx_name = "playbackError", READ, NOTIFY = playback_changed)]
-        /// код playbackError, значения как у errorCode
+        /// playbackError code, values as in errorCode
         #[qproperty(QString, playback_error_code, cxx_name = "playbackErrorCode", READ, NOTIFY = playback_changed)]
         #[qproperty(QString, token_storage, cxx_name = "tokenStorage", READ, NOTIFY = storage_changed)]
         #[qproperty(QMap_QString_QVariant, account, READ, NOTIFY = account_changed)]
@@ -40,7 +40,7 @@ pub mod qobject {
         #[qproperty(QString, personal_state, cxx_name = "personalState", READ, NOTIFY = personal_changed)]
         /// redirect URI to enter in the personal app's settings (the Web API apps share it)
         #[qproperty(QString, personal_redirect_uri, cxx_name = "personalRedirectUri", READ, CONSTANT)]
-        /// токен общего Web API: "none" | "authorizing" | "ready" | "error"
+        /// common Web API token: "none" | "authorizing" | "ready" | "error"
         #[qproperty(QString, web_state, cxx_name = "webState", READ, NOTIFY = web_changed)]
         type Auth = super::AuthRust;
 
@@ -74,28 +74,28 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "signedOut"]
         fn signed_out(self: Pin<&mut Auth>);
-        /// воспроизведение на этом ПК готово
+        /// playback on this PC is ready
         #[qsignal]
         #[cxx_name = "playbackReady"]
         fn playback_ready(self: Pin<&mut Auth>);
-        /// вошли, но аккаунт Free (показать PremiumNotice один раз)
+        /// logged in, but a Free account (show PremiumNotice once)
         #[qsignal]
         #[cxx_name = "premiumRequired"]
         fn premium_required(self: Pin<&mut Auth>);
 
-        /// «Войти через Spotify» (Premium): браузер + 127.0.0.1:8898, вход через сессию librespot.
+        /// "Log in via Spotify" (Premium): browser + 127.0.0.1:8898, login via a librespot session.
         #[qinvokable]
         #[cxx_name = "startLogin"]
         fn start_login(self: &Auth);
-        /// «Войти без Premium» / «Ускорить медиатеку»: вход Web API, браузер + 127.0.0.1:8989.
+        /// "Log in without Premium" / "Speed up the library": Web API login, browser + 127.0.0.1:8989.
         #[qinvokable]
         #[cxx_name = "startWebLogin"]
         fn start_web_login(self: &Auth);
-        /// «Открыть снова» (authUrl в браузере).
+        /// "Open again" (authUrl in the browser).
         #[qinvokable]
         #[cxx_name = "reopenBrowser"]
         fn reopen_browser(self: &Auth);
-        /// «Ссылка» — authUrl в буфер обмена.
+        /// "Link" - authUrl to the clipboard.
         #[qinvokable]
         #[cxx_name = "copyAuthUrl"]
         fn copy_auth_url(self: &Auth);
@@ -107,19 +107,19 @@ pub mod qobject {
         fn sign_out(self: &Auth);
         #[qinvokable]
         fn retry(self: &Auth);
-        /// «Проверить снова» (Premium).
+        /// "Check again" (Premium).
         #[qinvokable]
         #[cxx_name = "refreshProfile"]
         fn refresh_profile(self: &Auth);
-        /// «Разрешить воспроизведение» (браузер + 127.0.0.1:8898).
+        /// "Allow playback" (browser + 127.0.0.1:8898).
         #[qinvokable]
         #[cxx_name = "authorizePlayback"]
         fn authorize_playback(self: &Auth);
-        /// «Отключить» воспроизведение на этом ПК.
+        /// "Disable" playback on this PC.
         #[qinvokable]
         #[cxx_name = "disablePlayback"]
         fn disable_playback(self: &Auth);
-        /// Свой Client ID ("" — удалить).
+        /// Your own Client ID ("" - delete).
         #[qinvokable]
         #[cxx_name = "setPersonalClientId"]
         fn set_personal_client_id(self: &Auth, client_id: &QString);
@@ -238,9 +238,9 @@ impl qobject::Auth {
         }
     }
 
-    /// Снимок сервиса → свойства; сигнал — только для изменившихся групп.
-    /// QML знает «signedOut» | «checking» | «signedIn» | «error»; yt-services
-    /// говорит «idle» | «waiting» | «ready» | «failed» — переводим здесь.
+    /// Service snapshot -> properties; a signal - only for changed groups.
+    /// QML knows "signedOut" | "checking" | "signedIn" | "error"; yt-services
+    /// says "idle" | "waiting" | "ready" | "failed" - we translate here.
     fn apply(mut self: Pin<&mut Self>, next: AuthSnapshot) {
         let prev = std::mem::replace(&mut self.as_mut().rust_mut().snapshot, next.clone());
         if prev == next {
@@ -310,7 +310,7 @@ impl qobject::Auth {
     }
 
     fn on_event(mut self: Pin<&mut Self>, delivery: Delivery<AuthEvent>) {
-        // снимок обновлён до рассылки события: сначала свойства, потом сигнал
+        // the snapshot is updated before the event is sent: first the properties, then the signal
         let snapshot = ctx().services.auth.snapshot();
         self.as_mut().apply(snapshot);
         match delivery {

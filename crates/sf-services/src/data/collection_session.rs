@@ -1,6 +1,6 @@
-//! Коллекция аккаунта через сессию librespot (sf_player::engine::session_collection): «Любимые треки»,
-//! сохранённые альбомы, подписки на исполнителей, сохранение/снятие и «сохранено ли». Web API — только
-//! запасной путь с коротким сроком: общий ключ приложения упирается в 429 и суточную квоту.
+//! The account's collection through a librespot session (sf_player::engine::session_collection): "Liked Songs",
+//! saved albums, artist follows, save/unsave and "is it saved". The Web API is only
+//! a fallback path with a short deadline: the application's shared key hits 429 and a daily quota.
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -12,35 +12,35 @@ use sf_player::engine::session_reads::Failure;
 
 use super::route;
 
-/// Строк «Любимых треков» за страницу через сессию (один пакет метаданных).
+/// "Liked Songs" rows per page through the session (one metadata batch).
 pub const LIKED_PAGE: u32 = 50;
-/// Сколько ждать чтение набора целиком (с подробностями строк). Срок каждой страницы и пакета
-/// (с одним повтором) держит session_collection; этот — лишь потолок: у большой библиотеки
-/// десятки страниц и сотни альбомов.
+/// How long to wait for reading the whole set (with row details). The deadline for each page and batch
+/// (with one retry) is held by session_collection; this one is only a ceiling: a large library has
+/// dozens of pages and hundreds of albums.
 const READ_TIMEOUT: Duration = Duration::from_secs(120);
-/// Сколько ждать страницу подробностей «Любимых треков» (пакет и его повтор, иногда два пакета).
+/// How long to wait for a "Liked Songs" details page (a batch and its retry, sometimes two batches).
 const PAGE_TIMEOUT: Duration = Duration::from_secs(60);
-/// Сколько ждать запись или проверку через сессию, прежде чем спросить Web API.
+/// How long to wait for a write or a check through the session before asking the Web API.
 const SESSION_TIMEOUT: Duration = Duration::from_secs(8);
-/// Дольше Web API не ждём: под 429 он отвечает минутами.
+/// We do not wait longer for the Web API: under 429 it answers in minutes.
 const WEB_DEADLINE: Duration = Duration::from_secs(12);
 
-/// Web API не дольше `WEB_DEADLINE`.
+/// The Web API no longer than `WEB_DEADLINE`.
 async fn web<T>(call: impl Future<Output = Result<T, ApiError>>) -> Result<T, ApiError> {
     tokio::time::timeout(WEB_DEADLINE, call)
         .await
         .unwrap_or_else(|_| Err(ApiError::Network("Spotify did not answer in time".to_owned())))
 }
 
-// --- «Любимые треки» ---------------------------------------------------------------------------------
+// --- "Liked Songs" -------------------------------------------------------------------------------------
 
-/// «Любимые треки» через сессию: набор URI читается один раз (новые сверху), подробности — страницами.
-/// Страницы — в смещениях выданных строк, как у Web API: трек, которого Spotify больше не отдаёт,
-/// пропускается, а страница добирается следующими.
+/// "Liked Songs" through the session: the URI set is read once (newest first), details — page by page.
+/// Pages are at the offsets of the issued rows, as with the Web API: a track Spotify no longer returns
+/// is skipped, and the page is made up by the following ones.
 pub struct LikedFeed {
     session: Option<sf_player::Session>,
     rows: Vec<CollectionItem>,
-    /// смещение страницы → место в `rows`, с которого она начинается
+    /// page offset → the place in `rows` it starts from
     starts: HashMap<u32, usize>,
     skipped: usize,
 }
@@ -51,7 +51,7 @@ impl LikedFeed {
         Self { session: None, rows, starts: HashMap::from([(0, 0)]), skipped: 0 }
     }
 
-    /// Набор сессии того же аккаунта; None — сессии нет или она не ответила (спросить Web API).
+    /// A set from the session of the same account; None — no session or it did not answer (ask the Web API).
     pub async fn open(api: &ApiGateway, player: &PlayerHandle) -> Option<Self> {
         let session = route::account_session(api, player)?;
         match tokio::time::timeout(READ_TIMEOUT, collection::collection_all(&session, SET_COLLECTION)).await {
@@ -67,7 +67,7 @@ impl LikedFeed {
         }
     }
 
-    /// Страница с `offset`; None — сессия не смогла (дальше — Web API).
+    /// A page at `offset`; None — the session could not do it (further on — the Web API).
     pub async fn next_page(&mut self, offset: u32) -> Option<Page<SavedTrack>> {
         let session = self.session.clone()?;
         let page = self.page(offset, LIKED_PAGE, |uris| {
@@ -91,8 +91,8 @@ impl LikedFeed {
         }
     }
 
-    /// Страница с `offset` не длиннее `limit`; `resolve` — подробности треков по URI (нет в ответе —
-    /// Spotify трек больше не отдаёт).
+    /// A page at `offset` no longer than `limit`; `resolve` — track details by URI (not in the answer —
+    /// Spotify no longer returns the track).
     pub async fn page<F, Fut>(&mut self, offset: u32, limit: u32, mut resolve: F) -> Result<Page<SavedTrack>, Failure>
     where
         F: FnMut(Vec<String>) -> Fut,
@@ -129,9 +129,9 @@ impl LikedFeed {
     }
 }
 
-// --- альбомы и исполнители ---------------------------------------------------------------------------
+// --- albums and artists --------------------------------------------------------------------------------
 
-/// Сохранённые альбомы, новые сверху. Альбом, которого Spotify больше не отдаёт, пропускается.
+/// Saved albums, newest first. An album Spotify no longer returns is skipped.
 pub async fn saved_albums(session: &sf_player::Session) -> anyhow::Result<Vec<SavedAlbum>> {
     let rows: Vec<CollectionItem> = collection::collection_all(session, SET_COLLECTION)
         .await?
@@ -146,7 +146,7 @@ pub async fn saved_albums(session: &sf_player::Session) -> anyhow::Result<Vec<Sa
         .collect())
 }
 
-/// Исполнители, на которых подписан аккаунт, новые подписки сверху.
+/// Artists the account follows, newest follows first.
 pub async fn followed_artists(session: &sf_player::Session) -> anyhow::Result<Vec<Artist>> {
     let rows = collection::collection_all(session, SET_ARTIST).await?;
     let uris: Vec<String> = rows.iter().map(|row| row.uri.clone()).collect();
@@ -154,7 +154,7 @@ pub async fn followed_artists(session: &sf_player::Session) -> anyhow::Result<Ve
     Ok(uris.iter().filter_map(|uri| artists.remove(uri)).collect())
 }
 
-/// Чтение раздела через сессию с ожиданием; None — сессии нет или она не смогла (спросить Web API).
+/// Reading a section through the session with a wait; None — no session or it could not do it (ask the Web API).
 pub async fn read<T, Fut>(
     api: &ApiGateway,
     player: &PlayerHandle,
@@ -178,15 +178,15 @@ where
     }
 }
 
-// --- запись и проверка -------------------------------------------------------------------------------
+// --- write and check -----------------------------------------------------------------------------------
 
-/// Сохранить (`add`) или снять треки, альбомы, исполнителей, подкасты, выпуски: сначала сессия
-/// (каждый вид — в своём наборе), потом Web API /me/library не дольше WEB_DEADLINE.
+/// Save (`add`) or unsave tracks, albums, artists, podcasts, episodes: the session first
+/// (each kind in its own set), then the Web API /me/library no longer than WEB_DEADLINE.
 pub async fn write(api: &ApiGateway, player: &PlayerHandle, uris: &[String], add: bool) -> Result<(), ApiError> {
     if let Some(session) = route::account_session(api, player) {
         match tokio::time::timeout(SESSION_TIMEOUT, collection::write(&session, uris, add)).await {
             Ok(Ok(())) => {
-                // запись мимо Web API: его кэш GET (20 с) отдал бы запасному чтению старую коллекцию
+                // the write bypasses the Web API: its GET cache (20 s) would give the fallback read the old collection
                 api.forget_cached();
                 return Ok(());
             }
@@ -201,7 +201,7 @@ pub async fn write(api: &ApiGateway, player: &PlayerHandle, uris: &[String], add
     .await
 }
 
-/// Как /me/library/contains — для каждого URI в том же порядке: сначала сессия, потом Web API.
+/// Like /me/library/contains — for each URI in the same order: the session first, then the Web API.
 pub async fn contains(api: &ApiGateway, player: &PlayerHandle, uris: &[String]) -> Result<Vec<bool>, ApiError> {
     if let Some(session) = route::account_session(api, player) {
         match tokio::time::timeout(SESSION_TIMEOUT, collection::contains(&session, uris)).await {
@@ -225,7 +225,7 @@ mod tests {
         rows
     }
 
-    /// Подробности всех URI, кроме `gone`.
+    /// Details for every URI except `gone`.
     fn resolver(gone: &'static [&'static str]) -> impl FnMut(Vec<String>) -> std::future::Ready<Result<HashMap<String, Track>, Failure>> {
         move |uris| {
             std::future::ready(Ok(uris
@@ -268,7 +268,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_long_collection_pages_in_batches_of_fifty_and_skips_gone_rows_across_pages() {
-        // 130 треков, пропавшие — на границах пакетов (49, 50) и в конце (129)
+        // 130 tracks, the missing ones at batch boundaries (49, 50) and at the end (129)
         let gone: &'static [&'static str] = &["spotify:track:49", "spotify:track:50", "spotify:track:129"];
         let mut feed = LikedFeed::new(rows(130));
         let batches = std::cell::RefCell::new(Vec::new());
@@ -288,7 +288,7 @@ mod tests {
             pages += 1;
             assert!(page.items.len() <= LIKED_PAGE as usize);
             shown.extend(page.items.iter().map(|item| item.track.uri.clone()));
-            // пропавшие строки вычитаются из общего числа, как только встретились
+            // missing rows are subtracted from the total as soon as they are met
             assert!(page.total >= 127 && page.total <= last_total, "{}", page.total);
             last_total = page.total;
             match page.next_offset() {
@@ -306,7 +306,7 @@ mod tests {
         let unique: std::collections::HashSet<&String> = shown.iter().collect();
         assert_eq!(unique.len(), shown.len(), "no row twice");
         assert!(batches.borrow().iter().all(|&n| n <= LIKED_PAGE as usize));
-        // страница не короче лимита, пока строки есть: первая добрала пакетами (49 + 0 + 1)
+        // the page is no shorter than the limit while there are rows: the first made up with batches (49 + 0 + 1)
         assert_eq!(batches.borrow()[..3], [50, 1, 1]);
     }
 

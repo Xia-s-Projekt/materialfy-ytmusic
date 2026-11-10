@@ -1,4 +1,4 @@
-//! Состав полок главной (spotifast ui/home.rs + App::load_home): чистые функции без сети.
+//! The composition of the home shelves (spotifast ui/home.rs + App::load_home): pure functions without the network.
 use std::collections::HashSet;
 
 use md3_model::{EpisodeItem, HomeShelf, LibraryEntry, PlayContext, PlaylistItem, ShowItem, TrackItem};
@@ -8,7 +8,7 @@ use sf_api::util::{station_seed, uri_id, uri_kind};
 use crate::extra::seeds::station_title;
 use crate::releases::NewRelease;
 
-/// Поисковые термины «Сделано для вас» (reference model.rs DISCOVER_TERMS).
+/// "Made For You" search terms (reference model.rs DISCOVER_TERMS).
 pub const DISCOVER_TERMS: &[&str] = &["Discover Weekly", "Release Radar", "Daily Mix", "daylist"];
 pub const MADE_FOR_YOU_PER_TERM: usize = 6;
 pub const QUICK_PLAYLISTS: usize = 5;
@@ -17,25 +17,25 @@ pub const HOME_RECENTS: u32 = 50;
 pub const HOME_PODCAST_SHOWS: usize = 8;
 pub const EPISODES_PER_SHOW: u32 = 5;
 pub const PODCAST_CARDS: usize = 16;
-/// сколько дней невыслушанный выпуск считается новым
+/// how many days an unlistened episode still counts as new
 pub const NEW_EPISODE_DAYS: i64 = 30;
 pub const TOP_LIMIT: u32 = 20;
-/// плиток в полке «Новинки» (вместе с «Радаром»)
+/// tiles in the "New releases" shelf (together with the "Radar")
 pub const NEW_RELEASE_TILES: usize = 16;
 
 pub const QUICK: &str = "quick";
 pub const RECENT: &str = "recent";
 pub const MADE_FOR_YOU: &str = "madeForYou";
-/// «Новинки»: «Радар новинок» + свежие релизы исполнителей (ReleasesService)
+/// "New releases": "Release Radar" + fresh artist releases (ReleasesService)
 pub const NEW_RELEASES: &str = "newReleases";
 pub const PODCASTS: &str = "podcasts";
 pub const TOP_ARTISTS: &str = "topArtists";
 pub const TOP_TRACKS: &str = "topTracks";
 
-/// Порядок полок на главной.
+/// Shelf order on the home screen.
 pub const ORDER: &[&str] = &[QUICK, RECENT, MADE_FOR_YOU, NEW_RELEASES, PODCASTS, TOP_ARTISTS, TOP_TRACKS];
 
-/// Английский исходник; в снимок полки — через mf_i18n::t (shelf).
+/// English source; into the shelf snapshot — through mf_i18n::t (shelf).
 pub fn title(key: &str) -> &'static str {
     match key {
         QUICK => "Quick access",
@@ -49,7 +49,7 @@ pub fn title(key: &str) -> &'static str {
     }
 }
 
-/// kind полки: tiles | tracks | episodes | artists
+/// shelf kind: tiles | tracks | episodes | artists
 pub fn kind(key: &str) -> &'static str {
     match key {
         PODCASTS => "episodes",
@@ -59,7 +59,7 @@ pub fn kind(key: &str) -> &'static str {
     }
 }
 
-/// Полка из элементов (сериализация serde = ключи QML).
+/// A shelf from items (serde serialization = QML keys).
 pub fn shelf<T: Serialize>(key: &str, items: &[T]) -> HomeShelf {
     HomeShelf {
         key: key.to_owned(),
@@ -69,12 +69,12 @@ pub fn shelf<T: Serialize>(key: &str, items: &[T]) -> HomeShelf {
     }
 }
 
-/// Скрытые полки (SettingKey::HomeHidden: ключи через запятую).
+/// Hidden shelves (SettingKey::HomeHidden: keys separated by commas).
 pub fn hidden_keys(csv: &str) -> HashSet<String> {
     csv.split(',').map(str::trim).filter(|k| !k.is_empty()).map(str::to_owned).collect()
 }
 
-/// Плейлист Spotify под этот термин: «Discover Weekly», «Daily Mix 3» и т. п.
+/// A Spotify playlist for this term: "Discover Weekly", "Daily Mix 3", etc.
 pub fn is_made_for_you(name: &str, term: &str) -> bool {
     let name = name.trim().to_lowercase();
     let term = term.to_lowercase();
@@ -87,7 +87,7 @@ pub fn is_made_for_you(name: &str, term: &str) -> bool {
             .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
 }
 
-/// Ответ поиска по термину → плейлисты Spotify (владелец spotify), без повторов имён, ≤ 6.
+/// Search answer for a term → Spotify playlists (owner spotify), without repeated names, ≤ 6.
 pub fn made_for_you(term: &str, playlists: Vec<PlaylistItem>) -> Vec<PlaylistItem> {
     let mut seen = HashSet::new();
     let mut matching: Vec<PlaylistItem> = playlists
@@ -103,7 +103,7 @@ pub fn made_for_you(term: &str, playlists: Vec<PlaylistItem>) -> Vec<PlaylistIte
 }
 
 pub fn playlist_entry(p: &PlaylistItem) -> LibraryEntry {
-    // DJ — не плейлист: у него нет списка треков, он только запускается (как кнопка)
+    // A DJ is not a playlist: it has no track list, it is only started (like a button)
     let dj = p.uri == crate::data::home_feed::DJ_URI;
     LibraryEntry {
         kind: if dj { "dj".into() } else { "playlist".into() },
@@ -129,7 +129,7 @@ pub fn playlist_entry(p: &PlaylistItem) -> LibraryEntry {
     }
 }
 
-/// «Новинки»: «Радар новинок» первой плиткой, потом свежие релизы (плитки альбомов открывают их страницу).
+/// "New releases": "Release Radar" as the first tile, then fresh releases (album tiles open their page).
 pub fn new_release_tiles(radar: Option<&PlaylistItem>, releases: &[NewRelease]) -> Vec<LibraryEntry> {
     let radar = radar.map(|p| LibraryEntry { subtitle: mf_i18n::tf("Playlist · {0}", &[&"Spotify"]), ..playlist_entry(p) });
     radar
@@ -167,14 +167,14 @@ pub fn liked_entry(liked_uri: &str, count: i64) -> LibraryEntry {
     }
 }
 
-/// «Быстрый доступ»: Любимые + первые 5 плейлистов библиотеки.
+/// "Quick access": Liked + the first 5 library playlists.
 pub fn quick_tiles(liked_uri: &str, liked_count: i64, playlists: &[PlaylistItem]) -> Vec<LibraryEntry> {
     std::iter::once(liked_entry(liked_uri, liked_count))
         .chain(playlists.iter().take(QUICK_PLAYLISTS).map(playlist_entry))
         .collect()
 }
 
-/// Одно прослушивание (локальная история или /me/player/recently-played).
+/// One play (local history or /me/player/recently-played).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Play {
     pub track: TrackItem,
@@ -187,8 +187,8 @@ fn played_key(at: &str) -> (i64, String) {
     (secs, at.to_owned())
 }
 
-/// Плитка «Недавно прослушанного» по прослушиванию: контекст (плейлист/альбом/исполнитель/радио/Любимые/шоу),
-/// без контекста — альбом трека (выпуск — его шоу).
+/// A "Recently played" tile by play: context (playlist/album/artist/radio/Liked/show),
+/// without a context — the track's album (an episode — its show).
 pub fn recent_tile(play: &Play, playlists: &[PlaylistItem]) -> Option<LibraryEntry> {
     let track = &play.track;
     let context = play.context.as_ref();
@@ -262,7 +262,7 @@ fn album_subtitle(track: &TrackItem) -> String {
     if track.artists.is_empty() { mf_i18n::t("Album") } else { mf_i18n::tf("Album · {0}", &[&track.artists]) }
 }
 
-/// «Недавно прослушанное»: прослушивания новые первыми → плитки без повторов, ≤ 16.
+/// "Recently played": plays newest first → tiles without repeats, ≤ 16.
 pub fn recent_tiles(mut plays: Vec<Play>, playlists: &[PlaylistItem]) -> Vec<LibraryEntry> {
     plays.sort_by_key(|play| std::cmp::Reverse(played_key(&play.played_at)));
     let mut seen = HashSet::new();
@@ -274,8 +274,8 @@ pub fn recent_tiles(mut plays: Vec<Play>, playlists: &[PlaylistItem]) -> Vec<Lib
         .collect()
 }
 
-/// «Продолжить подкасты»: сначала начатые (новые первыми), затем самый новый невыслушанный выпуск каждого шоу
-/// за последние 30 дней; без повторов, ≤ 16. Выпуски шоу Spotify отдаёт новыми первыми.
+/// "Continue podcasts": first the started ones (newest first), then the newest unlistened episode of each show
+/// from the last 30 days; without repeats, ≤ 16. Spotify gives a show's episodes newest first.
 pub fn podcast_episodes(podcasts: &[(ShowItem, Vec<EpisodeItem>)], today: jiff::civil::Date) -> Vec<EpisodeItem> {
     let oldest_new = today.checked_sub(jiff::Span::new().days(NEW_EPISODE_DAYS)).unwrap_or(today);
     let released = |e: &EpisodeItem| e.release_date.get(..10).and_then(|d| d.parse::<jiff::civil::Date>().ok());
@@ -345,8 +345,8 @@ mod tests {
             title: format!("T{id}"),
             album_id: format!("al{id}"),
             album: format!("Al{id}"),
-            artists: "Группа".into(),
-            artist_refs: vec![ArtistRef { id: "ar".into(), name: "Группа".into() }],
+            artists: "Band".into(),
+            artist_refs: vec![ArtistRef { id: "ar".into(), name: "Band".into() }],
             cover: format!("c{id}"),
             ..Default::default()
         }
@@ -400,17 +400,17 @@ mod tests {
             ..Default::default()
         };
         let entry = playlist_entry(&dj);
-        assert_eq!((entry.kind.as_str(), entry.title.as_str()), ("dj", "DJ"), "у DJ нет списка треков, он только играет");
+        assert_eq!((entry.kind.as_str(), entry.title.as_str()), ("dj", "DJ"), "a DJ has no track list, it only plays");
         assert_eq!(entry.subtitle, mf_i18n::t("Music and commentary picked for you"));
         assert_eq!(entry.uri, crate::data::home_feed::DJ_URI);
-        assert_eq!(entry.owner, "Spotify", "остальные поля не тронуты");
+        assert_eq!(entry.owner, "Spotify", "the other fields are untouched");
 
-        assert_eq!(playlist_entry(&playlist("p", "Мой плейлист", "me")).kind, "playlist");
+        assert_eq!(playlist_entry(&playlist("p", "My playlist", "me")).kind, "playlist");
     }
 
     #[test]
     fn recent_tiles_follow_contexts_newest_first_without_repeats() {
-        let mine = [playlist("p", "Мой плейлист", "me")];
+        let mine = [playlist("p", "My playlist", "me")];
         let plays = vec![
             play("1", Some(PlayContext::with_uri("playlist", "spotify:playlist:p")), "2026-10-10T10:00:00Z"),
             play("2", None, "2026-10-11T09:00:00Z"),
@@ -433,9 +433,9 @@ mod tests {
         );
         assert_eq!(tiles[1].id, "spotify:track:3");
         assert_eq!(tiles[1].title, "Radio “T3”");
-        assert_eq!(tiles[2].title, "Мой плейлист");
+        assert_eq!(tiles[2].title, "My playlist");
         assert_eq!(tiles[2].played_at, "2026-10-10T10:00:00Z");
-        assert_eq!(tiles[4].title, "Группа");
+        assert_eq!(tiles[4].title, "Band");
     }
 
     #[test]
@@ -458,7 +458,7 @@ mod tests {
     #[test]
     fn podcasts_continue_first_then_new() {
         let today: jiff::civil::Date = "2026-10-11".parse().unwrap();
-        let show = |id: &str| ShowItem { show_id: id.into(), name: format!("Шоу {id}"), cover: "sc".into(), ..Default::default() };
+        let show = |id: &str| ShowItem { show_id: id.into(), name: format!("Show {id}"), cover: "sc".into(), ..Default::default() };
         let podcasts = vec![
             (show("a"), vec![episode("a3", "2026-10-10", 0, false), episode("a2", "2026-09-01", 5000, false)]),
             (show("b"), vec![episode("b2", "2026-08-01", 0, false)]),
@@ -467,9 +467,9 @@ mod tests {
         ];
         let shelf = podcast_episodes(&podcasts, today);
         let ids: Vec<_> = shelf.iter().map(|e| e.episode_id.as_str()).collect();
-        // начатые (новые первыми), затем новые за 30 дней; b2 старше месяца
+        // started (newest first), then new ones for 30 days; b2 is older than a month
         assert_eq!(ids, ["c2", "a2", "a3", "d1"]);
-        assert_eq!(shelf[0].show_name, "Шоу c");
+        assert_eq!(shelf[0].show_name, "Show c");
         assert_eq!(shelf[0].cover, "sc");
     }
 
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn new_releases_shelf_starts_with_the_radar() {
-        let radar = playlist("37i9dQZEVXbsGPw6v9FjFR", "Радар новинок", "spotify");
+        let radar = playlist("37i9dQZEVXbsGPw6v9FjFR", "Release Radar", "spotify");
         let release = NewRelease {
             album: md3_model::AlbumItem {
                 album_id: "a1".into(),
@@ -494,7 +494,7 @@ mod tests {
                 ..Default::default()
             },
             release_date: "2026-10-09".into(),
-            date_label: "9 октября".into(),
+            date_label: "October 9".into(),
             group: "single".into(),
         };
         let tiles = new_release_tiles(Some(&radar), std::slice::from_ref(&release));
@@ -502,7 +502,7 @@ mod tests {
         assert_eq!((tiles[0].kind.as_str(), tiles[0].id.as_str()), ("playlist", "37i9dQZEVXbsGPw6v9FjFR"));
         assert_eq!(tiles[1].kind, "album");
         assert_eq!(tiles[1].uri, "spotify:album:a1");
-        assert_eq!(tiles[1].subtitle, "Artist · 9 октября");
+        assert_eq!(tiles[1].subtitle, "Artist · October 9");
         let many = vec![release; 40];
         assert_eq!(new_release_tiles(None, &many).len(), NEW_RELEASE_TILES);
         let s = shelf(NEW_RELEASES, &new_release_tiles(None, &many[..1]));

@@ -1,13 +1,13 @@
-//! Бюджет запросов Web API. Общий Client ID один на всех пользователей, и Spotify быстро отвечает ему 429,
-//! а то и QUOTA_EXCEEDED на сутки. Здесь:
-//! - приоритеты: страница, которую открыл человек, > фоновое обновление > опрос плеера;
-//! - окно в 30 с на источник: фону и опросу достаётся только часть, страницам — всё;
-//! - склейка одинаковых GET в полёте и короткий кэш их ответов (любая запись его сбрасывает);
-//! - охлаждение источника после 429/QUOTA_EXCEEDED: фон и опрос в это время в сеть не ходят, страница — изредка
-//!   пробует, а интерфейс видит состояние «Web API ограничен».
+//! Web API request budget. The shared Client ID is the same for all users, and Spotify quickly answers it with 429,
+//! or even QUOTA_EXCEEDED for a day. Here:
+//! - priorities: the page a person opened > background refresh > player polling;
+//! - a 30 s window per source: background and polling only get a part, pages get all of it;
+//! - coalescing of identical GETs in flight and a short cache of their answers (any write clears it);
+//! - source cooldown after 429/QUOTA_EXCEEDED: background and polling do not hit the network then, a page rarely
+//!   tries, and the UI sees the "Web API limited" state.
 //!
-//! Приоритет задаёт вызывающий: `limits::background(fut)` / `limits::polling(fut)` (task-local, на порождённые
-//! задачи не переходит). Без него GET опроса плеера — Polling, остальное — Interactive.
+//! The caller sets the priority: `limits::background(fut)` / `limits::polling(fut)` (task-local, does not carry over to spawned
+//! tasks). Without it, player polling GETs are Polling, everything else is Interactive.
 
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
@@ -20,45 +20,45 @@ use tokio::sync::watch;
 use crate::ApiSource;
 use crate::client::ApiError;
 
-/// Окно, в котором считаем запросы (Spotify считает лимит за скользящие 30 с).
+/// The window in which requests are counted (Spotify counts the limit over a sliding 30 s).
 pub const WINDOW: Duration = Duration::from_secs(30);
-/// Мягкий бюджет общего Client ID на окно.
+/// Soft budget of the shared Client ID per window.
 const SHARED_BUDGET: usize = 40;
-/// Личное приложение — только этого пользователя, ему можно больше.
+/// A personal application serves only this user, so it may have more.
 const PERSONAL_BUDGET: usize = 120;
-/// Фон не ждёт места в окне дольше этого — отдаёт RateLimited.
+/// Background does not wait for room in the window longer than this — it returns RateLimited.
 const BACKGROUND_WAIT: Duration = Duration::from_secs(30);
-/// Короткий 429 страница переждёт сама (бюджет ожидания запроса в client.rs — 8 с).
+/// A short 429 is waited out by the page itself (the request waiting budget in client.rs is 8 s).
 const SHORT_HOLD: Duration = Duration::from_secs(8);
-/// Как часто страница пробует источник под долгим охлаждением.
+/// How often a page tries the source under a long cooldown.
 const PROBE_RATE_LIMITED: Duration = Duration::from_secs(15);
 const PROBE_QUOTA: Duration = Duration::from_secs(60);
-/// Квота без внятного Retry-After: не меньше 10 минут, не больше суток.
+/// Quota without a clear Retry-After: at least 10 minutes, at most a day.
 const QUOTA_MIN: Duration = Duration::from_secs(10 * 60);
 const QUOTA_MAX: Duration = Duration::from_secs(24 * 3600);
 const RATE_LIMIT_MAX: Duration = Duration::from_secs(3600);
-/// Опрос после 429 отступает: 60 с, 120 с, 240 с… до 10 минут.
+/// Polling backs off after a 429: 60 s, 120 s, 240 s… up to 10 minutes.
 const POLL_BACKOFF: Duration = Duration::from_secs(60);
 const POLL_BACKOFF_MAX: Duration = Duration::from_secs(10 * 60);
-/// Охлаждение короче этого интерфейсу не показываем: секундный 429 не повод мигать предупреждением.
+/// Cooldowns shorter than this are not shown in the UI: a one-second 429 is no reason to flash a warning.
 const SHOW_AFTER: Duration = Duration::from_secs(5);
-/// Сколько живёт ответ GET в кэше.
+/// How long a GET answer lives in the cache.
 const CACHE_TTL: Duration = Duration::from_secs(20);
-/// Каталог (альбомы, исполнители, треки, шоу) меняется редко: его ответы живут дольше.
+/// The catalog (albums, artists, tracks, shows) changes rarely: its answers live longer.
 const CATALOG_TTL: Duration = Duration::from_secs(10 * 60);
-/// Свои списки (/me/tracks, /me/albums…): записи через Web API или сессию кэш и так сбрасывают.
+/// Own lists (/me/tracks, /me/albums…): writes through the Web API or a session clear the cache anyway.
 const USER_TTL: Duration = Duration::from_secs(60);
-/// После записи кэш не наполняется: перепроверки snapshot/обложки должны видеть свежий ответ.
+/// After a write the cache is not filled: snapshot/cover rechecks must see a fresh answer.
 const WRITE_QUIET: Duration = Duration::from_secs(60);
 const CACHE_MAX: usize = 128;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Priority {
-    /// Опрос состояния (GET /me/player, очередь): первым уступает и сильнее всех отступает после 429.
+    /// State polling (GET /me/player, the queue): yields first and backs off the most after a 429.
     Polling,
-    /// Фоновое обновление: библиотека, новинки, полки — ждёт места в окне.
+    /// Background refresh: library, new releases, shelves — waits for room in the window.
     Background,
-    /// Страница, которую открыл человек, и любые записи.
+    /// The page a person opened, and any writes.
     Interactive,
 }
 
@@ -66,22 +66,22 @@ tokio::task_local! {
     static PRIORITY: Priority;
 }
 
-/// Выполнить `future` с приоритетом запросов Web API.
+/// Run `future` with a Web API request priority.
 pub async fn with_priority<F: Future>(priority: Priority, future: F) -> F::Output {
     PRIORITY.scope(priority, future).await
 }
 
-/// Фоновая работа: уступает страницам и не ходит в сеть, пока источник охлаждается.
+/// Background work: yields to pages and stays off the network while the source cools down.
 pub async fn background<F: Future>(future: F) -> F::Output {
     with_priority(Priority::Background, future).await
 }
 
-/// Периодический опрос: самая малая доля окна и долгий отступ после 429.
+/// Periodic polling: the smallest share of the window and a long backoff after a 429.
 pub async fn polling<F: Future>(future: F) -> F::Output {
     with_priority(Priority::Polling, future).await
 }
 
-/// Приоритет текущего запроса.
+/// Priority of the current request.
 pub(crate) fn priority_of(is_get: bool, path: &str) -> Priority {
     PRIORITY.try_with(|priority| *priority).unwrap_or(if is_get && is_polled(path) {
         Priority::Polling
@@ -101,11 +101,11 @@ fn budget(source: ApiSource) -> usize {
     }
 }
 
-/// Доля окна, которую может занять приоритет.
+/// The share of the window a priority may take.
 fn share(priority: Priority, budget: usize) -> usize {
     match priority {
         Priority::Interactive => usize::MAX,
-        // фон и опрос — меньше половины окна: обход библиотеки на старте не съедает место страницам
+        // background and polling get less than half the window: a library walk at startup does not eat the pages' room
         Priority::Background => budget / 3,
         Priority::Polling => (budget / 8).max(1),
     }
@@ -113,9 +113,9 @@ fn share(priority: Priority, budget: usize) -> usize {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LimitKind {
-    /// 429 с Retry-After.
+    /// 429 with Retry-After.
     RateLimited,
-    /// 429 с reason QUOTA_EXCEEDED: квота режима разработки, обычно до суток.
+    /// 429 with reason QUOTA_EXCEEDED: development mode quota, usually up to a day.
     Quota,
 }
 
@@ -135,14 +135,14 @@ impl LimitKind {
     }
 }
 
-/// Охлаждение источника, как его видит интерфейс.
+/// Source cooldown as the UI sees it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limit {
     pub kind: LimitKind,
     pub until: Instant,
 }
 
-/// Состояние Web API для интерфейса: None — источник работает.
+/// Web API state for the UI: None — the source is working.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WebApiLimits {
     pub shared: Option<Limit>,
@@ -154,7 +154,7 @@ impl WebApiLimits {
         self.shared.is_some() || self.personal.is_some()
     }
 
-    /// Пояснение под заголовком «Web API ограничен»; пусто — ограничений нет.
+    /// Explanation under the "Web API limited" heading; empty — there are no limits.
     pub fn user_text(&self) -> String {
         let line = |limit: &Limit, shared: bool| {
             let until = clock_after(limit.until.saturating_duration_since(Instant::now()));
@@ -179,7 +179,7 @@ impl WebApiLimits {
     }
 }
 
-/// Местное время через `after` (ЧЧ:ММ).
+/// Local time via `after` (HH:MM).
 fn clock_after(after: Duration) -> String {
     let at = jiff::Timestamp::now()
         .checked_add(jiff::SignedDuration::from_secs(after.as_secs() as i64 + 59))
@@ -206,7 +206,7 @@ enum Decision {
 struct SourceState {
     sent: VecDeque<Instant>,
     block: Option<Block>,
-    /// 429 подряд без успешного ответа между ними.
+    /// 429s in a row without a successful answer between them.
     strikes: u32,
     polling_until: Option<Instant>,
 }
@@ -225,7 +225,7 @@ impl SourceState {
         }
     }
 
-    /// Пускать ли запрос сейчас. Go записывает его в окно.
+    /// Whether to let the request through now. Go records it in the window.
     fn decide(&mut self, priority: Priority, now: Instant, budget: usize) -> Decision {
         self.expire(now);
         if let Some(block) = self.block.as_mut() {
@@ -237,7 +237,7 @@ impl SourceState {
                 if block.probed_at.is_some_and(|at| now.duration_since(at) < block.kind.probe_every()) {
                     return Decision::Fail(block.kind);
                 }
-                // проба: один запрос узнаёт, не кончилось ли ограничение раньше обещанного
+                // a probe: one request finds out whether the limit ended earlier than promised
                 block.probed_at = Some(now);
             }
         }
@@ -253,7 +253,7 @@ impl SourceState {
         match priority {
             Priority::Interactive => unreachable!("pages have no window limit"),
             Priority::Polling => Decision::Fail(LimitKind::RateLimited),
-            // место появится, когда из окна выйдет запрос, который держит долю фона
+            // room appears when the request holding the background share leaves the window
             Priority::Background => Decision::Wait((self.sent[used - allowed] + WINDOW).saturating_duration_since(now)),
         }
     }
@@ -283,7 +283,7 @@ impl SourceState {
         self.polling_until = Some(self.polling_until.map_or(now + backoff, |at| at.max(now + backoff)));
     }
 
-    /// Успешный ответ на запрос, ушедший после начала охлаждения, его снимает.
+    /// A successful answer to a request sent after the cooldown began lifts it.
     fn succeeded(&mut self, sent_at: Instant) {
         if self.block.is_some_and(|block| sent_at < block.since) {
             return;
@@ -301,10 +301,10 @@ impl SourceState {
 }
 
 type Key = (ApiSource, String);
-/// Ответ GET, которого ждут склеенные с ним запросы (None — ещё в полёте).
+/// The GET answer the coalesced requests are waiting for (None — still in flight).
 type Flight = watch::Receiver<Option<Result<String, ApiError>>>;
 
-/// Убирает свой полёт из таблицы, даже если запрос бросили.
+/// Removes its own flight from the table, even if the request was dropped.
 struct Landing<'a> {
     flights: &'a Mutex<HashMap<(u64, Key), Flight>>,
     key: &'a (u64, Key),
@@ -326,17 +326,17 @@ struct Cached {
     body: String,
 }
 
-/// Общее на оба источника: окно и охлаждение у каждого своё, кэш и склейка — одни.
+/// Shared by both sources: each has its own window and cooldown, the cache and coalescing are one.
 pub struct Limits {
     shared: Mutex<SourceState>,
     personal: Mutex<SourceState>,
     cache: Mutex<HashMap<Key, Cached>>,
     flights: Mutex<HashMap<(u64, Key), Flight>>,
-    /// Растёт на каждой записи и выходе: ответы прошлых поколений не кэшируются и не склеиваются с новыми.
+    /// Grows on every write and exit: answers of past generations are not cached or coalesced with new ones.
     generation: AtomicU64,
     last_write: Mutex<Option<Instant>>,
     status: watch::Sender<WebApiLimits>,
-    /// Кто будит интерфейс, когда охлаждение кончится.
+    /// Who wakes the UI when the cooldown ends.
     me: Mutex<Weak<Limits>>,
 }
 
@@ -381,14 +381,14 @@ impl Limits {
         self.status.borrow().clone()
     }
 
-    /// Охлаждается ли источник сейчас (для фоновой работы, которая хочет даже не начинать).
+    /// Whether the source the operation would land on is cooling down right now (for background work that prefers not to even start).
     pub fn blocked(&self, source: ApiSource) -> Option<LimitKind> {
         let mut state = self.source(source);
         state.expire(Instant::now());
         state.block.map(|block| block.kind)
     }
 
-    /// Пропустить запрос. Фон может подождать места в окне; опрос и всё под охлаждением — сразу ошибка.
+    /// Let a request through. Background may wait for room in the window; polling and anything under cooldown get an error at once.
     pub(crate) async fn admit(&self, source: ApiSource, priority: Priority) -> Result<(), ApiError> {
         let started = Instant::now();
         loop {
@@ -409,7 +409,7 @@ impl Limits {
         }
     }
 
-    /// Повтор того же запроса (401, 5xx, короткий 429) — тоже запрос в окне.
+    /// A retry of the same request (401, 5xx, short 429) is also a request in the window.
     pub(crate) fn count_retry(&self, source: ApiSource) {
         self.source(source).sent.push_back(Instant::now());
     }
@@ -445,7 +445,7 @@ impl Limits {
             *current = limits;
             true
         });
-        // когда охлаждение кончится, интерфейс должен об этом узнать без нового запроса
+        // when the cooldown ends, the UI must learn about it without a new request
         if changed
             && let Some(wake) = wake
             && let Ok(runtime) = tokio::runtime::Handle::try_current()
@@ -460,9 +460,9 @@ impl Limits {
         }
     }
 
-    // ---- склейка и кэш GET ----
+    // ---- GET coalescing and cache ----
 
-    /// GET: ответ из кэша, ответ такого же запроса в полёте или новый запрос `fetch`.
+    /// GET: an answer from the cache, the answer of an identical in-flight request, or a new `fetch` request.
     pub(crate) async fn get<F>(&self, source: ApiSource, path: &str, query: &[(&str, String)], fetch: F) -> Result<String, ApiError>
     where
         F: Future<Output = Result<String, ApiError>>,
@@ -499,7 +499,7 @@ impl Limits {
                 let answer = flight.wait_for(Option::is_some).await.ok().and_then(|answer| answer.clone());
                 match answer {
                     Some(answer) => answer,
-                    // ведущий запрос бросили — спрашиваем сами
+                    // the leading request was dropped — we ask ourselves
                     None => fetch.await,
                 }
             }
@@ -531,19 +531,19 @@ impl Limits {
         lock(&self.last_write).is_some_and(|at| at.elapsed() < WRITE_QUIET)
     }
 
-    /// Запись (PUT/POST/DELETE) любым источником: кэш своих данных и склейка начинаются заново (каталог остаётся).
+    /// A write (PUT/POST/DELETE) by any source: the cache of own data and coalescing start over (the catalog stays).
     pub(crate) fn wrote(&self) {
         *lock(&self.last_write) = Some(Instant::now());
         self.forget_user_data();
     }
 
-    /// Забыть кэш ответов (выход, смена аккаунта).
+    /// Forget the answer cache (logout, account switch).
     pub fn forget(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         lock(&self.cache).clear();
     }
 
-    /// Забыть то, что может поменять запись мимо Web API (библиотека и плейлисты через сессию): каталог остаётся.
+    /// Forget what a write outside the Web API may have changed (library and playlists through a session): the catalog stays.
     pub fn forget_user_data(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         lock(&self.cache).retain(|key, _| is_catalog(&key.1));
@@ -556,7 +556,7 @@ fn cache_key(path: &str, query: &[(&str, String)]) -> String {
     format!("{path}?{}", pairs.join("&"))
 }
 
-/// Состояние плеера кэшировать нельзя: оно меняется каждую секунду. Каталог — надолго, свои списки — на минуту.
+/// Player state cannot be cached: it changes every second. The catalog is long-lived, own lists for a minute.
 fn ttl_for(path: &str) -> Duration {
     if path.starts_with("/me/player") {
         Duration::ZERO
@@ -569,13 +569,13 @@ fn ttl_for(path: &str) -> Duration {
     }
 }
 
-/// Справочные данные каталога: запись в библиотеку или плейлист их не меняет.
+/// Catalog reference data: a write to the library or a playlist does not change it.
 fn is_catalog(path: &str) -> bool {
     const CATALOG: [&str; 6] = ["/albums", "/artists", "/tracks", "/shows", "/episodes", "/audiobooks"];
     CATALOG.iter().any(|prefix| path.starts_with(prefix))
 }
 
-/// Пауза с разбросом +10…30 %: клиенты, получившие 429 вместе, не возвращаются вместе.
+/// A pause with +10…30 % spread: clients that got a 429 together do not come back together.
 pub(crate) fn jittered(wait: Duration) -> Duration {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
     wait.mul_f64(1.1 + 0.2 * f64::from(nanos % 1000) / 1000.0)
@@ -595,21 +595,21 @@ mod tests {
         let start = Instant::now();
         let mut state = SourceState::new();
         let budget = 40;
-        // опрос: восьмая часть окна, дальше — отказ без ожидания
+        // polling: an eighth of the window, beyond that a refusal without waiting
         for _ in 0..5 {
             assert_eq!(state.decide(Priority::Polling, start, budget), Decision::Go);
         }
         assert_eq!(state.decide(Priority::Polling, start, budget), Decision::Fail(LimitKind::RateLimited));
-        // фон: до трети, дальше ждёт, пока окно не освободится
+        // background: up to a third, beyond that it waits until the window frees up
         for _ in 5..13 {
             assert_eq!(state.decide(Priority::Background, start, budget), Decision::Go);
         }
         assert_eq!(state.decide(Priority::Background, at(start, 1), budget), Decision::Wait(Duration::from_secs(29)));
-        // страница проходит всегда
+        // a page always gets through
         for _ in 0..30 {
             assert_eq!(state.decide(Priority::Interactive, start, budget), Decision::Go);
         }
-        // через окно всё снова свободно
+        // everything is free again through the window
         assert_eq!(state.decide(Priority::Polling, at(start, 31), budget), Decision::Go);
     }
 
@@ -620,11 +620,11 @@ mod tests {
         state.limited(start, Duration::from_secs(120), false);
         assert_eq!(state.decide(Priority::Background, start, 40), Decision::Fail(LimitKind::RateLimited));
         assert_eq!(state.decide(Priority::Polling, start, 40), Decision::Fail(LimitKind::RateLimited));
-        // страница: одна проба, следующая — не раньше чем через 15 с
+        // a page: one probe, the next no earlier than 15 s later
         assert_eq!(state.decide(Priority::Interactive, at(start, 1), 40), Decision::Go);
         assert_eq!(state.decide(Priority::Interactive, at(start, 2), 40), Decision::Fail(LimitKind::RateLimited));
         assert_eq!(state.decide(Priority::Interactive, at(start, 17), 40), Decision::Go);
-        // ограничение кончилось — фон снова идёт, опрос ещё отступает (≥ 120 с)
+        // the limit ended — background goes again, polling still backs off (≥ 120 s)
         assert_eq!(state.decide(Priority::Background, at(start, 121), 40), Decision::Go);
         assert_eq!(state.decide(Priority::Polling, at(start, 100), 40), Decision::Fail(LimitKind::RateLimited));
     }
@@ -660,7 +660,7 @@ mod tests {
         let mut state = SourceState::new();
         state.limited(start, Duration::from_secs(1), true);
         assert_eq!(state.decide(Priority::Background, at(start, 300), 40), Decision::Fail(LimitKind::Quota));
-        // ответ на запрос, ушедший до квоты, её не снимает
+        // an answer to a request sent before the quota does not lift it
         state.succeeded(start - Duration::from_secs(1));
         assert!(state.block.is_some());
         state.succeeded(at(start, 60));
@@ -691,7 +691,7 @@ mod tests {
         assert_eq!(inside, Priority::Background);
     }
 
-    /// Склейка не должна мешать запускать запросы в tokio::spawn (Send для любых времён жизни).
+    /// Coalescing must not get in the way of launching requests in tokio::spawn (Send for any lifetimes).
     #[test]
     fn web_requests_stay_spawnable() {
         fn spawnable<F: Future + Send + 'static>(_: F) {}
@@ -728,7 +728,7 @@ mod tests {
             tokio::task::yield_now().await;
             follower.await
         };
-        // ведущего бросают по таймауту — ждущий спрашивает сам
+        // the leader is dropped on timeout — the waiter asks for itself
         let leader = tokio::time::timeout(Duration::from_millis(20), leader);
         let (dropped, own) = tokio::join!(leader, follower);
         assert!(dropped.is_err());
@@ -761,7 +761,7 @@ mod tests {
         };
         let (a, b, c, ()) = tokio::join!(first, second, other, opener);
         assert_eq!((a.unwrap(), b.unwrap(), c.unwrap()), ("body".into(), "body".into(), "body".into()));
-        // один запрос на общий источник, один — на личный
+        // one request for the shared source, one for the personal one
         assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 
@@ -779,9 +779,9 @@ mod tests {
         assert_eq!(limits.get(ApiSource::Shared, "/albums/1", &[], fetch()).await.unwrap(), "v2");
         limits.wrote();
         assert_eq!(limits.get(ApiSource::Shared, "/me/albums", &[], fetch()).await.unwrap(), "v3");
-        // сразу после записи свои данные не кэшируются: перепроверки видят свежий ответ
+        // right after a write own data is not cached: rechecks see a fresh answer
         assert_eq!(limits.get(ApiSource::Shared, "/me/albums", &[], fetch()).await.unwrap(), "v4");
-        // каталог запись не меняет: он остаётся в кэше
+        // a write does not change the catalog: it stays in the cache
         assert_eq!(limits.get(ApiSource::Shared, "/albums/1", &[], fetch()).await.unwrap(), "v2");
         assert_eq!(calls.load(Ordering::SeqCst), 4);
     }
@@ -817,7 +817,7 @@ mod tests {
         let refused = background(async { limits.admit(ApiSource::Shared, priority_of(true, "/me/albums")).await }).await;
         assert!(matches!(refused, Err(ApiError::RateLimited)));
         assert!(started.elapsed() < Duration::from_millis(100));
-        // другой источник не затронут
+        // the other source is not affected
         assert!(background(limits.admit(ApiSource::Personal, Priority::Background)).await.is_ok());
         limits.note_success(ApiSource::Shared, Instant::now());
         assert!(status.borrow_and_update().shared.is_none());

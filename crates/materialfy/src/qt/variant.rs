@@ -1,4 +1,4 @@
-//! serde_json::Value <-> QVariant. Словари из QML (трек, плейлист) приходят как QVariantMap.
+//! serde_json::Value <-> QVariant. Dicts from QML (track, playlist) arrive as QVariantMap.
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QMetaTypeType, QString, QStringList, QVariant};
 use serde_json::{Map, Number, Value};
 
@@ -72,7 +72,7 @@ pub fn qvariant_to_json(value: &QVariant) -> Value {
             let list = value.value::<QVariantList>().unwrap_or_default();
             Value::Array(list.iter().map(qvariant_to_json).collect())
         }
-        // прочие типы (QUrl, QColor…) — строкой, если Qt умеет их так показать
+        // other types (QUrl, QColor...) - as a string, if Qt can show them that way
         _ => match value.value::<QString>() {
             Some(s) => Value::String(s.to_string()),
             None => Value::Null,

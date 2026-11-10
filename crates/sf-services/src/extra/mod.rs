@@ -1,14 +1,14 @@
-//! Внутренние модули «services-extra» (станции радио, медиаклавиши/SMTC/MPRIS, приёмники zeroconf…).
-//! Новые файлы части 2 sf-services создавать только здесь; объявлять в этом mod.rs.
+//! Internal modules of "services-extra" (radio stations, media keys/SMTC/MPRIS, zeroconf receivers…).
+//! New files of part 2 of sf-services are created only here; declare them in this mod.rs.
 
-/// список устройств Connect: слияние Web API, этого ПК и приёмников mDNS
+/// Connect device list: merging Web API, this PC and mDNS receivers
 pub mod connect;
-/// полки главной из главной Spotify и «Для тебя» (через сессию), запасной топ из истории
+/// home shelves from Spotify's home and "For You" (through the session), fallback top from history
 pub mod feed;
-/// панель «Сейчас играет» и медиаклавиши (fastframe-now-playing)
+/// the "Now playing" panel and media keys (fastframe-now-playing)
 #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 pub mod media;
-/// группы сидов радио
+/// radio seed groups
 pub mod seeds;
-/// состав полок главной
+/// home shelf composition
 pub mod shelves;

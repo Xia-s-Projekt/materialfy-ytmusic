@@ -1,4 +1,4 @@
-//! Сервисы без входа и без сети: история, закрепления, стоп-лист, каталог отвечает «Войдите в аккаунт».
+//! Services without sign-in and without network: history, pins, stop-list, the catalog answers "Sign in to your account".
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -36,7 +36,7 @@ fn track(id: &str, duration_ms: i64) -> TrackItem {
     TrackItem {
         track_id: id.to_owned(),
         uri: format!("spotify:track:{id}"),
-        title: format!("Песня {id}"),
+        title: format!("Song {id}"),
         duration_ms,
         available: true,
         ..Default::default()
@@ -48,7 +48,7 @@ async fn history_counts_only_real_listening_and_survives_a_restart() {
     let f = fixture();
     let file = f.dir.join("history.json");
     let history = HistoryService::with_file(tokio::runtime::Handle::current(), f.auth.clone(), f.player.clone(), file.clone());
-    let context = PlayContext::with_uri("album", "spotify:album:a1").titled("Альбом");
+    let context = PlayContext::with_uri("album", "spotify:album:a1").titled("Album");
     history.note_played(track("skipped", 240_000), context.clone(), 5.0);
     history.note_played(track("heard", 240_000), context.clone(), 31.0);
     history.note_played(track("short", 20_000), PlayContext::new("tracks"), 10.0);
@@ -114,7 +114,7 @@ async fn catalog_asks_to_sign_in_and_an_empty_search_is_empty() {
     let _ = std::fs::remove_dir_all(&f.dir);
 }
 
-/// --offline: start() не зовут — «Входим…» не висит; start() без сохранённого входа приводит к signedOut.
+/// --offline: start() is not called — "Signing in…" does not hang; start() without a saved sign-in leads to signedOut.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sign_in_without_saved_grants_ends_signed_out() {
     let f = fixture();
@@ -134,7 +134,7 @@ async fn sign_in_without_saved_grants_ends_signed_out() {
     let _ = std::fs::remove_dir_all(&f.dir);
 }
 
-/// Оболочка берёт прокси для картинок QML из proxy()/watch_proxy(): с паролем и после каждого применения.
+/// The shell takes the proxy for QML images from proxy()/watch_proxy(): with the password and after each application.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn applied_proxy_is_published_for_the_shell() {
     let f = fixture();

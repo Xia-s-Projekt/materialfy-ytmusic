@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Карточка исполнителя при наведении на его имя: фото, подписчики, жанр, «Открыть» и «Радио».
-// Кладётся поверх окна; show(id, x, y, w) — под ссылкой, hideSoon() — скрыть, если мышь не на карточке.
+// Artist card on hovering their name: photo, followers, genre, "Open" and "Radio".
+// Placed over the window; show(id, x, y, w) — under the link, hideSoon() — hide if the mouse is not on the card.
 Item {
     id: root
 

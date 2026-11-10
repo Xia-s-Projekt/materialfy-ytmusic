@@ -1,4 +1,4 @@
-//! Маршрутизация запросов между общим и личным приложением Spotify. Перенос spotifast/src/api/gateway.rs.
+//! Routing of requests between the shared and the personal Spotify application. Port of spotifast/src/api/gateway.rs.
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -7,7 +7,7 @@ use crate::client::{ApiClient, ApiError, NetActivity, TokenProvider};
 use crate::limits::{LimitKind, Limits, WebApiLimits};
 use crate::models::Playlist;
 
-/// Общий и личный Web API вошли в разные аккаунты (ключ перевода; sf-services сверяет по нему код ошибки).
+/// The shared and the personal Web API are signed into different accounts (a translation key; sf-services matches the error code against it).
 pub const ACCOUNT_MISMATCH: &str = "The shared and personal Spotify apps are signed in to different accounts";
 
 pub use md3_model::{AccountId, PlaylistId};
@@ -164,10 +164,10 @@ pub struct ApiGateway {
     http: crate::http::Http,
     shared: Session,
     personal: Session,
-    /// Аккаунт сессии librespot (вход воспроизведения): известен и без токена Web API.
+    /// The librespot session account (playback login): known even without a Web API token.
     session_account: RwLock<Option<AccountId>>,
     playlist_access: Mutex<HashMap<PlaylistId, PlaylistAccess>>,
-    /// Бюджет запросов, склейка и кэш GET, охлаждение после 429/квоты (см. limits.rs).
+    /// Request budget, coalescing and GET cache, cooldown after 429/quota (see limits.rs).
     limits: Arc<Limits>,
 }
 
@@ -185,22 +185,22 @@ impl ApiGateway {
         }
     }
 
-    /// Общий HTTP-клиент (с прокси) — для запросов мимо Web API, например картинок.
+    /// Shared HTTP client (with proxy) — for requests outside the Web API, for example images.
     pub fn http(&self) -> crate::http::Http {
         self.http.clone()
     }
 
-    /// «Web API ограничен»: охлаждение общего/личного приложения после 429 или QUOTA_EXCEEDED.
+    /// "Web API limited": cooldown of the shared/personal application after a 429 or QUOTA_EXCEEDED.
     pub fn web_api_limits(&self) -> tokio::sync::watch::Receiver<WebApiLimits> {
         self.limits.watch()
     }
 
-    /// Охлаждается ли источник, которому досталась бы операция: фоновой работе лучше не начинать.
+    /// Whether the source the operation would land on is cooling down: background work had better not start.
     pub fn web_api_blocked(&self, operation: Operation) -> Option<LimitKind> {
         self.limits.blocked(plan(operation, self.personal_ready()))
     }
 
-    /// Забыть кэш ответов GET (после записи мимо Web API, например через сессию librespot); каталог остаётся.
+    /// Forget the GET answer cache (after a write outside the Web API, for example through a librespot session); the catalog stays.
     pub fn forget_cached(&self) {
         self.limits.forget_user_data();
     }
@@ -281,7 +281,7 @@ impl ApiGateway {
         self.web_account().or_else(|| self.session_account())
     }
 
-    /// Аккаунт, в который вошёл Web API (общее или личное приложение).
+    /// The account the Web API is signed into (shared or personal application).
     pub fn web_account(&self) -> Option<AccountId> {
         self.state(ApiSource::Shared)
             .account()
@@ -289,7 +289,7 @@ impl ApiGateway {
             .or_else(|| self.state(ApiSource::Personal).account().cloned())
     }
 
-    /// Аккаунт сессии librespot (None — входа воспроизведения нет).
+    /// The librespot session account (None — there is no playback login).
     pub fn session_account(&self) -> Option<AccountId> {
         self.session_account
             .read()
@@ -297,8 +297,8 @@ impl ApiGateway {
             .clone()
     }
 
-    /// Вход воспроизведения задаёт аккаунт приложения и без Web API; Web API другого аккаунта
-    /// после этого не устанавливается (`install`).
+    /// The playback login sets the application account even without a Web
+    /// it is not set after that (`install`).
     pub fn set_session_account(&self, account: Option<AccountId>) {
         *self
             .session_account
@@ -595,7 +595,7 @@ mod tests {
         gateway.set_session_account(Some(AccountId::new("listener")));
         assert_eq!(gateway.account(), Some(AccountId::new("listener")));
         assert_eq!(gateway.web_account(), None);
-        // Web API другого аккаунта не встаёт рядом с сессией
+        // another account's Web API does not sit next to a session
         gateway.begin_verification(ApiSource::Shared, provider("stranger", ApiSource::Shared));
         assert!(gateway.install(ApiSource::Shared, AccountId::new("stranger")).is_err());
         gateway.begin_verification(ApiSource::Shared, provider("same", ApiSource::Shared));

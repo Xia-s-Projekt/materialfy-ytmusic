@@ -3,13 +3,13 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Настройки → Внешний вид: где жить плееру вне окна и каким ему быть. Крупные карточки с живым превью
-// (макет docs/design/50-dynamic-island.html): выключен / островок / панель задач (/ оба — Windows), ниже —
-// стиль (чёрный / цветной) тоже с превью. Выбранная карточка — тональный контейнер, углы 16 → 28, галочка.
+// Settings → Appearance: where the player lives outside the window and what it looks like. Large cards with a live preview
+// (layout docs/design/50-dynamic-island.html): off / island / taskbar (/ both — Windows), below that —
+// the style (black / colored) also with a preview. The selected card is a tonal container, corners 16 → 28, a check mark.
 ColumnLayout {
     id: root
 
-    // режимы, доступные на этой системе (SettingsPage: островок — Windows и X11, панель задач — Windows)
+    // modes available on this system (SettingsPage: island — Windows and X11, taskbar — Windows)
     property var modes: ["off", "island", "taskbar"]
     readonly property bool active: Settings.floatingPlayer !== "off" && modes.indexOf(Settings.floatingPlayer) >= 0
 
@@ -92,7 +92,7 @@ ColumnLayout {
         }
     }
 
-    // ---- Карточка выбора ----
+    // ---- Selection card ----
     component Choice: Item {
         id: card
         property string title
@@ -144,7 +144,7 @@ ColumnLayout {
                 elide: Text.ElideRight
             }
         }
-        // галочка выбранной
+        // check mark on the selected one
         Rectangle {
             anchors.right: parent.right
             anchors.top: parent.top
@@ -165,7 +165,7 @@ ColumnLayout {
         }
     }
 
-    // Рабочий стол в миниатюре: обои, панель задач, островок и/или виджет
+    // Desktop in miniature: wallpaper, taskbar, island and/or widget
     component MiniDesk: Item {
         id: desk
         property bool island: false
@@ -179,7 +179,7 @@ ColumnLayout {
                 GradientStop { position: 1; color: Qt.tint(Theme.surfaceContainerLow, Qt.alpha(Theme.tertiary, 0.18)) }
             }
         }
-        // окно приложения
+        // the application window
         Rectangle {
             x: 14; y: 22; width: parent.width * 0.5; height: parent.height * 0.5
             radius: 6
@@ -226,7 +226,7 @@ ColumnLayout {
         }
     }
 
-    // Компактный островок: обложка и полоски (верх прямой — растёт из кромки)
+    // Compact island: cover and bars (the top is straight — it grows out of the edge)
     component MiniIsland: Item {
         id: mi
         property bool tinted: false
@@ -260,7 +260,7 @@ ColumnLayout {
         }
     }
 
-    // Виджет панели задач: пилюля с обложкой, названием и кнопками
+    // Taskbar widget: a pill with cover, title and buttons
     component MiniPill: Item {
         id: mp
         property bool tinted: false
@@ -303,7 +303,7 @@ ColumnLayout {
         }
     }
 
-    // Обложка играющего трека (или заглушка) в превью
+    // Cover of the playing track (or a placeholder) in the preview
     component MiniCover: Item {
         height: width
         MorphImage {

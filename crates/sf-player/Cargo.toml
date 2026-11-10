@@ -1,6 +1,6 @@
 [package]
 name = "sf-player"
-description = "Плеер Spotify: librespot (Session/Spirc/Player), свой sink на fastframe-audio, Connect, очередь, оптимистичный снимок"
+description = "Spotify player: librespot (Session/Spirc/Player), custom sink on fastframe-audio, Connect, queue, optimistic snapshot"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

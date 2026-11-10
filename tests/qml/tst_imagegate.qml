@@ -1,11 +1,11 @@
-// Учёт слотов ImageGate ( Md3/ImageGate.qml — тот самый синглтон, не копия):
+// ImageGate slot accounting ( Md3/ImageGate.qml — the real singleton, not a copy):
 //   QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_imagegate.qml
-// (tests/qml/gate/ImageGate.qml — копия настоящего синглтона: симлинк не работает на Windows
-//  (core.symlinks=false), весь модуль Md3 сюда нельзя — его синглтоны тянут Materialfy.Core.
-//  Копию при изменении оригинала нужно обновлять: они в одном коммите.)
-// Контракт: acquire до limit — слот сразу; дальше — очередь; release будит ждущего через
-// qmlContinue; cancel убирает ждущего без возврата слота (слот ему не выдавался);
-// лишний release не уводит счётчик в минус; мёртвая заявка пропускается.
+// (tests/qml/gate/ImageGate.qml — a copy of the real singleton: symlinks do not work on Windows
+//  (core.symlinks=false), and the whole Md3 module cannot come here — its singletons pull in Materialfy.Core.
+//  When the original changes the copy must be updated: they go in one commit.)
+// Contract: acquire up to the limit — a slot immediately; beyond that — the queue; release wakes a waiter via
+// qmlContinue; cancel removes a waiter without returning a slot (no slot was given to it);
+// an extra release does not drive the counter negative; a dead request is skipped.
 import QtQuick
 import QtTest
 import "gate" as Gate
@@ -13,7 +13,7 @@ import "gate" as Gate
 TestCase {
     name: "ImageGate"
 
-    // фальшивый «Image»: очередь зовёт qmlContinue на том, кого поставила в очередь
+    // fake "Image": the queue calls qmlContinue on whoever it put in the queue
     Component {
         id: fakeFactory
         QtObject {
@@ -22,19 +22,19 @@ TestCase {
         }
     }
 
-    // занять все слоты лимита; вернуть выданные держатели
+    // take all the slots up to the limit; return the holders that were given
     function fillToLimit() {
         const holders = []
         for (let i = 0; i < Gate.ImageGate.limit; ++i) {
             const o = createTemporaryObject(fakeFactory, null)
-            compare(Gate.ImageGate.acquire(o), true, "слот " + i + " выдан сразу")
+            compare(Gate.ImageGate.acquire(o), true, "slot " + i + " given immediately")
             holders.push(o)
         }
         return holders
     }
 
     function drainQueue() {
-        // состояние синглтона между тестами: выданные слоты отпустить, очередь разобрать
+        // singleton state between tests: release the slots that were given, drain the queue
         while (Gate.ImageGate.running > 0)
             Gate.ImageGate.release(null)
         Gate.ImageGate._queue = []
@@ -46,11 +46,11 @@ TestCase {
         drainQueue()
         const holders = fillToLimit()
         const waiter = createTemporaryObject(fakeFactory, null)
-        compare(Gate.ImageGate.acquire(waiter), false, "сверх лимита — в очередь")
+        compare(Gate.ImageGate.acquire(waiter), false, "over the limit — queued")
         compare(Gate.ImageGate._queue.length, 1)
         for (const h of holders)
             Gate.ImageGate.release(h)
-        compare(waiter.continues, 1, "ждущий получил слот через qmlContinue")
+        compare(waiter.continues, 1, "the waiter got a slot via qmlContinue")
         compare(Gate.ImageGate.running, 1)
         drainQueue()
     }
@@ -63,11 +63,11 @@ TestCase {
         compare(Gate.ImageGate.acquire(w1), false)
         compare(Gate.ImageGate.acquire(w2), false)
         Gate.ImageGate.release(holders[0])
-        compare(w1.continues, 1, "первый ждущий разбужен первым")
-        compare(w2.continues, 0, "второй ждёт своего слота")
+        compare(w1.continues, 1, "the first waiter is woken first")
+        compare(w2.continues, 0, "the second is waiting for its slot")
         compare(Gate.ImageGate.running, Gate.ImageGate.limit)
         Gate.ImageGate.release(w1)
-        compare(w2.continues, 1, "освободившийся слот уходит следующему")
+        compare(w2.continues, 1, "the freed slot goes to the next one")
         drainQueue()
     }
 
@@ -76,32 +76,32 @@ TestCase {
         const holders = fillToLimit()
         const waiter = createTemporaryObject(fakeFactory, null)
         compare(Gate.ImageGate.acquire(waiter), false)
-        Gate.ImageGate.cancel(waiter)         // ушёл, не получив слота
+        Gate.ImageGate.cancel(waiter)         // left without getting a slot
         compare(Gate.ImageGate._queue.length, 0)
-        Gate.ImageGate.release(holders[0])    // единственный слот вернулся
-        compare(waiter.continues, 0, "отменённый не будится")
-        compare(Gate.ImageGate.running, Gate.ImageGate.limit - 1, "слот не достался отменённому")
+        Gate.ImageGate.release(holders[0])    // the only slot was returned
+        compare(waiter.continues, 0, "the cancelled one is not woken")
+        compare(Gate.ImageGate.running, Gate.ImageGate.limit - 1, "the slot did not go to the cancelled one")
         drainQueue()
     }
 
     function test_release_below_zero_is_clamped() {
         drainQueue()
         const o = createTemporaryObject(fakeFactory, null)
-        Gate.ImageGate.release(o)             // release без acquire
-        compare(Gate.ImageGate.running, 0, "счётчик не ушёл в минус")
+        Gate.ImageGate.release(o)             // release without acquire
+        compare(Gate.ImageGate.running, 0, "the counter did not go negative")
         const w = createTemporaryObject(fakeFactory, null)
-        compare(Gate.ImageGate.acquire(w), true, "после лишнего release лимит не съеден")
+        compare(Gate.ImageGate.acquire(w), true, "after the extra release the limit is not consumed")
         drainQueue()
     }
 
     function test_queued_item_without_continue_is_skipped() {
         drainQueue()
         const holders = fillToLimit()
-        Gate.ImageGate._queue.push(null)      // «мёртвая» заявка в очереди
+        Gate.ImageGate._queue.push(null)      // a "dead" request in the queue
         const w = createTemporaryObject(fakeFactory, null)
         compare(Gate.ImageGate.acquire(w), false)
         Gate.ImageGate.release(holders[0])
-        compare(w.continues, 1, "мёртвая заявка пропущена, живая разбужена")
+        compare(w.continues, 1, "the dead request was skipped, the live one woken")
         drainQueue()
     }
 }

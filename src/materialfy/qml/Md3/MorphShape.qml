@@ -1,31 +1,31 @@
 import QtQuick
 
-// Фигура MD3 Expressive. При смене `shape` плавно морфится из текущей формы в новую
-// (в том числе из промежуточной, если предыдущий морф ещё не закончился).
-// Рисует шейдер shaders/shape.frag: контур — полярная функция, морф, цвет, поворот, «дыхание» —
-// uniform'ы. Раньше здесь был PathPolyline из 120 точек: JS пересобирал его каждый кадр морфа,
-// CurveRenderer заново триангулировал, а цвет накладывал отдельный слой.
-// Корень — Item: вложенные элементы (иконка, инициалы) лежат поверх фигуры.
+// MD3 Expressive shape. When shape changes it smoothly morphs from the current form to the new one
+// (including from an intermediate one, if the previous morph has not finished yet).
+// It draws the shaders/shape.frag shader: the outline is a polar function, morph, color, rotation, "breathing" —
+// uniforms. Previously there was a PathPolyline of 120 points: JS rebuilt it every morph frame,
+// CurveRenderer re-triangulated it, and a separate layer applied the color.
+// The root is an Item: nested elements (icon, initials) sit on top of the shape.
 Item {
     id: root
 
     property var shape: "circle"
-    property real angle: 0                 // поворот контура, градусы (Item.rotation не трогаем)
-    property int samples: 120              // не используется (контур считает шейдер), оставлено для совместимости
+    property real angle: 0                 // outline rotation, degrees (Item.rotation is left alone)
+    property int samples: 120              // unused (the shader computes the outline), kept for compatibility
     property color color: Theme.primary
     property color strokeColor: "transparent"
-    property bool tinted: true             // не используется: цвет — всегда uniform
-    property real strokeWidth: 0           // обводка внутрь контура, px
+    property bool tinted: true             // unused: the color is always a uniform
+    property real strokeWidth: 0           // stroke inside the outline, px
     property alias duration: m.duration
     property alias overshoot: m.overshoot
-    property alias livingSpeed: m.livingSpeed // скорость «дыхания» blob-фигур, 0 — заморозить
-    property real pulse: 0                 // 0..1 — «дыхание» контура: впадины глубже, фигура чуть шире
-    // Растворение по вертикали без слоя (см. shape.frag): (u0, du, v0, dv) по y шейдера, 0 — нет
+    property alias livingSpeed: m.livingSpeed // blob shape "breathing" speed, 0 — freeze
+    property real pulse: 0                 // 0..1 — outline "breathing": dents are deeper, the shape slightly wider
+    // Vertical fade without a layer (see shape.frag): (u0, du, v0, dv) along the shader y, 0 — none
     property alias fade: fx.fade
-    readonly property alias pad: fx.pad    // насколько шейдер выходит за элемент с каждой стороны, px
+    readonly property alias pad: fx.pad    // how far the shader extends past the item on each side, px
 
     function morphTo(next) { m.morphTo(next) }
-    // Сменить фигуру сразу, без морфа (привязка m.shape не рвётся)
+    // Change the shape at once, without a morph (the m.shape binding is not broken)
     function jumpTo(next) { m._ready = false; shape = next; m._set(next); m._ready = true }
 
     implicitWidth: 48
@@ -39,13 +39,13 @@ Item {
 
     ShaderEffect {
         id: fx
-        // чуть больше элемента: перелёт морфа (OutBack) не должен упираться в край прямоугольника
+        // slightly larger than the item: the morph overshoot (OutBack) must not hit the rectangle edge
         readonly property real pad: Math.ceil(Math.min(root.width, root.height) * 0.06) + 1
         x: -pad
         y: -pad
         width: root.width + 2 * pad
         height: root.height + 2 * pad
-        z: -1   // под вложенными элементами (иконка, инициалы)
+        z: -1   // under the nested elements (icon, initials)
         visible: root.width > 0 && root.height > 0 && (root.color.a > 0 || root.strokeWidth > 0)
         blending: true
 

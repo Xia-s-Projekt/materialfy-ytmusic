@@ -1,8 +1,8 @@
 import QtQuick
 import Md3
 
-// Ряд чипов разделов настроек. В узком окне прокручивается по горизонтали;
-// выбранный чип сам въезжает в видимую часть.
+// Row of settings section chips. In a narrow window it scrolls horizontally;
+// the selected chip scrolls itself into the visible area.
 Item {
     id: root
 
@@ -45,7 +45,7 @@ Item {
             }
         }
 
-        // колесо мыши крутит ряд по горизонтали, только если он не помещается
+        // the mouse wheel turns the row horizontally, only if it does not fit
         WheelHandler {
             enabled: flick.interactive
             acceptedDevices: PointerDevice.Mouse

@@ -1,30 +1,30 @@
-//! Настройки приложения: схема ключей (имена, типы, значения по умолчанию).
+//! App settings: the key schema (names, types, default values).
 //!
-//! Хранилище в формате QSettings (тот же, что пишет QSettings оболочки):
-//! - Linux/macOS, а также при --config-dir на любой ОС: INI-файл (`[General]`, `ключ=значение`;
-//!   bool — "true"/"false", числа — текстом, строки с запятой/спецсимволами — в кавычках, как пишет QSettings);
-//! - Windows без --config-dir: реестр HKCU\Software\materialfy\Materialfy (строки, bool и float — REG_SZ,
-//!   int — REG_DWORD; при чтении REG_SZ числа тоже принимаются).
+//! Storage in QSettings format (the same one the shell's QSettings writes):
+//! - Linux/macOS, and also with --config-dir on any OS: an INI file (`[General]`, `key=value`;
+//!   bool — "true"/"false", numbers as text, strings with a comma or special characters quoted, as QSettings writes them);
+//! - Windows without --config-dir: the registry HKCU\Software\materialfy\Materialfy (strings, bool and float — REG_SZ,
+//!   int — REG_DWORD; when reading REG_SZ numbers are accepted too).
 //!
-//! Чтение как `_read` в Python: нет значения или не приводится к типу — значение по умолчанию.
-//! Запись как `_write`: если новое значение равно текущему — ничего не происходит и событие не шлётся.
-//! Все методы потокобезопасны; запись на диск — сразу (синхронно, файл маленький).
+//! Reading like `_read` in Python: no value or it does not convert to the type — the default value.
+//! Writing like `_write`: if the new value equals the current one — nothing happens and no event is sent.
+//! All methods are thread-safe; the write to disk happens immediately (synchronously, the file is small).
 //!
-//! `get(WindowButtons)` всегда true: кнопки окна приложение рисует на всех ОС, настройки больше нет. Старое
-//! значение в конфиге читается и сохраняется, но не влияет; сравнение при записи — с `get_stored`.
+//! `get(WindowButtons)` is always true: the app draws the window buttons on every OS, the setting is gone. The old
+//! value in the config is read and saved but has no effect; the comparison on write is against `get_stored`.
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
 
-/// windowX/windowY: положение ещё не сохранялось
+/// windowX/windowY: the position has not been saved yet
 pub const WINDOW_POS_UNSET: i64 = -1_000_000;
 
-/// Все ключи (Spotify-версия).
+/// All keys (Spotify version).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SettingKey {
-    // Внешний вид
+    // Appearance
     ThemeMode,
     SchemeVariant,
     AccentFromCover,
@@ -38,53 +38,53 @@ pub enum SettingKey {
     CoverSpin,
     CoverPulse,
     CalmWhenInactive,
-    /// текст песни: "normal" (классика) | "spicy" (крупная строка со сглаженным градиентом) | "karaoke" (текущая строка крупнее)
+    /// lyrics text: "normal" (classic) | "spicy" (large line with a smoothed gradient) | "karaoke" (the current line is larger)
     LyricsMode,
-    /// множитель размера шрифта текста (базовый размер задаёт место вызова)
+    /// lyrics font size multiplier (the base size is set by the call site)
     LyricsFontScale,
-    /// затемняющая подложка за текстом: "none" | "soft" | "strong"
+    /// darkening backdrop behind the text: "none" | "soft" | "strong"
     LyricsScrim,
-    /// выравнивание текста песни: "left" | "center" | "right"
+    /// lyrics text alignment: "left" | "center" | "right"
     LyricsTextAlign,
-    /// режим заполнения: "word" | "line" | "off"
+    /// fill mode: "word" | "line" | "off"
     LyricsFillMode,
-    /// фильтр видимых строк: "all" | "three" | "one" | "1"…"15"
+    /// visible-line filter: "all" | "three" | "one" | "1"…"15"
     LyricsVisibleLines,
-    /// множитель градиента и свечения (0..2)
+    /// gradient and glow multiplier (0..2)
     LyricsHighlight,
-    /// масштаб активной строки (0.0 — по стилю, либо 1.0…1.35)
+    /// active line scale (0.0 — per style, or 1.0…1.35)
     LyricsActiveScale,
-    /// масштаб неактивных строк (0.0 — по стилю, либо 0.8…1.0)
+    /// inactive line scale (0.0 — per style, or 0.8…1.0)
     LyricsIdleScale,
-    /// амплитуда волны слов (0.0…2.0)
+    /// word wave amplitude (0.0…2.0)
     LyricsWordBounce,
-    /// непрозрачность неактивных строк (0.15…0.75)
+    /// inactive line opacity (0.15…0.75)
     LyricsDimOpacity,
-    /// длительность скролла строки в мс (-1 — по стилю, либо 200…800)
+    /// line scroll duration in ms (-1 — per style, or 200…800)
     LyricsScrollMs,
-    /// задержка каскада соседних строк в мс (-1 — по стилю, либо 0…80)
+    /// neighboring line cascade delay in ms (-1 — per style, or 0…80)
     LyricsStaggerMs,
-    /// степень размытия неактивных строк (0..1)
+    /// inactive line blur amount (0..1)
     LyricsBlurAmount,
-    /// множитель межстрочного интервала (0.8..1.6)
+    /// line spacing multiplier (0.8..1.6)
     LyricsLineSpacing,
-    /// анимации прокрутки и переходов текста
+    /// scroll and text transition animations
     LyricsAnimate,
-    /// показывать метку источника текста
+    /// show the lyrics source label
     LyricsShowSource,
-    /// сдвиг синхронизации в миллисекундах (-500..500)
+    /// sync offset in milliseconds (-500..500)
     LyricsSyncMs,
     /// "system" | "full" | "reduced" → Theme.reducedMotion
     Animations,
-    /// режим для слабых ПК: "auto" (сам, когда кадры рисует процессор) | "on" | "off" → Theme.lowPower
+    /// low-end PC mode: "auto" (by itself, when the frames are drawn by the CPU) | "on" | "off" → Theme.lowPower
     LowPowerMode,
-    /// выбор графического процессора для рендеринга: "auto" | "integrated" | "discrete"
+    /// GPU choice for rendering: "auto" | "integrated" | "discrete"
     GpuPreference,
-    /// язык интерфейса: "system" (как в ОС) | "en" | "ru" | "pt" (mf_i18n::parse_setting); меняется на лету
+    /// interface language: "system" (as in the OS) | "en" | "ru" | "pt" (mf_i18n::parse_setting); changes live
     Language,
-    /// масштаб интерфейса в процентах: 75 | 100 | 125 | 150 | 200 (QT_SCALE_FACTOR, после перезапуска)
+    /// interface scale in percent: 75 | 100 | 125 | 150 | 200 (QT_SCALE_FACTOR, after a restart)
     UiScale,
-    // Раскладка
+    // Layout
     RightPanelOpen,
     RightPanelTab,
     SidebarCollapsed,
@@ -97,65 +97,65 @@ pub enum SettingKey {
     LibraryView,
     /// "recent" | "added" | "alpha" | "author" | "spotify"
     LibrarySort,
-    /// скрытые полки главной через запятую (quick,recent,madeForYou,podcasts,topArtists,topTracks)
+    /// hidden home shelves, comma separated (quick,recent,madeForYou,podcasts,topArtists,topTracks)
     HomeHidden,
-    /// сцена «Радио» на главной
+    /// the "Radio" scene on home
     HomeRadioHidden,
-    /// в боковой панели вместо списка плейлистов — последние добавленные/обновлённые
+    /// in the sidebar, instead of the playlist list — the most recently added/updated
     SidebarLibrary,
-    // Воспроизведение (librespot)
-    /// 96 | 160 | 320 кбит/с (смена — перезапуск движка)
+    // Playback (librespot)
+    /// 96 | 160 | 320 kbit/s (changing it restarts the engine)
     Bitrate,
     Normalisation,
     Gapless,
     Autoplay,
     /// 0..1
     Volume,
-    /// имя устройства вывода; "" — по умолчанию системы
+    /// output device name; "" — the system default
     AudioDevice,
     AudioCache,
-    /// лимит аудиокэша librespot, МБ (256…10240)
+    /// librespot audio cache limit, MB (256…10240)
     AudioCacheMb,
-    /// пользователь включил воспроизведение на этом ПК (грант playback выдан)
+    /// the user enabled playback on this PC (the playback grant was given)
     PlaybackAuthorized,
-    /// скорость воспроизведения 0.5…2.0 (шаг 0.05), без смены высоты тона; меняется на лету
+    /// playback speed 0.5…2.0 (step 0.05), without pitch shifting; changes live
     PlaybackSpeed,
-    /// кроссфейд между треками, секунды 0…12 (0 — выкл.); меняется на лету
+    /// crossfade between tracks, seconds 0…12 (0 — off); changes live
     Crossfade,
     /// the DJ's spoken lines between its tracks; changes on the fly
     DjVoice,
-    // Spotify Connect и сеть
-    /// имя Connect-устройства; "" — «Materialfy · <имя ПК>»
+    // Spotify Connect and network
+    /// Connect device name; "" — "Materialfy · <PC name>"
     DeviceName,
-    /// свой Client ID (личное приложение Web API); "" — нет
+    /// own Client ID (a personal Web API app); "" — none
     WebClientId,
-    /// окно с инструкцией, когда общий Client ID упёрся в лимит: true — «больше не показывать»
+    /// the instruction window when the shared Client ID hits the limit: true — "do not show again"
     ApiLimitTipDismissed,
-    /// "off" | "system" | "http" | "socks"; пароль — в хранилище секретов (sf-auth, слот Proxy)
+    /// "off" | "system" | "http" | "socks"; the password lives in the secret store (sf-auth, the Proxy slot)
     ProxyMode,
     ProxyHost,
     ProxyPort,
     ProxyUsername,
-    /// обложки и картинки грузить напрямую, мимо прокси (по умолчанию — через него, как всё остальное)
+    /// load covers and images directly, bypassing the proxy (by default — through it, like everything else)
     CoversBypassProxy,
-    // Локальные данные
-    /// закреплённые URI (плейлисты/альбомы/станции), JSON-массив строк — get_string_list/set_string_list
+    // Local data
+    /// pinned URIs (playlists/albums/stations), a JSON array of strings — get_string_list/set_string_list
     Pins,
-    /// локальный «не рекомендовать»: URI треков, JSON-массив строк (фильтр радио)
+    /// local "do not recommend": track URIs, a JSON array of strings (radio filter)
     HiddenTracks,
-    /// группа радио «Любой трек» (сиды, выбранные через поиск): JSON-массив RadioSeed
+    /// the "Any track" radio group (seeds chosen via search): a JSON array of RadioSeed
     RadioSeeds,
-    // Поведение
+    // Behavior
     CloseToTray,
     WheelStep,
-    /// плеер поверх всего вне главного окна: "off" | "island" (островок у верхнего края экрана) | "taskbar" (в панели задач
-    /// Windows) | "both" (и то и другое, Windows)
+    /// always-on-top player outside the main window: "off" | "island" (the island at the top edge of the screen) | "taskbar" (in the Windows
+    /// taskbar) | "both" (both of those, Windows)
     FloatingPlayer,
-    /// вид островка и виджета: "black" (чёрный, как железо) | "color" (тёмный тон обложки со свечением)
+    /// island and widget look: "black" (black, like the hardware) | "color" (dark cover hue with a glow)
     FloatingPlayerStyle,
-    /// место виджета в панели задач: "tray" (у трея) | "left" | "appsLeft" | "appsRight" | доля 0..1 свободной ширины ("0.42")
+    /// widget position in the taskbar: "tray" (by the tray) | "left" | "appsLeft" | "appsRight" | a fraction 0..1 of the free width ("0.42")
     TaskbarWidgetPos,
-    /// сколько раз под раскрытым островком показана подсказка с клавишами (до 3)
+    /// how many times the key hint is shown under the expanded island (up to 3)
     FloatingKeyHints,
     FloatingHideFullscreen,
     FloatingHideMaximized,
@@ -163,11 +163,11 @@ pub enum SettingKey {
     FloatingEdge,
     FloatingFreeX,
     FloatingFreeY,
-    /// мониторы для островка: "" / "0" (основной) | "0,1" | "all"
+    /// monitors for the island: "" / "0" (primary) | "0,1" | "all"
     FloatingIslandScreens,
-    /// мониторы для панели задач: "" / "0" (основной) | "0,1" | "all"
+    /// monitors for the taskbar: "" / "0" (primary) | "0,1" | "all"
     TaskbarScreens,
-    /// позиции на панели задач для каждого монитора: JSON {"0":"tray","1":"appsRight"}
+    /// taskbar positions per monitor: JSON {"0":"tray","1":"appsRight"}
     TaskbarPositions,
     // Updates
     /// check GitHub Releases for a new version on startup and every 6 h (no network when off)
@@ -288,7 +288,7 @@ impl SettingKey {
         SettingKey::SkippedVersion,
     ];
 
-    /// Имя ключа в хранилище и в QML ("themeMode", …).
+    /// The key's name in storage and in QML ("themeMode", …).
     pub fn name(self) -> &'static str {
         use SettingKey::*;
         match self {
@@ -405,7 +405,7 @@ impl SettingKey {
             ThemeMode => Str("dark".into()),
             SchemeVariant => Str("content".into()),
             AccentFromCover => Bool(true),
-            CustomSeed => Str("#8C6DFF".into()), // Ultraviolet, фирменный акцент Materialfy
+            CustomSeed => Str("#8C6DFF".into()), // Ultraviolet, Materialfy's brand accent
             WindowButtons => Bool(false),
             TrackTransition => Str("wipe".into()),
             BackdropMode => Str("gauss".into()),
@@ -495,8 +495,8 @@ impl SettingKey {
         }
     }
 
-    /// Допустимое значение ключа (значение уже приведено к типу ключа): bitrate — ближайшее из 96/160/320,
-    /// audioCacheMb — 256…10240 с шагом 256. Остальные ключи — как есть.
+    /// The allowed value for a key (the value is already converted to the key's type): bitrate — the nearest of 96/160/320,
+    /// audioCacheMb — 256…10240 in steps of 256. Other keys — as is.
     pub fn normalize(self, value: SettingValue) -> SettingValue {
         match (self, value) {
             (SettingKey::Bitrate, SettingValue::Int(kbps)) => SettingValue::Int(match kbps {
@@ -548,7 +548,7 @@ impl SettingKey {
                 SettingValue::Int(ms.clamp(-500, 500))
             }
             (SettingKey::UiScale, SettingValue::Int(percent)) => {
-                // пресеты из настроек; значение из конфига вне пресетов — ближайший
+                // presets from settings; a config value outside the presets — the nearest one
                 let percent = percent.clamp(50, 250);
                 SettingValue::Int(
                     [75i64, 100, 125, 150, 200]
@@ -629,12 +629,12 @@ impl SettingKey {
     }
 }
 
-/// Самый длинный кроссфейд, секунды.
+/// The longest crossfade, in seconds.
 pub const CROSSFADE_MAX_S: i64 = 12;
 
-/// Битрейты librespot, кбит/с.
+/// librespot bitrates, kbit/s.
 pub const BITRATES: [i64; 3] = [96, 160, 320];
-/// Лимит аудиокэша, МБ.
+/// Audio cache limit, MB.
 pub const AUDIO_CACHE_MB_MIN: i64 = 256;
 pub const AUDIO_CACHE_MB_MAX: i64 = 10240;
 pub const AUDIO_CACHE_MB_STEP: i64 = 256;
@@ -649,8 +649,8 @@ impl SettingValue {
         }
     }
 
-    /// Привести к типу, как `typ(value)` в Python (строковый bool из INI — `value.lower() == "true"`).
-    /// None — не приводится.
+    /// Convert to the type, like `typ(value)` in Python (a string bool from INI — `value.lower() == "true"`).
+    /// None — not converted.
     pub fn coerce(&self, to: SettingType) -> Option<SettingValue> {
         use SettingValue::*;
         Some(match (to, self) {
@@ -678,7 +678,7 @@ impl SettingValue {
         })
     }
 
-    /// Текст для INI/REG_SZ — как QVariant::toString у QSettings.
+    /// Text for INI/REG_SZ — like QSettings' QVariant::toString.
     fn to_qt_string(&self) -> String {
         match self {
             SettingValue::Str(s) => s.clone(),
@@ -689,7 +689,7 @@ impl SettingValue {
     }
 }
 
-/// JSON-массив строк; не JSON — список через запятую (пустые элементы отбрасываются).
+/// A JSON array of strings; not JSON — a comma-separated list (empty items are dropped).
 fn parse_string_list(text: &str) -> Vec<String> {
     let text = text.trim();
     if text.is_empty() {
@@ -701,7 +701,7 @@ fn parse_string_list(text: &str) -> Vec<String> {
     text.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned).collect()
 }
 
-/// str(float) в Python: 1.0 → "1.0".
+/// str(float) in Python: 1.0 → "1.0".
 fn py_float_str(f: f64) -> String {
     if f.is_finite() && f.fract() == 0.0 && f.abs() < 1e16 {
         format!("{f:.1}")
@@ -721,21 +721,21 @@ fn qt_float_str(f: f64) -> String {
     }
 }
 
-/// Хранилище настроек. Клонируйте Arc<SettingsStore>.
+/// The settings store. Clone the Arc<SettingsStore>.
 pub struct SettingsStore {
     backend: Box<dyn Backend>,
     changes: broadcast::Sender<SettingKey>,
     write_lock: Mutex<()>,
 }
 
-/// Низкоуровневое хранилище строк/чисел (INI или реестр).
+/// Low-level string/number storage (INI or registry).
 pub trait Backend: Send + Sync {
     fn read(&self, name: &str) -> Option<SettingValue>;
     fn write(&self, name: &str, value: &SettingValue) -> std::io::Result<()>;
 }
 
 impl SettingsStore {
-    /// Хранилище по умолчанию для ОС; `config_override` — каталог из --config-dir.
+    /// The default store for the OS; `config_override` — the directory from --config-dir.
     pub fn open(config_override: Option<PathBuf>) -> Arc<Self> {
         #[cfg(target_os = "windows")]
         if config_override.is_none() {
@@ -745,12 +745,12 @@ impl SettingsStore {
         Self::with_backend(Box::new(IniBackend::open(path)))
     }
 
-    /// Хранилище в памяти (тесты).
+    /// In-memory store (tests).
     pub fn in_memory() -> Arc<Self> {
         Self::with_backend(Box::new(MemoryBackend::default()))
     }
 
-    /// Своё хранилище (тесты, особые случаи).
+    /// Custom store (tests, special cases).
     pub fn with_backend(backend: Box<dyn Backend>) -> Arc<Self> {
         let (changes, _) = broadcast::channel(64);
         Arc::new(Self { backend, changes, write_lock: Mutex::new(()) })
@@ -763,7 +763,7 @@ impl SettingsStore {
         self.get_stored(key)
     }
 
-    /// Сохранённое значение без подмен (windowButtons всегда true в `get`).
+    /// The stored value without substitution (windowButtons is always true in `get`).
     pub fn get_stored(&self, key: SettingKey) -> SettingValue {
         self.backend
             .read(key.name())
@@ -797,12 +797,12 @@ impl SettingsStore {
         }
     }
 
-    /// Список строк (Pins, HiddenTracks): JSON-массив; старый вид «a,b» тоже читается.
+    /// A string list (Pins, HiddenTracks): a JSON array; the old "a,b" form is read too.
     pub fn get_string_list(&self, key: SettingKey) -> Vec<String> {
         parse_string_list(&self.get_str(key))
     }
 
-    /// Записать список строк JSON-массивом; пустой список — пустая строка. true — изменилось.
+    /// Write a string list as a JSON array; an empty list — an empty string. true — it changed.
     pub fn set_string_list<S: AsRef<str>>(&self, key: SettingKey, list: &[S]) -> bool {
         let text = if list.is_empty() {
             String::new()
@@ -813,8 +813,8 @@ impl SettingsStore {
         self.set(key, SettingValue::Str(text))
     }
 
-    /// Записать; true — значение изменилось (и разослано подписчикам). Значение приводится к типу ключа
-    /// и к допустимому диапазону (SettingKey::normalize).
+    /// Write; true — the value changed (and was sent to subscribers). The value is converted to the key's type
+    /// and to the allowed range (SettingKey::normalize).
     pub fn set(&self, key: SettingKey, value: SettingValue) -> bool {
         let Some(value) = value.coerce(key.value_type()).map(|v| key.normalize(v)) else {
             tracing::warn!("setting {}: value {value:?} does not match its type", key.name());
@@ -832,7 +832,7 @@ impl SettingsStore {
         }
         let _ = self.changes.send(key);
         if key == SettingKey::LyricsMode {
-            // При смене стиля текста сбрасываем ручные параметры к значениям по умолчанию для стиля
+            // When the text style changes we reset the manual parameters to the style's defaults
             for reset_key in [
                 SettingKey::LyricsActiveScale,
                 SettingKey::LyricsWordBounce,
@@ -847,13 +847,13 @@ impl SettingsStore {
         true
     }
 
-    /// Изменения от любого источника (мост Settings, Player.volume, Wave.select…).
+    /// Changes from any source (the Settings bridge, Player.volume, Wave.select…).
     pub fn subscribe(&self) -> broadcast::Receiver<SettingKey> {
         self.changes.subscribe()
     }
 }
 
-/// В памяти.
+/// In memory.
 #[derive(Default)]
 pub struct MemoryBackend {
     values: Mutex<HashMap<String, SettingValue>>,
@@ -873,7 +873,7 @@ impl Backend for MemoryBackend {
     }
 }
 
-/// INI-файл в формате QSettings. Чужие секции и ключи сохраняются при перезаписи.
+/// An INI file in QSettings format. Foreign sections and keys are preserved on rewrite.
 pub struct IniBackend {
     path: PathBuf,
     doc: Mutex<ini::Document>,
@@ -911,19 +911,19 @@ impl Backend for IniBackend {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        // атомарная замена: сначала временный файл рядом
+        // atomic replacement: a temporary file next to it first
         let tmp = self.path.with_extension("conf.tmp");
         std::fs::write(&tmp, doc.render())?;
         std::fs::rename(&tmp, &self.path)
     }
 }
 
-/// QSettings: строка, начинающаяся с '@', пишется с удвоенным '@'.
+/// QSettings: a string starting with '@' is written with a doubled '@'.
 fn escape_at(s: &str) -> String {
     if s.starts_with('@') { format!("@{s}") } else { s.to_owned() }
 }
 
-/// Обратное к escape_at и разбор служебных форм QSettings ("@Invalid()", "@ByteArray(...)").
+/// The inverse of escape_at, plus parsing QSettings' special forms ("@Invalid()", "@ByteArray(...)").
 fn unescape_at(s: String) -> Option<String> {
     if let Some(rest) = s.strip_prefix("@@") {
         return Some(format!("@{rest}"));
@@ -932,18 +932,18 @@ fn unescape_at(s: String) -> Option<String> {
         return Some(inner.to_owned());
     }
     if s.starts_with('@') && s.ends_with(')') && s[1..].chars().next().is_some_and(char::is_alphabetic) {
-        // @Invalid(), @Variant(...) и прочие типы Qt — не наши значения
+        // @Invalid(), @Variant(...) and the other Qt types are not our values
         return None;
     }
     Some(s)
 }
 
 mod ini {
-    //! Разбор и запись INI так, как это делает QSettings (iniEscapedString / iniUnescapedStringList).
+    //! INI parsing and writing the way QSettings does it (iniEscapedString / iniUnescapedStringList).
 
     #[derive(Debug, Default)]
     pub struct Document {
-        /// Строки до первой секции (QSettings считает их General).
+        /// Lines before the first section (QSettings treats them as General).
         preamble: Vec<String>,
         sections: Vec<Section>,
     }
@@ -971,7 +971,7 @@ mod ini {
     impl Document {
         pub fn parse(text: &str) -> Self {
             let mut doc = Document::default();
-            // продолжение строки обратным слешем QSettings не пишет — не поддерживаем
+            // QSettings does not write backslash line continuations — not supported
             for line in text.lines() {
                 let line = line.strip_suffix('\r').unwrap_or(line);
                 if let Some(name) = header_name(line) {
@@ -994,7 +994,7 @@ mod ini {
             )
         }
 
-        /// Сырое значение (после '=') ключа секции General; последнее вхождение побеждает.
+        /// The raw value (after '=') of a General section key; the last occurrence wins.
         pub fn get(&self, key: &str) -> Option<&str> {
             self.general_lines()
                 .filter_map(|line| split_entry(line))
@@ -1029,7 +1029,7 @@ mod ini {
             }
             match self.sections.iter_mut().find(|s| s.name.eq_ignore_ascii_case("General")) {
                 Some(section) => {
-                    // перед хвостовыми пустыми строками секции
+                    // before the section's trailing empty strings
                     let at = section
                         .lines
                         .iter()
@@ -1066,7 +1066,7 @@ mod ini {
         }
     }
 
-    /// iniEscapedString из qsettings.cpp.
+    /// iniEscapedString from qsettings.cpp.
     pub fn encode_string(s: &str) -> String {
         let mut out = String::with_capacity(s.len() + 2);
         let mut needs_quotes = false;
@@ -1110,10 +1110,10 @@ mod ini {
         }
     }
 
-    /// iniUnescapedStringList: кавычки, escape-последовательности, запятые вне кавычек — список.
-    /// Список склеивается обратно через ',' (так его записала бы рука человека).
+    /// iniUnescapedStringList: quotes, escape sequences, commas outside quotes — a list.
+    /// The list is joined back with ',' (the way a human hand would have written it).
     pub fn decode_parts(raw: &str) -> Vec<String> {
-        // (символ, защищён ли от обрезки пробелов)
+        // (character, whether it is protected from whitespace trimming)
         let mut parts: Vec<Vec<(char, bool)>> = vec![Vec::new()];
         let mut in_quotes = false;
         let mut chars = raw.chars().peekable();
@@ -1166,7 +1166,7 @@ mod ini {
             .collect()
     }
 
-    /// Значение строкой; None — служебное значение Qt (@Invalid() и т. п.).
+    /// The value as a string; None — a Qt special value (@Invalid() etc.).
     pub fn decode_value(raw: &str) -> Option<String> {
         super::unescape_at(decode_parts(raw).join(","))
     }
@@ -1181,7 +1181,7 @@ mod registry {
 
     const KEY_PATH: &str = r"Software\materialfy\Materialfy";
 
-    /// HKCU\<path>; по умолчанию — ключ QSettings оболочки.
+    /// HKCU\<path>; by default — the shell's QSettings key.
     pub struct RegistryBackend {
         path: String,
     }
@@ -1209,7 +1209,7 @@ mod registry {
                     let list: Vec<String> = key.get_value(name).ok()?;
                     Some(SettingValue::Str(list.join(",")))
                 }
-                // QSettings читает REG_DWORD как int (со знаком)
+                // QSettings reads REG_DWORD as a (signed) int
                 RegType::REG_DWORD => {
                     let v: u32 = key.get_value(name).ok()?;
                     Some(SettingValue::Int(i64::from(v as i32)))
@@ -1359,11 +1359,11 @@ mod tests {
         assert!(store.set(SettingKey::ThemeMode, SettingValue::Str("light".into())));
         assert_eq!(rx.try_recv().unwrap(), SettingKey::ThemeMode);
         assert_eq!(store.get_str(SettingKey::ThemeMode), "light");
-        // приведение к типу ключа
+        // conversion to the key's type
         assert!(store.set(SettingKey::Bitrate, SettingValue::Float(160.0)));
         assert_eq!(store.get(SettingKey::Bitrate), SettingValue::Int(160));
         assert!(!store.set(SettingKey::Bitrate, SettingValue::Str("160".into())));
-        assert!(!store.set(SettingKey::Volume, SettingValue::Str("громко".into())));
+        assert!(!store.set(SettingKey::Volume, SettingValue::Str("loud".into())));
     }
 
     #[test]
@@ -1386,11 +1386,11 @@ mod tests {
         assert_eq!(ini::encode_string("q\"\\"), "q\\\"\\\\");
         assert_eq!(ini::encode_string("x\ty"), "x\\ty");
         assert_eq!(ini::encode_string("\u{1}a"), "\\x1\\x61");
-        assert_eq!(ini::encode_string("тест"), "тест");
-        for s in ["plain", "a,b", " pad ", "q\"\\", "x\ty\n", "\u{1}abc", "тест; ок", "", "k=v"] {
+        assert_eq!(ini::encode_string("test"), "test");
+        for s in ["plain", "a,b", " pad ", "q\"\\", "x\ty\n", "\u{1}abc", "test; ok", "", "k=v"] {
             assert_eq!(ini::decode_value(&ini::encode_string(s)).as_deref(), Some(s), "{s:?}");
         }
-        // как читает QSettings
+        // the way QSettings reads it
         assert_eq!(ini::decode_value("  spaced  ").as_deref(), Some("spaced"));
         assert_eq!(ini::decode_value("a, b").as_deref(), Some("a,b"));
         assert_eq!(ini::decode_value("v ; comment").as_deref(), Some("v"));
@@ -1409,7 +1409,7 @@ mod tests {
     fn ini_python_compat() {
         let path = temp_ini("compat");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        // так файл пишет QSettings из Python-версии
+        // this is how the Python version's QSettings writes the file
         let python = "[General]\naccentFromCover=false\nbitrate=160\ncustomSeed=#FF0000\nvolume=0.35\n\
                       pins=\"spotify:a,spotify:b\"\nwindowWidth=oops\n\n[Other]\nkeep=me\n";
         std::fs::write(&path, python).unwrap();
@@ -1436,7 +1436,7 @@ mod tests {
         let general_end = text.find("[Other]").unwrap();
         assert!(text[..general_end].contains("themeMode=light"));
 
-        // перечитать с диска
+        // re-read from disk
         let again = SettingsStore::with_backend(Box::new(IniBackend::open(path.clone())));
         assert_eq!(again.get_str(SettingKey::Pins), "a,b");
         assert!((again.get_f64(SettingKey::Volume) - 0.5).abs() < 1e-12);
@@ -1453,7 +1453,7 @@ mod tests {
         let path = format!(r"Software\materialfy\Materialfy-mf-platform-test-{}", std::process::id());
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         {
-            // так значения пишет QSettings из Python-версии
+            // this is how the Python version's QSettings writes the values
             let (key, _) = hkcu.create_subkey(&path).unwrap();
             key.set_value("nowPlayingBlur", &"1".to_string()).unwrap();
             key.set_value("accentFromCover", &"false".to_string()).unwrap();
@@ -1503,13 +1503,13 @@ mod tests {
         }
         assert!(store.set(SettingKey::AudioCacheMb, Int(5000)));
         assert_eq!(store.get_int(SettingKey::AudioCacheMb), 5120);
-        // WheelStep — без ограничений, как было
+        // WheelStep — unrestricted, as before
         assert!(store.set(SettingKey::WheelStep, Int(37)));
         assert_eq!(store.get_int(SettingKey::WheelStep), 37);
         for key in SettingKey::ALL {
             assert_eq!(key.normalize(key.default_value()), key.default_value(), "{}", key.name());
         }
-        // посторонние значения из хранилища тоже приводятся
+        // stray values from the store are converted too
         let backend = MemoryBackend::default();
         backend.write("bitrate", &SettingValue::Str("128".into())).unwrap();
         backend.write("audioCacheMb", &Int(1)).unwrap();
@@ -1523,21 +1523,21 @@ mod tests {
         let store = SettingsStore::in_memory();
         assert!(store.get_string_list(SettingKey::Pins).is_empty());
         assert!(!store.set_string_list::<&str>(SettingKey::Pins, &[]));
-        let pins = ["spotify:playlist:a", "spotify:album:b,c", "кавычка \"x\""];
+        let pins = ["spotify:playlist:a", "spotify:album:b,c", "quote \"x\""];
         assert!(store.set_string_list(SettingKey::Pins, &pins));
         assert_eq!(
             store.get_str(SettingKey::Pins),
-            r#"["spotify:playlist:a","spotify:album:b,c","кавычка \"x\""]"#
+            r#"["spotify:playlist:a","spotify:album:b,c","quote \"x\""]"#
         );
         assert_eq!(store.get_string_list(SettingKey::Pins), pins);
         assert!(!store.set_string_list(SettingKey::Pins, &pins));
         assert!(store.set_string_list(SettingKey::Pins, &Vec::<String>::new()));
         assert_eq!(store.get_str(SettingKey::Pins), "");
-        // старый вид — через запятую
+        // the old form — comma separated
         assert!(store.set(SettingKey::HiddenTracks, SettingValue::Str("spotify:track:1, spotify:track:2,".into())));
         assert_eq!(store.get_string_list(SettingKey::HiddenTracks), ["spotify:track:1", "spotify:track:2"]);
 
-        // INI: JSON с запятыми и кавычками переживает перечитывание
+        // INI: JSON with commas and quotes survives a re-read
         let path = temp_ini("lists");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
         let store = SettingsStore::with_backend(Box::new(IniBackend::open(path.clone())));
@@ -1579,7 +1579,7 @@ mod tests {
 
     #[test]
     fn qml_names() {
-        // name() = имя свойства QML; служебные pins/hiddenTracks свойств не имеют
+        // name() is the QML property name; the internal pins/hiddenTracks have no property
         let names: Vec<&str> = SettingKey::ALL.iter().map(|k| k.name()).collect();
         for name in [
             "themeMode", "schemeVariant", "accentFromCover", "customSeed", "windowButtons", "trackTransition",
@@ -1614,7 +1614,7 @@ mod tests {
     #[test]
     fn lyrics_mode_change_resets_manual_adjustments() {
         let store = SettingsStore::in_memory();
-        // Задаём кастомные значения для шести ручных регулировок текста
+        // Set custom values for the six manual text adjustments
         store.set(SettingKey::LyricsActiveScale, SettingValue::Float(1.2));
         store.set(SettingKey::LyricsWordBounce, SettingValue::Float(1.5));
         store.set(SettingKey::LyricsDimOpacity, SettingValue::Float(0.6));
@@ -1622,7 +1622,7 @@ mod tests {
         store.set(SettingKey::LyricsStaggerMs, SettingValue::Int(15));
         store.set(SettingKey::LyricsIdleScale, SettingValue::Float(0.85));
 
-        // Изначальный режим — normal. Меняем на spicy: шесть регулировок должны сброситься к дефолтам стиля
+        // The initial mode is normal. Change it to spicy: the six adjustments must reset to the style's defaults
         assert!(store.set(SettingKey::LyricsMode, SettingValue::Str("spicy".into())));
         assert_eq!(store.get(SettingKey::LyricsActiveScale), SettingValue::Float(0.0));
         assert_eq!(store.get(SettingKey::LyricsWordBounce), SettingValue::Float(1.0));
@@ -1631,7 +1631,7 @@ mod tests {
         assert_eq!(store.get(SettingKey::LyricsStaggerMs), SettingValue::Int(-1));
         assert_eq!(store.get(SettingKey::LyricsIdleScale), SettingValue::Float(0.0));
 
-        // Пользователь настраивает параметры в новом режиме
+        // The user configures the parameters in the new mode
         store.set(SettingKey::LyricsActiveScale, SettingValue::Float(1.15));
         store.set(SettingKey::LyricsWordBounce, SettingValue::Float(0.8));
         store.set(SettingKey::LyricsDimOpacity, SettingValue::Float(0.5));
@@ -1639,7 +1639,7 @@ mod tests {
         store.set(SettingKey::LyricsStaggerMs, SettingValue::Int(25));
         store.set(SettingKey::LyricsIdleScale, SettingValue::Float(0.95));
 
-        // Повторное применение того же режима (spicy -> spicy) НЕ должно сбрасывать настройки
+        // Re-applying the same mode (spicy -> spicy) must NOT reset the settings
         assert!(!store.set(SettingKey::LyricsMode, SettingValue::Str("spicy".into())));
         assert_eq!(store.get(SettingKey::LyricsActiveScale), SettingValue::Float(1.15));
         assert_eq!(store.get(SettingKey::LyricsWordBounce), SettingValue::Float(0.8));

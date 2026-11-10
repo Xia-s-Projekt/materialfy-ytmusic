@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Очередь в порядке воспроизведения: «Играет из …», «Сейчас играет», «Далее в очереди» (свои треки,
-// перестановка за ручку на этом компьютере), «Далее из «…»» (контекст, не цель для перетаскивания).
-// Занимает родителя; используется в RightPanel и во вкладке очереди NowPlaying.
+// The queue in playback order: "Playing from …", "Now playing", "Next in queue" (your own tracks,
+// reorderable by handle on this computer), "Next from “…”" (context, not a drag target).
+// Fills its parent; used in RightPanel and in the NowPlaying queue tab.
 Item {
     id: root
 
@@ -13,9 +13,9 @@ Item {
 
     readonly property var queue: Player.queue
     readonly property real rowHeight: compact ? 56 : 64
-    readonly property int contextPreview: 20     // столько строк контекста видно до «Ещё N треков»
+    readonly property int contextPreview: 20     // this many context rows show before "N more tracks"
 
-    // ---- Границы секций (порядок в модели: current → manual → context) ----
+    // ---- Section boundaries (model order: current → manual → context) ----
     property int manualStart: -1
     property int contextStart: -1
     readonly property int count: queue ? queue.count : 0
@@ -48,11 +48,11 @@ Item {
         function onCountChanged() { root.recount() }
         function onModelReset() { root.recount() }
     }
-    // новый контекст — снова свёрнут
+    // a new context is collapsed again
     readonly property string _contextUri: Player.contextUri
     on_ContextUriChanged: contextExpanded = false
 
-    // ---- Перестановка в «Далее в очереди» ----
+    // ---- Reordering in "Next in queue" ----
     property int dragFrom: -1
     property int dragTo: -1
     property real dragOffset: 0
@@ -74,7 +74,7 @@ Item {
         if (dragFrom < 0)
             return
         if (dragTo !== dragFrom && Player.queueReorderable) {
-            // строка стоит на новом месте, пока не придёт обновлённая модель
+            // the row stays in its new place until the refreshed model arrives
             dragOffset = (dragTo - dragFrom) * rowHeight
             Player.moveManual(dragFrom, dragTo)
             settleTimer.restart()
@@ -103,10 +103,10 @@ Item {
         return 0
     }
 
-    // полный словарь строки; uid и title — только зависимости привязки (строку заменили на месте)
+    // full row dictionary; uid and title are only binding dependencies (the row was replaced in place)
     function rowData(i, uid, title) { return queue.get(i) }
 
-    // ---- Очистка с возвратом ----
+    // ---- Clear with undo ----
     function clearQueue() {
         const saved = []
         for (let i = Math.max(0, manualStart); manualStart >= 0 && i < count; i++) {
@@ -123,7 +123,7 @@ Item {
             })
     }
 
-    // ---- Бросок трека из списков ----
+    // ---- Track drop from lists ----
     function _droppedTrack(drop) {
         if (drop.source && typeof drop.source.trackData === "function")
             return drop.source.trackData()
@@ -136,7 +136,7 @@ Item {
         }
         return null
     }
-    // позиция в «Далее в очереди» для точки списка; -1 — не цель
+    // position in "Next in queue" for the list point; -1 — not a target
     function _dropIndexAt(x, y) {
         if (!Player.isLocal)
             return manualRows
@@ -155,7 +155,7 @@ Item {
         return -1
     }
 
-    // ---- Пусто ----
+    // ---- Empty ----
     EmptyState {
         anchors.centerIn: parent
         width: Math.min(parent.width - 32, 300)
@@ -168,7 +168,7 @@ Item {
                             : I18n.t("Play a playlist or album. To play a track next, choose “Add to queue” in its menu or drag it here")
     }
 
-    // «Играет на …» и «Играет из …» — над списком, не прокручиваются
+    // "Playing on …" and "Playing from …" — above the list, not scrolled
     Column {
         id: top
         width: parent.width
@@ -210,8 +210,8 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         acceptedButtons: Qt.NoButton
         cacheBuffer: 400
-        // без reuseItems: замер на живой очереди показал регрессию — при частых диффах плеера
-        // переклейка данных на переиспользуемые делегаты дороже обновления биндингов на месте
+        // without reuseItems: a measurement on a live queue showed a regression — with frequent player diffs
+        // rebinding data onto reused delegates costs more than updating bindings in place
 
         section.property: "section"
         section.criteria: ViewSection.FullString
@@ -260,7 +260,7 @@ Item {
             visible: !hidden
             z: lifted ? 10 : 0
 
-            // место, куда встанет поднятая строка
+            // the place where the lifted row will land
             Rectangle {
                 visible: cell.lifted && root.dragTo !== root.dragFrom
                 y: (root.dragTo - root.dragFrom) * root.rowHeight
@@ -282,7 +282,7 @@ Item {
                     enabled: !row.dragging && root.shiftAnimated
                     NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized }
                 }
-                // свойства корня делегата трогают переходы ListView (add/displaced), поэтому приглушаем строку
+                // delegate root properties touch ListView transitions (add/displaced), so we dim the row
                 opacity: root.dragFrom >= 0 && cell.sec === "context" ? 0.45 : 1
                 Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsDefault } }
                 scale: row.dragging ? 1.03 : 1
@@ -321,7 +321,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 style: "text"
                 icon: root.contextShown < root.contextRows ? "expand_more" : "chevron_right"
-                // свёрнутые строки раскрываются на месте, остальное — на странице контекста
+                // collapsed rows expand in place, the rest — on the context page
                 text: I18n.n(root.contextMore, "{0} more track", "{0} more tracks")
                 onClicked: {
                     if (root.contextShown < root.contextRows)
@@ -355,7 +355,7 @@ Item {
     }
     SmoothScroll { flickable: list; wheelStep: Settings.wheelStep; visible: list.visible }
 
-    // трек, брошенный из списков: на этом компьютере — на место, на другом устройстве — в конец
+    // a track dropped from lists: on this computer — in place, on another device — at the end
     DropArea {
         id: dropZoneHover
         anchors.fill: parent
@@ -380,7 +380,7 @@ Item {
         }
     }
 
-    // ---- Snackbar «Очередь очищена · Вернуть» ----
+    // ---- Snackbar "Queue cleared · Restore" ----
     Snackbar {
         id: undoBar
         anchors.fill: parent

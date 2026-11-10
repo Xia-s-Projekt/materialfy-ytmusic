@@ -1,18 +1,18 @@
-//! Локальная история прослушиваний (перенос spotifast/src/history.rs): librespot-воспроизведение Spotify
-//! не записывает, поэтому прослушивания этого ПК хранятся в файле и сливаются с /me/player/recently-played.
+//! Local play history (port of spotifast/src/history.rs): librespot playback of Spotify
+//! does not record, so this PC's plays are kept in a file and merged with /me/player/recently-played.
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
 use crate::history::PlayRecord;
 
-/// Прослушивание засчитывается после 30 с или половины короткого трека.
+/// A play is counted after 30 s or half of a short track.
 const COUNTS_AFTER: Duration = Duration::from_secs(30);
 
-/// Сколько локальных прослушиваний хранить.
+/// How many local plays to keep.
 pub const KEPT: usize = 500;
 
-/// Своя запись и запись Spotify об этом же треке в пределах минуты — одно прослушивание.
+/// One's own record and Spotify's record about the same track within a minute — one play.
 const SAME_PLAY: i64 = 60;
 
 pub fn counts_after(duration_ms: i64) -> Duration {
@@ -20,16 +20,16 @@ pub fn counts_after(duration_ms: i64) -> Duration {
     COUNTS_AFTER.min(half).max(Duration::from_secs(1))
 }
 
-/// Прослушивания этого ПК, новые первыми.
+/// This PC's plays, newest first.
 #[derive(Default)]
 pub struct Journal {
     plays: Vec<PlayRecord>,
-    /// в памяти не то, что на диске
+    /// what is in memory is not what is on disk
     pub dirty: bool,
 }
 
 impl Journal {
-    /// Нечитаемый файл — пустая история.
+    /// An unreadable file — an empty history.
     pub fn load(path: &Path) -> Self {
         let plays = std::fs::read_to_string(path)
             .ok()
@@ -42,7 +42,7 @@ impl Journal {
         &self.plays
     }
 
-    /// Записать, если менялось; неудачная запись остаётся на следующий раз.
+    /// Write if anything changed; a failed write stays for the next time.
     pub fn save(&mut self, path: &Path) {
         if !self.dirty {
             return;
@@ -74,8 +74,8 @@ fn seconds(play: &PlayRecord) -> Option<i64> {
     play.played_at.parse::<jiff::Timestamp>().ok().map(|at| at.as_second())
 }
 
-/// Слияние локальной истории и истории Spotify, новые первыми. Запись Spotify рядом (≤ 60 с) со своей —
-/// то же прослушивание; записи одного источника между собой не сливаются. Без времени — в конец.
+/// Merging the local history and Spotify's history, newest first. A Spotify record nearby (≤ 60 s) with one's own —
+/// the same play; records of one source are not merged with each other. Without a time — at the end.
 pub fn merged(local: &[PlayRecord], remote: &[PlayRecord]) -> Vec<PlayRecord> {
     let mut unmatched: HashMap<&str, Vec<i64>> = HashMap::new();
     let mut out: Vec<(Option<i64>, PlayRecord)> = Vec::new();
@@ -111,7 +111,7 @@ pub fn merged(local: &[PlayRecord], remote: &[PlayRecord]) -> Vec<PlayRecord> {
     out.into_iter().map(|(_, play)| play).collect()
 }
 
-/// Дополнить ранее загруженную историю Spotify страницей: повтор (uri, время) отбрасывается.
+/// Supplement an earlier loaded Spotify history with a page: a repeat (uri, time) is discarded.
 pub fn absorb_remote(known: &mut Vec<PlayRecord>, page: Vec<PlayRecord>) -> usize {
     let mut added = 0;
     for play in page {

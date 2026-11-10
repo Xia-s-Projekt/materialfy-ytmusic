@@ -1,4 +1,4 @@
-//! Ключи сериализации = роли моделей и ключи словарей QML. Менять только вместе с QML.
+//! Serialization keys = model roles and QML dictionary keys. Change only together with QML.
 use md3_model::*;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -68,7 +68,7 @@ fn track() -> TrackItem {
         available: true,
         uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC".into(),
         added_at: "2026-10-01T10:00:00Z".into(),
-        added_by: "Друг".into(),
+        added_by: "Friend".into(),
         ..Default::default()
     }
 }
@@ -85,8 +85,8 @@ fn track_keys() {
 
 #[test]
 fn track_defaults_when_keys_missing() {
-    // QML может прислать неполный словарь (track_from_map) — недостающее берётся по умолчанию
-    let t: TrackItem = serde_json::from_value(json!({"trackId": "x", "title": "Т"})).unwrap();
+    // QML may send an incomplete dictionary (track_from_map) — missing values fall back to defaults
+    let t: TrackItem = serde_json::from_value(json!({"trackId": "x", "title": "T"})).unwrap();
     assert_eq!(t.track_id, "x");
     assert_eq!(t.play_uri(), "spotify:track:x");
     let e: TrackItem = serde_json::from_value(json!({"trackId": "e", "isEpisode": true})).unwrap();
@@ -111,7 +111,7 @@ fn info_types_are_flat() {
     );
     assert_eq!(keys(&ArtistInfo::default()), expected(&[ARTIST_KEYS, &["listeners", "followed", "biography", "headerImage"]]));
     let info = AlbumInfo {
-        item: AlbumItem { album_id: "a1".into(), title: "Альбом".into(), track_count: 12, ..Default::default() },
+        item: AlbumItem { album_id: "a1".into(), title: "Album".into(), track_count: 12, ..Default::default() },
         label: "RCA".into(),
         duration_ms: 2_400_000,
         release_date: "1987-11-12".into(),
@@ -132,11 +132,11 @@ fn show_episode_keys() {
     let ep = EpisodeItem {
         episode_id: "ep1".into(),
         uri: "spotify:episode:ep1".into(),
-        title: "Выпуск 12".into(),
+        title: "Episode 12".into(),
         duration_ms: 3_600_000,
         resume_ms: 120_000,
         show_id: "sh1".into(),
-        show_name: "Подкаст".into(),
+        show_name: "Podcast".into(),
         cover: "c".into(),
         ..Default::default()
     };
@@ -144,8 +144,8 @@ fn show_episode_keys() {
     let t = ep.to_track();
     assert!(t.is_episode);
     assert_eq!(t.track_id, "ep1");
-    assert_eq!(t.album, "Подкаст");
-    assert_eq!(t.artists, "Подкаст");
+    assert_eq!(t.album, "Podcast");
+    assert_eq!(t.artists, "Podcast");
     assert_eq!(t.show_id, "sh1");
     assert_eq!(t.play_uri(), "spotify:episode:ep1");
 }
@@ -155,7 +155,7 @@ fn device_keys() {
     assert_eq!(keys(&DeviceItem::default()), expected(&[DEVICE_KEYS]));
     let dev = DeviceItem {
         id: "d1".into(),
-        name: "Кухня".into(),
+        name: "Kitchen".into(),
         kind: "speaker".into(),
         is_active: true,
         supports_volume: true,
@@ -213,7 +213,7 @@ fn radio_home_search_keys() {
     assert_eq!(keys(&SearchBest::default()), expected(&[&["type", "item"]]));
     let shelf = HomeShelf {
         key: "topTracks".into(),
-        title: "Ваши любимые".into(),
+        title: "Your liked songs".into(),
         kind: "tracks".into(),
         items: vec![serde_json::to_value(track()).unwrap()],
     };
@@ -227,18 +227,18 @@ fn radio_home_search_keys() {
 
 #[test]
 fn play_context() {
-    // пустые uri/title/cover не пишутся
+    // empty uri/title/cover are not written
     assert_eq!(serde_json::to_value(PlayContext::new(contexts::LIKED)).unwrap(), json!({"type": "liked"}));
-    let ctx = PlayContext::with_uri(contexts::PLAYLIST, "spotify:playlist:p1").titled("Мой плейлист");
+    let ctx = PlayContext::with_uri(contexts::PLAYLIST, "spotify:playlist:p1").titled("My playlist");
     assert_eq!(
         serde_json::to_value(&ctx).unwrap(),
-        json!({"type": "playlist", "uri": "spotify:playlist:p1", "title": "Мой плейлист"})
+        json!({"type": "playlist", "uri": "spotify:playlist:p1", "title": "My playlist"})
     );
     let covered = ctx.clone().with_cover("https://i.scdn.co/image/300");
     assert_eq!(serde_json::to_value(&covered).unwrap()["cover"], json!("https://i.scdn.co/image/300"));
     roundtrip(&ctx);
     roundtrip(&covered);
-    // неполный словарь из QML
+    // an incomplete dictionary from QML
     let parsed: PlayContext = serde_json::from_value(json!({"type": "album"})).unwrap();
     assert_eq!(parsed, PlayContext::new(contexts::ALBUM));
     let parsed: PlayContext = serde_json::from_value(json!({})).unwrap();

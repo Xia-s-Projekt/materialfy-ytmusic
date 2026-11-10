@@ -74,7 +74,7 @@ pub enum LibraryEvent {
     Feedback { kind: FeedbackKind, track: TrackItem },
 }
 
-/// Ключ кэша плейлиста: ytmusicapi добавляет к id префикс «VL» сам, наружу отдаём голый.
+/// Playlist cache key: ytmusicapi adds the "VL" prefix to the id itself; we return the bare one.
 fn playlist_key(id: &str) -> String {
     id.trim().strip_prefix("VL").unwrap_or(id.trim()).to_owned()
 }
@@ -96,16 +96,16 @@ pub struct LibraryService {
     history: Arc<HistoryService>,
     _settings: Arc<mf_platform::SettingsStore>,
     playlists: Mutex<Vec<PlaylistItem>>,
-    /// прочитанные плейлисты; ключ — id без «VL»
+    /// playlists that have been read; key is the id without "VL"
     playlists_info: Mutex<HashMap<String, PlaylistInfo>>,
-    /// какие плейлисты читаются прямо сейчас: повторный запрос тот же результат не изменит
+    /// which playlists are being read right now: a repeat request will not change the result
     reading: Mutex<HashSet<String>>,
     liked: Mutex<Vec<TrackItem>>,
     liked_set: Mutex<HashSet<String>>,
     albums: Mutex<Vec<AlbumItem>>,
     artists: Mutex<Vec<ArtistItem>>,
     shows: Mutex<Vec<ShowItem>>,
-    /// uri альбомов/шоу/исполнителей/плейлистов, добавленных в библиотеку
+    /// uri of albums/shows/artists/playlists added to the library
     saved: Mutex<HashSet<String>>,
     pinned: Mutex<HashSet<String>>,
     error_text: Mutex<String>,
@@ -188,7 +188,7 @@ impl LibraryService {
             let list: Vec<serde_json::Value> = v.as_array().cloned().unwrap_or_default();
             let items: Vec<ShowItem> = list
                 .iter()
-                // «New Episodes» — автоплейлист, а не подкаст: страницы у него нет
+                // "New Episodes" is an auto-playlist, not a podcast: it has no pages
                 .filter(|v| v.get("podcastId").and_then(Value::as_str) != Some("RDPN"))
                 .map(yt_api::map::show_item)
                 .collect();
@@ -210,7 +210,7 @@ impl LibraryService {
         rt.spawn(async move { me.load_all().await; });
     }
 
-    // --- ошибки и заметки ---
+    // --- errors and notes ---
 
     fn set_error(&self, text: String) {
         let current = lock(&self.error_text);
@@ -246,8 +246,8 @@ impl LibraryService {
     pub fn is_saved(&self, uri: &str) -> bool { lock(&self.saved).contains(uri) }
     pub fn saved_revision(&self) -> u64 { lock(&self.saved).len() as u64 }
 
-    /// Страница каталога сообщила живой флаг: альбом в библиотеке, исполнитель подписан,
-    /// подкаст сохранён. Без этого кнопка на странице врала бы до перезагрузки библиотеки.
+    /// The catalog page reported a live flag: the album is in the library, the artist is subscribed to,
+    /// the podcast is saved. Without this the button on the page would lie until the library is reloaded.
     pub fn note_saved(&self, uri: &str, saved: bool) {
         if uri.is_empty() { return; }
         let mut set = lock(&self.saved);
@@ -274,7 +274,7 @@ impl LibraryService {
         let key = playlist_key(id.as_str());
         let in_library = lock(&self.playlists).iter().any(|p| playlist_key(&p.playlist_id) == key);
         if let Some(mut info) = lock(&self.playlists_info).get(&key).cloned() {
-            // «В библиотеке» = «в подписках»: свой плейлист подписки не требует
+            // "In library" = "in subscriptions": your own subscription playlist does not require
             info.followed = in_library && !info.item.can_edit;
             return Some(info);
         }
@@ -288,7 +288,7 @@ impl LibraryService {
         self.playlist_info(id).map(|i| i.tracks)
     }
 
-    // --- чтение плейлиста ---
+    // --- playlist reading ---
 
     async fn fetch_playlist(&self, key: &str) -> Result<PlaylistInfo, YtError> {
         let api = self.auth.api();
@@ -308,7 +308,7 @@ impl LibraryService {
         })
     }
 
-    /// Перечитать плейлист и разослать строки + шапку. false — чтение уже идёт.
+    /// Re-read the playlist and send out the rows + header. false - a read is already in progress.
     async fn read_playlist(&self, id: &PlaylistId) -> bool {
         let key = playlist_key(id.as_str());
         if key.is_empty() { return false; }
@@ -350,7 +350,7 @@ impl LibraryService {
         self.load_playlist(id.clone());
     }
 
-    /// После записи: перечитать затронутый плейлист и разделы (создание/удаление меняют список).
+    /// After a write: re-read the affected playlist and sections (create/delete change the list).
     fn after_write(self: &Arc<Self>, id: Option<PlaylistId>) {
         let me = self.clone();
         self.rt.spawn(async move {
@@ -361,12 +361,12 @@ impl LibraryService {
         });
     }
 
-    /// Строки плейлиста, если он уже прочитан (для перестановки и удаления).
+    /// Playlist rows, if it has already been read (for reordering and deletion).
     fn rows_of(&self, id: &PlaylistId) -> Vec<TrackItem> {
         self.playlist_info(id).map(|i| i.tracks).unwrap_or_default()
     }
 
-    // --- экран «Библиотека» ---
+    // --- "Library" screen ---
 
     pub fn entries(&self, kind: LibraryKind, owner: &str, sort: &str) -> Vec<LibraryEntry> {
         let mut out = match kind {
@@ -463,7 +463,7 @@ impl LibraryService {
         out
     }
 
-    /// Последние прослушанные контексты (локальная история): плейлист, альбом, исполнитель, подкаст.
+    /// Recently played contexts (local history): playlist, album, artist, podcast.
     pub fn recent_entries(&self, limit: usize) -> Vec<LibraryEntry> {
         let mut seen = HashSet::new();
         let mut out = Vec::new();
@@ -496,7 +496,7 @@ impl LibraryService {
         out
     }
 
-    // --- мутации: плейлисты ---
+    // --- mutations: playlists ---
 
     pub fn add_to_playlist(self: &Arc<Self>, track: TrackItem, id: PlaylistId) {
         if track.track_id.is_empty() {
@@ -532,8 +532,8 @@ impl LibraryService {
         });
     }
 
-    /// Вернуть удалённое на свои места: ytmusicapi умеет только дописывать в конец,
-    /// поэтому добавленные строки переводятся на позицию перестановкой.
+    /// Put the deleted item back in place: ytmusicapi can only append to the end,
+    /// so added rows are moved into position by reordering.
     pub fn insert_tracks(self: &Arc<Self>, id: PlaylistId, uris: Vec<String>, position: usize) {
         let ids = video_ids(&uris);
         if ids.is_empty() { return; }
@@ -546,7 +546,7 @@ impl LibraryService {
                 Err(e) => return me.fail(e),
             };
             if added.len() != ids.len() {
-                // ответ без setVideoId — позицию не выразить, строки остаются в конце
+                // a response without setVideoId - the position cannot be expressed, the rows stay at the end
                 return me.after_write(Some(id));
             }
             let Ok(_) = me.fetch_playlist(&key).await else { return me.after_write(Some(id)) };
@@ -560,7 +560,7 @@ impl LibraryService {
         });
     }
 
-    /// rows: [(videoId, pos, setVideoId)] — удалению нужны все три.
+    /// rows: [(videoId, pos, setVideoId)] - deletion needs all three.
     pub fn remove_tracks(self: &Arc<Self>, id: PlaylistId, rows: Vec<(String, usize, String)>) {
         let videos: Vec<serde_json::Value> = rows
             .iter()
@@ -593,8 +593,8 @@ impl LibraryService {
             }
             let api = me.auth.api();
             let key = playlist_key(id.as_str());
-            // moveItem ставит строку перед другой; «в самый конец» он не умеет — там
-            // остаётся удалить и дописать в конец
+            // moveItem places a row before another; it cannot do "all the way to the end" - there
+            // all that is left is to delete and append at the end
             let before: Option<&str> = if from < to {
                 if to + 1 < rows.len() { Some(rows[to + 1].set_video_id.as_str()) } else { None }
             } else {
@@ -713,7 +713,7 @@ impl LibraryService {
         });
     }
 
-    // --- лайки ---
+    // --- likes ---
 
     pub fn toggle_like(self: &Arc<Self>, track: TrackItem) {
         if track.track_id.is_empty() { return; }
@@ -739,7 +739,7 @@ impl LibraryService {
                     me.clear_error();
                 }
                 Err(e) => {
-                    // откат: API отказало, локальный набор вернули
+                    // rollback: the API refused, the local set was restored
                     let mut set = lock(&me.liked_set);
                     if was { set.insert(track.track_id.clone()); } else { set.remove(&track.track_id); }
                     drop(set);
@@ -773,7 +773,7 @@ impl LibraryService {
         });
     }
 
-    /// Альбом/подкаст/плейлист — в библиотеку (rate_playlist), исполнитель — подписка.
+    /// Album/podcast/playlist - into the library (rate_playlist), artist - subscription.
     pub fn toggle_saved(self: &Arc<Self>, uri: String) {
         let Some((kind, id)) = uri_parts(&uri) else { return };
         let kind = kind.to_owned();
@@ -793,7 +793,7 @@ impl LibraryService {
                         api.subscribe_artist(&id).await
                     }
                 }
-                // у выпусков подкастов своего API «в библиотеку» в ytmusicapi нет
+                // ytmusicapi has no API of its own for podcast episodes "into the library"
                 "album" | "show" | "playlist" => {
                     api.rate_playlist(&id, if was { "INDIFFERENT" } else { "LIKE" }).await
                 }
@@ -815,7 +815,7 @@ impl LibraryService {
     }
 }
 
-/// Подпись строки библиотеки: «Плейлист · N треков» (+ владелец, если он не вы).
+/// Library row label: "Playlist - N tracks" (+ owner, if it is not you).
 fn subtitle_playlist(p: &PlaylistItem) -> String {
     let mut parts = vec!["Playlist".to_owned(), plural_tracks(p.track_count)];
     if !p.owner.is_empty() {
@@ -835,13 +835,13 @@ fn plural_tracks(count: i64) -> String {
     if count <= 0 { "0 tracks".to_owned() } else { format!("{count} tracks") }
 }
 
-/// Локализованные подписи (mf_i18n), без зависимости bridges → services.
+/// Localized labels (mf_i18n), with no bridges -> services dependency.
 struct I18n;
 impl I18n {
     fn artist() -> String { "Artist".to_owned() }
 }
 
-/// URI треков → videoId (`ytmusic:track:ID`).
+/// Track URI -> videoId (`ytmusic:track:ID`).
 fn video_ids(uris: &[String]) -> Vec<String> {
     uris.iter()
         .filter_map(|uri| uri_parts(uri).map(|(_, id)| id.to_owned()))
@@ -853,7 +853,7 @@ fn title_of(service: &LibraryService, id: &PlaylistId) -> String {
     service.playlist_info(id).map(|i| i.item.title).unwrap_or_default()
 }
 
-/// setVideoId добавленных строк из ответа add_playlist_items.
+/// setVideoId of added rows from the add_playlist_items response.
 fn added_set_video_ids(response: &serde_json::Value) -> Vec<String> {
     response
         .get("playlistEditResults")
@@ -866,8 +866,8 @@ fn added_set_video_ids(response: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Поставить только что добавленные строки (в конце списка) на позицию `position`.
-/// Возвращает false, если выразить перестановку не удалось.
+/// Place just-added rows (at the end of the list) at position `position`.
+/// Returns false if the reordering could not be expressed.
 async fn place_rows(
     me: &Arc<LibraryService>,
     id: &PlaylistId,
@@ -878,7 +878,7 @@ async fn place_rows(
     let api = me.auth.api();
     let key = playlist_key(id.as_str());
     let count = rows.len();
-    // строки добавлены в конец в том же порядке, что и в added
+    // rows are added at the end in the same order as in added
     let start = count.saturating_sub(added.len());
     for (offset, set) in added.iter().enumerate() {
         let target = position + offset;
@@ -896,7 +896,7 @@ async fn place_rows(
     true
 }
 
-/// id нового плейлиста из ответа create_playlist (строка или словарь).
+/// id of the new playlist from the create_playlist response (string or dict).
 fn playlist_id_of(response: &serde_json::Value) -> Option<String> {
     if let Some(id) = response.as_str() {
         return (!id.is_empty()).then(|| id.to_owned());
@@ -910,7 +910,7 @@ fn playlist_id_of(response: &serde_json::Value) -> Option<String> {
 
 use serde_json::Value;
 
-/// Сортировка раздела библиотеки. Порядок YouTube Music («ytmusic») сохраняется как пришёл.
+/// Library section sorting. The YouTube Music ("ytmusic") order is kept as it arrived.
 fn sort_entries(rows: &mut [LibraryEntry], sort: &str) {
     match sort {
         "alpha" => rows.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
@@ -925,7 +925,7 @@ fn sort_entries(rows: &mut [LibraryEntry], sort: &str) {
     }
 }
 
-/// Контекст модели «Любимые треки» — тот же, что у моста (см. bridges::library).
+/// "Liked tracks" model context - the same as the bridge's (see bridges::library).
 pub fn liked_context() -> PlayContext {
     PlayContext::new(contexts::LIKED)
 }

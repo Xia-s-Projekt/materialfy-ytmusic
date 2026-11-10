@@ -1,6 +1,6 @@
-//! Covers: запасная обложка не со Spotify (yt_services::cover_fallback, Deezer). MorphImage спрашивает её, когда
-//! картинку Spotify не удалось загрузить ни с одного его CDN: find(kind, artist, title) возвращает ключ запроса,
-//! ответ приходит сигналом found(key, url) — url пустой, если ничего не нашлось.
+//! Covers: a fallback cover not from Spotify (yt_services::cover_fallback, Deezer). MorphImage asks for it when
+//! the Spotify image could not be loaded from any of its CDNs: find(kind, artist, title) returns a request key,
+//! the response comes via the found(key, url) signal - url is empty if nothing was found.
 use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
 
@@ -21,12 +21,12 @@ pub mod qobject {
         #[qobject]
         type Covers = super::CoversRust;
 
-        /// Ответ на find: url обложки или пустая строка
+        /// Response to find: the cover url or an empty string
         #[qsignal]
         fn found(self: Pin<&mut Covers>, key: QString, url: QString);
 
-        /// kind: "album" | "track" | "artist"; artist — первый исполнитель; title — название (у artist пустое).
-        /// Возвращает ключ запроса (пустой — искать нечего).
+        /// kind: "album" | "track" | "artist"; artist - the first artist; title - the name (empty for artist).
+        /// Returns a request key (empty - there is nothing to search for).
         #[qinvokable]
         fn find(self: Pin<&mut Covers>, kind: &QString, artist: &QString, title: &QString) -> QString;
     }

@@ -1,14 +1,14 @@
-//! Единственный экземпляр (app.py: raise_running_instance).
-//! Linux: если на сессионной шине уже есть mpris::BUS_NAME — вызвать у него org.mpris.MediaPlayer2.Raise
-//! и вернуть true (вызывающий выходит с кодом 0). Работающий экземпляр получает просьбу как MprisCommand::Raise.
+//! Single instance (app.py: raise_running_instance).
+//! Linux: if mpris::BUS_NAME is already on the session bus — call org.mpris.MediaPlayer2.Raise on it
+//! and return true (the caller exits with code 0). The running instance receives the request as MprisCommand::Raise.
 //!
-//! Windows и macOS (дополнение к Python-версии, где там всегда false): работающий экземпляр держит
-//! [`InstanceListener`] — именованный канал `\\.\pipe\materialfy-Materialfy-<user>` (создаётся как первый экземпляр
-//! канала, т. е. работает и как мьютекс) или unix-сокет `$TMPDIR/materialfy-Materialfy.sock`. Новый процесс подключается,
-//! пишет "raise\n" и выходит; без слушателя (оболочка его не запустила) — false, как раньше.
-//! Протокол: клиент — строка "raise\n", сервер — ответ "ok\n" или "hung\n": окно не отвечает (GUI-поток не
-//! отметился в [`gui_alive`] за 20 с: подвисание на тяжёлой странице слабого ПК — ещё не зависание). Зависший экземпляр новый процесс завершает (Windows) и запускается сам —
-//! иначе после зависания каждый запуск тихо выходил, «показав» мёртвое окно.
+//! Windows and macOS (an addition to the Python version, where it was always false there): the running instance holds
+//! [`InstanceListener`] — a named pipe `\\.\pipe\materialfy-Materialfy-<user>` (created as the pipe's first instance
+//! pipe, so it doubles as a mutex) or a unix socket `$TMPDIR/materialfy-Materialfy.sock`. The new process connects,
+//! writes "raise\n" and exits; with no listener (the shell did not start it) — false, as before.
+//! Protocol: the client sends the string "raise\n", the server replies "ok\n" or "hung\n": the window is not responding (the GUI thread has not
+//! checked in with [`gui_alive`] for 20 s: a stall on a heavy page on a weak PC is not yet a hang). A hung instance is terminated by the new process (Windows) and that process starts itself —
+//! otherwise after a hang every launch quietly exited, "showing" a dead window.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -23,7 +23,7 @@ const REPLY: &[u8] = b"ok\n";
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 const HUNG: &[u8] = b"hung\n";
 
-/// Последняя отметка GUI-потока и начало работы слушателя, мс от эпохи (0 — ещё не было).
+/// The GUI thread's last check-in and the listener's start, ms since the epoch (0 — none yet).
 static GUI_BEAT_MS: AtomicU64 = AtomicU64::new(0);
 static LISTEN_MS: AtomicU64 = AtomicU64::new(0);
 
@@ -31,12 +31,12 @@ fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
-/// GUI-поток жив — звать из его таймера раз в секунду.
+/// The GUI thread is alive — call from its timer once a second.
 pub fn gui_alive() {
     GUI_BEAT_MS.store(now_ms(), Ordering::Relaxed);
 }
 
-/// Окно отвечает: отметка свежая; до первой отметки (окно ещё грузится) — первые 60 с работы.
+/// The window is responding: the check-in is fresh; before the first check-in (the window is still loading) — the first 60 s of running.
 #[cfg_attr(not(any(target_os = "windows", target_os = "macos")), allow(dead_code))]
 fn gui_responsive() -> bool {
     let now = now_ms();
@@ -47,7 +47,7 @@ fn gui_responsive() -> bool {
 }
 const TIMEOUT: Duration = Duration::from_secs(3);
 
-/// true — работающий экземпляр найден и попрошен показать окно.
+/// true — a running instance was found and asked to show its window.
 pub async fn raise_running_instance() -> bool {
     match tokio::time::timeout(TIMEOUT, imp::raise()).await {
         Ok(found) => found,
@@ -58,21 +58,21 @@ pub async fn raise_running_instance() -> bool {
     }
 }
 
-/// Сколько новый процесс ждёт, пока уже запущенный (может, ещё стартующий) экземпляр откликнется.
+/// How long the new process waits for the already-running (possibly still starting) instance to answer.
 #[cfg(target_os = "windows")]
 const PRIMARY_WAIT: Duration = Duration::from_secs(20);
 
-/// Стать единственным экземпляром. true — этот процесс первый, работать дальше; false — уже работает другой
-/// (его окно показано) — выйти. Windows: именованный мьютекс занимается атомарно с самого начала запуска,
-/// поэтому два одновременных запуска (двойной клик, автозапуск и ярлык) не стартуют оба, даже пока первый ещё
-/// не открыл канал просьб. Зависший экземпляр raise завершает — тогда место занимает этот процесс.
+/// Become the single instance. true — this process is first, carry on; false — another one is already
+/// running (its window is shown) — exit. Windows: the named mutex is taken atomically from the very start of launch,
+/// so two simultaneous launches (a double click, autostart and a shortcut) do not both start, even while the first
+/// has not yet opened the request channel. A hung instance is terminated by raise — then this process takes its place.
 pub async fn become_primary() -> bool {
     #[cfg(target_os = "windows")]
     {
         let deadline = std::time::Instant::now() + PRIMARY_WAIT;
         loop {
             if imp::claim() {
-                // мьютекс свободен, но канал может держать версия до мьютекса — её окно и показать
+                // the mutex is free, but the pipe may be held by a version from before the mutex — show its window
                 return !raise_running_instance().await;
             }
             if raise_running_instance().await {
@@ -91,16 +91,16 @@ pub async fn become_primary() -> bool {
     }
 }
 
-/// Слушатель просьб «показать окно» от новых процессов (Windows/macOS).
-/// На Linux не нужен: `start` возвращает Err(Unsupported), просьба приходит через MPRIS.
+/// A listener for "show the window" requests from new processes (Windows/macOS).
+/// Not needed on Linux: `start` returns Err(Unsupported), the request arrives via MPRIS.
 pub struct InstanceListener {
     requests: mpsc::UnboundedReceiver<()>,
     task: tokio::task::JoinHandle<()>,
 }
 
 impl InstanceListener {
-    /// Занять канал/сокет. Ошибка — другой экземпляр уже слушает (или ОС не поддерживается).
-    /// Вызывать внутри tokio-рантайма.
+    /// Take the pipe/socket. An error means another instance is already listening (or the OS is unsupported).
+    /// Call inside a tokio runtime.
     pub async fn start() -> Result<InstanceListener, PlatformError> {
         let (tx, requests) = mpsc::unbounded_channel();
         LISTEN_MS.store(now_ms(), Ordering::Relaxed);
@@ -108,12 +108,12 @@ impl InstanceListener {
         Ok(InstanceListener { requests, task })
     }
 
-    /// Ждать следующей просьбы показать окно; None — слушатель остановлен.
+    /// Wait for the next show-the-window request; None — the listener has stopped.
     pub async fn recv(&mut self) -> Option<()> {
         self.requests.recv().await
     }
 
-    /// Отдать канал просьб (слушатель продолжает работать, пока жив рантайм).
+    /// Hand over the request channel (the listener keeps working while the runtime lives).
     pub fn into_receiver(self) -> mpsc::UnboundedReceiver<()> {
         self.requests
     }
@@ -123,7 +123,7 @@ impl InstanceListener {
     }
 }
 
-/// Обработать одно подключение: прочитать просьбу, ответить.
+/// Handle a single connection: read the request, reply.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 async fn serve_client<S>(mut stream: S, tx: mpsc::UnboundedSender<()>)
 where
@@ -157,7 +157,7 @@ where
     }
 }
 
-/// Ответ работающего экземпляра.
+/// A reply from the running instance.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[derive(Debug, PartialEq, Eq)]
 enum Answer {
@@ -165,7 +165,7 @@ enum Answer {
     Hung,
 }
 
-/// Клиент: отправить просьбу и дождаться ответа. None — запрос не ушёл.
+/// Client: send the request and wait for the reply. None — the request did not go out.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 async fn send_request<S>(mut stream: S) -> Option<Answer>
 where
@@ -178,7 +178,7 @@ where
     let mut reply = [0u8; 8];
     match stream.read(&mut reply).await {
         Ok(n) if reply[..n] == *HUNG => Some(Answer::Hung),
-        // запрос ушёл, даже если ответ не дошёл — второй экземпляр всё равно не нужен
+        // the request went out even if the reply did not arrive — the second instance is not needed anyway
         _ => Some(Answer::Shown),
     }
 }
@@ -259,7 +259,7 @@ mod imp {
         match super::send_request(client).await {
             Some(super::Answer::Shown) => true,
             Some(super::Answer::Hung) => {
-                // окно зависло: завершить тот процесс и запуститься вместо него
+                // the window hung: terminate that process and start in its place
                 if let Some(pid) = pid {
                     terminate(pid).await;
                 }
@@ -269,13 +269,13 @@ mod imp {
         }
     }
 
-    /// Разрешить работающему экземпляру вывести окно на передний план (иначе Windows только мигнёт кнопкой).
-    /// Возвращает его PID.
+    /// Allow the running instance to bring its window to the front (otherwise Windows only flashes the taskbar button).
+    /// Returns its PID.
     fn allow_foreground(client: &impl AsRawHandle) -> Option<u32> {
         use windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId;
         use windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow;
         let mut pid = 0u32;
-        // SAFETY: дескриптор открытого канала живёт дольше вызова, pid — валидный указатель
+        // SAFETY: the open pipe handle outlives the call, pid is a valid pointer
         unsafe {
             if GetNamedPipeServerProcessId(client.as_raw_handle(), &mut pid) != 0 && pid != 0 {
                 AllowSetForegroundWindow(pid);
@@ -285,12 +285,12 @@ mod imp {
         None
     }
 
-    /// Завершить зависший экземпляр и дождаться, пока он освободит канал.
+    /// Terminate the hung instance and wait for it to release the pipe.
     async fn terminate(pid: u32) {
         use windows_sys::Win32::Foundation::CloseHandle;
         use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess};
         tracing::warn!("the running instance (pid {pid}) does not respond: ending it");
-        // SAFETY: дескриптор процесса открыт здесь же и закрыт после вызова
+        // SAFETY: the process handle is opened here and closed after the call
         unsafe {
             let process = OpenProcess(PROCESS_TERMINATE, 0, pid);
             if !process.is_null() {
@@ -306,7 +306,7 @@ mod imp {
         }
     }
 
-    /// Занять мьютекс экземпляра на всё время жизни процесса; false — его держит другой процесс.
+    /// Take the instance mutex for the process's whole lifetime; false — another process holds it.
     pub fn claim() -> bool {
         use std::sync::OnceLock;
         use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError};
@@ -316,11 +316,11 @@ mod imp {
             return true;
         }
         let name: Vec<u16> = format!(r"Local\{ORGANIZATION}-{APPLICATION}-instance").encode_utf16().chain([0]).collect();
-        // SAFETY: имя — строка с нулём на конце; дескриптор либо закрывается здесь же, либо живёт до конца процесса
+        // SAFETY: the name is a null-terminated string; the handle is either closed here or lives until the process ends
         unsafe {
             let handle = CreateMutexW(std::ptr::null(), 0, name.as_ptr());
             if handle.is_null() {
-                // мьютекс не создать (права, странная среда) — не мешаем запуску, остаётся канал
+                // cannot create the mutex (permissions, a strange environment) — do not block the launch, the pipe remains
                 return true;
             }
             if GetLastError() == ERROR_ALREADY_EXISTS {
@@ -370,13 +370,13 @@ mod imp {
     use crate::dirs::{APPLICATION, ORGANIZATION};
 
     pub fn socket_path() -> PathBuf {
-        // $TMPDIR на macOS — свой у каждого пользователя
+        // $TMPDIR on macOS is per user
         std::env::temp_dir().join(format!("{ORGANIZATION}-{APPLICATION}.sock"))
     }
 
     pub async fn raise() -> bool {
         match UnixStream::connect(socket_path()).await {
-            // зависший экземпляр на macOS не завершаем — просто запускаемся
+            // on macOS we do not terminate the hung instance — just start
             Ok(stream) => super::send_request(stream).await == Some(super::Answer::Shown),
             Err(_) => false,
         }
@@ -387,7 +387,7 @@ mod imp {
         if UnixStream::connect(&path).await.is_ok() {
             return Err(std::io::Error::from(std::io::ErrorKind::AddrInUse).into());
         }
-        // сокет от упавшего процесса
+        // a socket left by a crashed process
         let _ = std::fs::remove_file(&path);
         let listener = UnixListener::bind(&path)?;
         Ok(tokio::spawn(async move {
@@ -424,7 +424,7 @@ mod imp {
 
 #[cfg(test)]
 mod tests {
-    /// Отметка окна — общая на процесс: тесты, которые её трогают, идут по очереди
+    /// The window check-in is per process: tests that touch it run in sequence
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     static GUI_STATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -441,7 +441,7 @@ mod tests {
         assert_eq!(rx.recv().await, Some(()));
     }
 
-    /// Окно давно не отмечалось — ответ «завис», просьба показать окно не уходит.
+    /// The window has not checked in for a long time — the reply is "hung", the show-the-window request is not sent.
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     #[tokio::test]
     async fn a_hung_window_answers_hung() {
@@ -470,7 +470,7 @@ mod tests {
         assert!(rx.try_recv().is_err());
     }
 
-    /// Настоящий канал/сокет: занимает имя пользователя, поэтому не по умолчанию.
+    /// A real pipe/socket: it takes the user's name, so it is not the default.
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     #[tokio::test]
     #[ignore = "takes the single-instance name"]

@@ -1,4 +1,4 @@
-// Home — зеркало HomeService: полки главной ({key, title, kind, items:[…]}).
+// Home - a mirror of HomeService: home shelves ({key, title, kind, items:[...]}).
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ pub mod qobject {
 
     unsafe extern "RustQt" {
         #[qobject]
-        // Свой сигнал у каждого свойства: смена loading/errorText не должна пересобирать полки в QML
+        // A separate signal for each property: a loading/errorText change should not rebuild the shelves in QML
         #[qproperty(QList_QVariant, shelves, READ, NOTIFY = shelves_changed)]
         #[qproperty(bool, loading, READ, NOTIFY = loading_changed)]
         #[qproperty(QString, error_text, cxx_name = "errorText", READ, NOTIFY = error_text_changed)]
@@ -37,7 +37,7 @@ pub mod qobject {
         #[cxx_name = "errorTextChanged"]
         fn error_text_changed(self: Pin<&mut Home>);
 
-        /// Обновить полки (force — без 10-минутного ограничения).
+        /// Refresh the shelves (force - without the 10-minute limit).
         #[qinvokable]
         fn refresh(self: &Home, force: bool);
     }
@@ -64,7 +64,7 @@ impl qobject::Home {
         if prev == next {
             return;
         }
-        // полки сравниваются по содержимому: сервис может прислать новый Arc с теми же полками
+        // shelves are compared by content: the service may send a new Arc with the same shelves
         let shelves = !Arc::ptr_eq(&prev.shelves, &next.shelves) && prev.shelves != next.shelves;
         let loading = prev.loading != next.loading;
         let error = prev.error_text != next.error_text;

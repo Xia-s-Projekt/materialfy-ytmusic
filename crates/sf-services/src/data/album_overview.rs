@@ -1,6 +1,6 @@
-//! Альбом и трек через GraphQL-шлюз клиентов Spotify (сохранённые запросы getAlbum и getTrack) с токеном
-//! сессии: то, чего нет в метаданных librespot, — прослушивания каждого трека, а также лейбл, правообладатели,
-//! дата выпуска с её точностью и «courtesy line». Без квоты Web API. Проверено вживую (2026-10):
+//! An album and a track through the Spotify clients' GraphQL gateway (the saved getAlbum and getTrack queries) with a
+//! session token: what librespot metadata does not have — each track's play counts, plus the label, copyright holders,
+//! the release date with its precision and the "courtesy line". No Web API quota. Verified live (2026-10):
 //! data.albumUnion { label, copyright.items[{type C|P, text}], date { isoString, precision }, courtesyLine,
 //! tracksV2 { totalCount, items[{ track { uri, playcount ("164947776"), discNumber, trackNumber } }] } };
 //! data.trackUnion { playcount, trackNumber, albumOfTrack { copyright, date, courtesyLine } }.
@@ -13,20 +13,20 @@ use sf_api::{Http, map};
 use super::persisted;
 use crate::catalog::AlbumPage;
 
-/// Хэши getAlbum (тот же документ, что queryAlbumTracks; свежий — из бандла веб-плеера).
+/// getAlbum hashes (the same document as queryAlbumTracks; a fresh one from the web player bundle).
 const ALBUM_HASHES: [&str; 1] = ["11c9cad9cb24c4f9e25ef9456f68621cfd6006a90f679e729c1d2f2fd70dfe16"];
-/// Хэши getTrack.
+/// getTrack hashes.
 const TRACK_HASHES: [&str; 1] = ["a8ef9e9f02b836feb0da3003c31dbb30decc6f4b473ef89ca88c882386d668de"];
-/// Треков на страницу getAlbum (как у веб-плеера).
+/// Tracks per getAlbum page (as the web player does).
 const PAGE: u64 = 50;
-/// Сборники по тысяче треков — не дальше.
+/// Compilations of a thousand tracks — no further.
 const MAX_PAGES: u64 = 40;
 
-/// Трек альбома по шлюзу.
+/// An album track from the gateway.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TrackPlays {
     pub uri: String,
-    /// 0 — шлюз не знает
+    /// 0 — the gateway does not know
     pub play_count: i64,
     pub disc_number: i64,
     pub track_number: i64,
@@ -37,11 +37,11 @@ pub struct AlbumOverview {
     pub label: String,
     /// «© …», «℗ …»
     pub copyrights: Vec<String>,
-    /// "2001-03-12" | "2001-03" | "2001" — по точности даты
+    /// "2001-03-12" | "2001-03" | "2001" — by date precision
     pub release_date: String,
     pub courtesy_line: String,
     pub total_tracks: u64,
-    /// треки в порядке альбома
+    /// tracks in album order
     pub tracks: Vec<TrackPlays>,
 }
 
@@ -54,7 +54,7 @@ pub struct TrackOverview {
     pub courtesy_line: String,
 }
 
-/// Альбом целиком: первая страница, затем остальные разом (у длинных альбомов).
+/// The whole album: the first page, then the rest at once (for long albums).
 pub async fn album(http: &Http, session: &sf_player::Session, album_id: &str) -> anyhow::Result<AlbumOverview> {
     let first = album_page(http, session, album_id, 0).await?;
     let mut overview = parse_album(&first)?;
@@ -62,7 +62,7 @@ pub async fn album(http: &Http, session: &sf_player::Session, album_id: &str) ->
     let offsets: Vec<u64> = (1..MAX_PAGES).map(|page| page * PAGE).take_while(|offset| *offset < total).collect();
     let rest = futures::future::join_all(offsets.iter().map(|offset| album_page(http, session, album_id, *offset))).await;
     for (offset, body) in offsets.iter().zip(rest) {
-        // страница, что не пришла, обрывает список: дальше совпадения ищутся только по URI
+        // a page that did not arrive cuts the list short: further matches are looked up by URI only
         match body.and_then(|body| parse_album(&body)) {
             Ok(more) => overview.tracks.extend(more.tracks),
             Err(error) => {
@@ -80,14 +80,14 @@ async fn album_page(http: &Http, session: &sf_player::Session, album_id: &str, o
     persisted::query(http, session, "getAlbum", &ALBUM_HASHES, &variables).await
 }
 
-/// Трек: прослушивания и сведения о его альбоме (без лейбла — его знает только getAlbum).
+/// A track: play counts and details about its album (without the label — only getAlbum knows it).
 pub async fn track(http: &Http, session: &sf_player::Session, track_id: &str) -> anyhow::Result<TrackOverview> {
     let variables = json!({ "uri": format!("spotify:track:{track_id}") });
     let body = persisted::query(http, session, "getTrack", &TRACK_HASHES, &variables).await?;
     parse_track(&body)
 }
 
-/// "164947776" (шлюз отдаёт строкой) или число; иное — 0.
+/// "164947776" (the gateway returns a string) or a number; anything else — 0.
 fn play_count(value: Option<&Value>) -> i64 {
     match value {
         Some(Value::String(text)) => text.trim().parse().unwrap_or(0),
@@ -96,7 +96,7 @@ fn play_count(value: Option<&Value>) -> i64 {
     }
 }
 
-/// Дата с её точностью, как release_date Web API: DAY → "2001-03-12", MONTH → "2001-03", YEAR → "2001".
+/// A date with its precision, as the Web API release_date: DAY → "2001-03-12", MONTH → "2001-03", YEAR → "2001".
 fn release_date(date: Option<&Value>) -> String {
     let Some(date) = date else { return String::new() };
     let iso = date.get("isoString").and_then(Value::as_str).unwrap_or_default();
@@ -174,9 +174,9 @@ fn parse_track(body: &Value) -> anyhow::Result<TrackOverview> {
     })
 }
 
-/// Дополнить страницу альбома тем, что знает шлюз: прослушивания треков (по URI; если списки совпали
-/// по длине — и по месту, для подменённых треков), лейбл и дата — если их нет или шлюз знает точнее,
-/// правообладатели — как их показывает Spotify.
+/// Fill in the album page with what the gateway knows: track play counts (by URI; if the lists matched
+/// in length — also by position, for swapped tracks), label and date — if they are missing or the gateway knows more precisely,
+/// copyright holders — as Spotify shows them.
 pub fn apply(page: &mut AlbumPage, overview: &AlbumOverview) {
     let by_uri: HashMap<&str, i64> =
         overview.tracks.iter().map(|track| (track.uri.as_str(), track.play_count)).collect();
@@ -211,7 +211,7 @@ pub fn apply(page: &mut AlbumPage, overview: &AlbumOverview) {
     }
 }
 
-/// Прослушивания трека на странице альбома (0 — неизвестно).
+/// A track's play counts on the album page (0 — unknown).
 pub fn plays_on(page: &AlbumPage, track_id: &str) -> i64 {
     let uri = format!("spotify:track:{track_id}");
     page.tracks
@@ -283,7 +283,7 @@ mod tests {
         apply(&mut page, &overview);
         assert!(page.tracks[0].play_count > 0, "matched by URI out of order");
         assert!(page.tracks[2].play_count > 900_000_000);
-        // три строки против трёх треков шлюза — неизвестный по URI берётся по месту
+        // three rows against three gateway tracks — one unknown by URI is taken by position
         assert_eq!(page.tracks[1].play_count, overview.tracks[1].play_count);
         assert_eq!(page.info.label, "Daft Life Ltd./ADA France");
         assert_eq!(page.info.release_date, "2001-03-12", "the more precise date wins");
@@ -291,7 +291,7 @@ mod tests {
         assert_eq!(page.info.copyright, "own", "the session's copyright stays");
         assert_eq!(plays_on(&page, "0DiWol3AO6WpXZgp0goxAV"), page.tracks[2].play_count);
 
-        // списки разной длины — только по URI
+        // lists of different length — by URI only
         let mut short = AlbumPage { tracks: vec![row("nothing"), row("0DiWol3AO6WpXZgp0goxAV")], ..Default::default() };
         apply(&mut short, &overview);
         assert_eq!(short.tracks[0].play_count, 0);

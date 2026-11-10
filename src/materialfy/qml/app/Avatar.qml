@@ -1,7 +1,7 @@
 import QtQuick
 import Md3
 
-// Аватар: фото (source), иначе инициалы, иначе значок человека.
+// Avatar: photo (source), otherwise initials, otherwise a person icon.
 MorphShape {
     id: root
     property string name

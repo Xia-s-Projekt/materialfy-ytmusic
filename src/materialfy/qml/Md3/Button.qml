@@ -1,7 +1,7 @@
 import QtQuick
 
-// Кнопка MD3 Expressive: style filled | tonal | outlined | text | elevated, size xs | s | m | l | xl.
-// При нажатии скругление «сжимается» (shape morph); toggle-кнопка в выбранном состоянии становится квадратнее.
+// MD3 Expressive button: style filled | tonal | outlined | text | elevated, size xs | s | m | l | xl.
+// On press the corner radius squeezes (shape morph); a toggle button becomes squarer when checked.
 Item {
     id: root
 
@@ -11,7 +11,7 @@ Item {
     property string size: "s"
     property bool checkable: false
     property bool checked: false
-    // false — состояние задаётся только снаружи (checked: binding), клик лишь шлёт clicked()
+    // false — state is only set from outside (checked: binding), a click only emits clicked()
     property bool autoToggle: true
     readonly property alias pressed: area.pressed
     readonly property alias hovered: area.containsMouse
@@ -82,7 +82,7 @@ Item {
 
         Icon {
             visible: root.icon !== ""
-            tight: true   // отступы MD3 — от видимой иконки, иначе узкие глифы (logout) «съезжают»
+            tight: true   // MD3 paddings are measured from the visible icon, otherwise narrow glyphs (logout) shift
             name: root.icon
             size: root._spec.icon
             fill: root._selected ? 1 : 0

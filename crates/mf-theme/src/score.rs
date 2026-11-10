@@ -1,6 +1,6 @@
-//! Score.score из materialyoucolor (score/score.py) — ранжирование цветов квантайзера.
-//! Своя копия, а не material_colors::score: в Python сумма популяций начинается с 1e-5,
-//! а оттенок округляется по-банковски (round()), и порядок при равных баллах — как у устойчивой сортировки.
+//! Score.score from materialyoucolor (score/score.py) — ranking of the quantizer's colors.
+//! Our own copy rather than material_colors::score: in Python the population sum starts at 1e-5,
+//! the hue is rounded with banker's rounding (round()), and the order for equal scores is that of a stable sort.
 use material_colors::color::Rgb;
 use material_colors::hct::Hct;
 
@@ -22,7 +22,7 @@ fn difference_degrees(a: f64, b: f64) -> f64 {
     180.0 - ((a - b).abs() - 180.0).abs()
 }
 
-/// `colors` — пары (ARGB, популяция) в порядке выдачи квантайзера. Возвращает ARGB, лучший первым.
+/// `colors` — (ARGB, population) pairs in the quantizer's output order. Returns ARGB, best first.
 pub fn score(colors: &[(u32, u32)]) -> Vec<u32> {
     let mut hcts = Vec::with_capacity(colors.len());
     let mut hue_population = [0u64; 360];
@@ -60,7 +60,7 @@ pub fn score(colors: &[(u32, u32)]) -> Vec<u32> {
         };
         scored.push((hct, proportion_score + (chroma - TARGET_CHROMA) * weight));
     }
-    // sort(reverse=True) в Python устойчив: равные сохраняют исходный порядок
+    // sort(reverse=True) in Python is stable: equal elements keep their original order
     scored.sort_by(|a, b| b.1.total_cmp(&a.1));
 
     let mut chosen: Vec<Hct> = Vec::new();

@@ -1,5 +1,5 @@
-// Catalog: переходы (сигнал openRequested слушает главное окно), страницы альбома/исполнителя/шоу/выпуска
-// (кэш AlbumData/ArtistData, повтор при ошибке), поиск с поколениями запросов, меню трека.
+// Catalog: navigation (the openRequested signal is listened to by the main window), album/artist/show/episode pages
+// (AlbumData/ArtistData cache, retry on error), search with request generations, track menu.
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -53,15 +53,15 @@ pub mod qobject {
         fn search_shows_ptr(self: &Catalog) -> *mut QObject;
         fn search_episodes_ptr(self: &Catalog) -> *mut QObject;
 
-        /// страница ("artist" | "album" | "playlist" | "show" | "episode" | "radio"), параметры
+        /// page ("artist" | "album" | "playlist" | "show" | "episode" | "radio"), parameters
         #[qsignal]
         #[cxx_name = "openRequested"]
         fn open_requested(self: Pin<&mut Catalog>, page: QString, props: QMap_QString_QVariant);
-        /// у трека несколько исполнителей — пусть выберет
+        /// the track has several artists - let the user choose
         #[qsignal]
         #[cxx_name = "chooseArtist"]
         fn choose_artist(self: Pin<&mut Catalog>, refs: QList_QVariant);
-        /// карточка исполнителя: id, x, y (низ ссылки), ширина
+        /// artist card: id, x, y (bottom of the link), width
         #[qsignal]
         #[cxx_name = "previewRequested"]
         fn preview_requested(self: Pin<&mut Catalog>, artist_id: QString, x: f64, y: f64, width: f64);
@@ -71,12 +71,12 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "searchChanged"]
         fn search_changed(self: Pin<&mut Catalog>);
-        /// меню трека у точки (x, y) — его показывает главное окно; w, h > 0 — размер кнопки «⋯»
-        /// с левым верхним углом в (x, y): меню встаёт у неё
+        /// track menu at the point (x, y) - it is shown by the main window; w, h > 0 - the size of the "..." button
+        /// with its top left corner at (x, y): the menu places itself next to it
         #[qsignal]
         #[cxx_name = "trackMenuRequested"]
         fn track_menu_requested(self: Pin<&mut Catalog>, track: QMap_QString_QVariant, x: f64, y: f64, w: f64, h: f64);
-        /// ответ на requestTrackDetails: id трека и словарь TrackDetails (пустой — не загрузилось)
+        /// response to requestTrackDetails: the track id and a TrackDetails dict (empty - it did not load)
         #[qsignal]
         #[cxx_name = "trackDetailsReady"]
         fn track_details_ready(self: Pin<&mut Catalog>, track_id: QString, details: QMap_QString_QVariant);
@@ -87,7 +87,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openAlbum"]
         fn open_album(self: Pin<&mut Catalog>, album_id: &QString);
-        /// Страница альбома прокручивает к треку и подсвечивает его.
+        /// The album page scrolls to the track and highlights it.
         #[qinvokable]
         #[cxx_name = "openAlbum"]
         fn open_album_at(self: Pin<&mut Catalog>, album_id: &QString, track_id: &QString);
@@ -110,7 +110,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openEpisode"]
         fn open_episode(self: Pin<&mut Catalog>, episode_id: &QString);
-        /// Любая ссылка open.spotify.com / spotify:… → нужная страница; false — не распознана.
+        /// Any open.spotify.com / spotify:... link -> the right page; false - not recognized.
         #[qinvokable]
         #[cxx_name = "openUri"]
         fn open_uri(self: Pin<&mut Catalog>, text: &QString) -> bool;
@@ -135,7 +135,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "copyLink"]
         fn copy_link(self: &Catalog, url: &QString);
-        /// https://open.spotify.com/track/<id> (выпуск — /episode/<id>)
+        /// https://open.spotify.com/track/<id> (an episode - /episode/<id>)
         #[qinvokable]
         #[cxx_name = "trackUrl"]
         fn track_url(self: &Catalog, track: &QMap_QString_QVariant) -> QString;
@@ -143,18 +143,18 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "artistUrl"]
         fn artist_url(self: &Catalog, artist_id: &QString) -> QString;
-        /// https://open.spotify.com/<kind>/<id> для любого spotify:-URI
+        /// https://open.spotify.com/<kind>/<id> for any spotify: URI
         #[qinvokable]
         #[cxx_name = "uriUrl"]
         fn uri_url(self: &Catalog, uri: &QString) -> QString;
         #[qinvokable]
         #[cxx_name = "requestTrackMenu"]
         fn request_track_menu(self: Pin<&mut Catalog>, track: &QMap_QString_QVariant, x: f64, y: f64);
-        /// меню трека у кнопки: (x, y) — её левый верхний угол в координатах окна, w × h — размер
+        /// track menu at a button: (x, y) - its top left corner in window coordinates, w x h - the size
         #[qinvokable]
         #[cxx_name = "requestTrackMenuAt"]
         fn request_track_menu_at(self: Pin<&mut Catalog>, track: &QMap_QString_QVariant, x: f64, y: f64, w: f64, h: f64);
-        /// Окно «О треке»: всё, что известно о треке {trackId, albumId} → trackDetailsReady.
+        /// The "About the track" window: everything known about the track {trackId, albumId} -> trackDetailsReady.
         #[qinvokable]
         #[cxx_name = "requestTrackDetails"]
         fn request_track_details(self: Pin<&mut Catalog>, track: &QMap_QString_QVariant);
@@ -166,22 +166,22 @@ pub mod qobject {
 
 const NOT_SIGNED_IN: &str = "Sign in to your account";
 
-/// Объект страницы и номер его текущей загрузки (ответ старой загрузки отбрасывается).
+/// A page object and the number of its current load (a response from an old load is discarded).
 struct Entry<T: cxx::memory::UniquePtrTarget> {
-    /// 0 — ещё не загружался
+    /// 0 - not loaded yet
     load: u64,
-    /// загружен для прошлого аккаунта — перечитать при следующем обращении
+    /// loaded for a previous account - re-read on the next access
     stale: bool,
     data: UniquePtr<T>,
 }
 
 type Fetch<P> = Pin<Box<dyn Future<Output = Result<P, ServiceError>> + Send>>;
 
-/// Страница каталога: где лежит её кэш и чем она грузится.
+/// A catalog page: where its cache lives and what loads it.
 trait CatalogPage: PageData {
     fn entries(catalog: &mut CatalogRust) -> &mut HashMap<String, Entry<Self>>;
     fn fetch(catalog: Arc<CatalogService>, id: String) -> Fetch<Self::Page>;
-    /// перед загрузкой (шоу запоминает свой id для loadMore)
+    /// before loading (the show remembers its id for loadMore)
     fn prepare(_data: Pin<&mut Self>, _id: &str) {}
 }
 
@@ -230,9 +230,9 @@ pub struct CatalogRust {
     shows: HashMap<String, Entry<ShowData>>,
     episodes: HashMap<String, Entry<EpisodeData>>,
     loads: u64,
-    /// номер перехода: поздний ответ «трек → альбом» не уводит со страницы, открытой позже
+    /// navigation number: a late "track -> album" response does not take you away from a page opened later
     nav: u64,
-    // поиск
+    // search
     search_state: QString,
     search_query: QString,
     best: QVariantMap,
@@ -290,7 +290,7 @@ fn to_map<T: serde::Serialize>(value: &T) -> QVariantMap {
     }
 }
 
-/// «Любимые треки»: spotify:user:<id>:collection (и spotify:collection).
+/// "Liked tracks": spotify:user:<id>:collection (and spotify:collection).
 fn is_collection_uri(text: &str) -> bool {
     let Some(rest) = text.strip_prefix("spotify:") else { return false };
     let rest = rest.strip_suffix(":tracks").unwrap_or(rest);
@@ -326,7 +326,7 @@ impl qobject::Catalog {
         model_ptr(&self.search_episodes)
     }
 
-    // --- переходы ------------------------------------------------------------
+    // --- navigation -----------------------------------------------------------
 
     fn open_artist(self: Pin<&mut Self>, artist_id: &QString) {
         if !artist_id.is_empty() {
@@ -382,7 +382,7 @@ impl qobject::Catalog {
         if id.is_empty() && (uri.contains(":playlist:") || uri.contains("/playlist/")) {
             id = md3_model::PlaylistId::from_uri_or_id(&uri).0;
         }
-        // строка экрана «Библиотека» (LIBRARY_KEYS): id без префикса
+        // a "Library" screen row (LIBRARY_KEYS): id without a prefix
         if id.is_empty() && uri.is_empty() {
             id = json_str(&playlist, "id");
         }
@@ -446,7 +446,7 @@ impl qobject::Catalog {
         match kind {
             "artist" => self.open_artist(&id),
             "album" => self.open_album(&id),
-            // DJ выглядит плейлистом, но списка треков у него нет: ссылка на него только запускает его
+            // DJ looks like a playlist, but has no track list: a link to it only starts it
             "playlist" if uri == yt_services::data::home_feed::DJ_URI => {
                 let context = PlayContext::with_uri("playlist", uri.clone());
                 ctx().services.player.play_context(context, None, None);
@@ -467,7 +467,7 @@ impl qobject::Catalog {
         true
     }
 
-    /// Ссылка на трек → его альбом с подсветкой трека (альбом узнаётся запросом).
+    /// A link to a track -> its album with the track highlighted (the album is found by a query).
     fn open_track(mut self: Pin<&mut Self>, track_id: String) {
         let thread = self.qt_thread();
         let mut this = self.as_mut().rust_mut();
@@ -497,7 +497,7 @@ impl qobject::Catalog {
         }
     }
 
-    // --- страницы альбома, исполнителя, шоу, выпуска ---------------------------
+    // --- album, artist, show, episode pages ---------------------------------
 
     fn album(self: Pin<&mut Self>, album_id: &QString) -> *mut cxx_qt::QObject {
         self.page::<AlbumData>(album_id.to_string())
@@ -515,7 +515,7 @@ impl qobject::Catalog {
         self.page::<EpisodeData>(episode_id.to_string())
     }
 
-    /// Объект страницы из кэша; загрузка — при первом обращении, после ошибки и после смены аккаунта.
+    /// A page object from the cache; loading - on first access, after an error and after an account change.
     fn page<T: CatalogPage>(mut self: Pin<&mut Self>, id: String) -> *mut cxx_qt::QObject {
         let thread = self.qt_thread();
         let this = self.as_mut().rust_mut().get_mut();
@@ -526,7 +526,7 @@ impl qobject::Catalog {
             .or_insert_with(|| Entry { load: 0, stale: false, data: T::new_object() });
         let Some(mut data) = entry.data.as_mut() else { return std::ptr::null_mut() };
         let ptr = data.as_mut().object_ptr();
-        // уже загружен или грузится; пустой id (привязка QML ещё не готова) — без запроса
+        // already loaded or loading; an empty id (the QML binding is not ready yet) - no request
         if id.is_empty() || (entry.load != 0 && !entry.stale && !data.failed()) {
             return ptr;
         }
@@ -551,7 +551,7 @@ impl qobject::Catalog {
 
     fn page_loaded<T: CatalogPage>(mut self: Pin<&mut Self>, id: String, load: u64, result: Result<T::Page, ServiceError>) {
         let Some(entry) = T::entries(self.as_mut().rust_mut().get_mut()).get_mut(&id) else { return };
-        // ответ устаревшей загрузки (повтор, смена аккаунта)
+        // a response from a stale load (retry, account change)
         if entry.load != load {
             return;
         }
@@ -565,7 +565,7 @@ impl qobject::Catalog {
         }
     }
 
-    /// Страницы с ошибкой — загрузить снова (вход завершился после открытия страницы).
+    /// Pages with an error - load again (the login ended after the page was opened).
     fn retry_failed<T: CatalogPage>(mut self: Pin<&mut Self>) {
         let ids: Vec<String> = T::entries(self.as_mut().rust_mut().get_mut())
             .iter()
@@ -577,12 +577,12 @@ impl qobject::Catalog {
         }
     }
 
-    /// Загруженное прошлым аккаунтом перечитывается при следующем обращении.
+    /// Anything loaded by a previous account is re-read on the next access.
     fn mark_stale(self: Pin<&mut Self>) {
         fn stale<T: cxx::memory::UniquePtrTarget>(entries: &mut HashMap<String, Entry<T>>) {
             for entry in entries.values_mut().filter(|e| e.load != 0) {
                 entry.stale = true;
-                // ответ, который ещё в пути, уже не подойдёт
+                // a response that is still on its way will no longer do
                 entry.load = u64::MAX;
             }
         }
@@ -593,7 +593,7 @@ impl qobject::Catalog {
         stale(&mut this.episodes);
     }
 
-    // --- поиск ---------------------------------------------------------------
+    // --- search --------------------------------------------------------------
 
     fn set_state(mut self: Pin<&mut Self>, state: &'static str) {
         let mut this = self.as_mut().rust_mut();
@@ -689,7 +689,7 @@ impl qobject::Catalog {
             Delivery::Lagged => (!signed_in(), signed_in()),
         };
         if signed_out {
-            // ответы запросов прошлого аккаунта отбрасываются
+            // responses from a previous account's requests are discarded
             self.as_mut().rust_mut().generation += 1;
             self.as_mut().mark_stale();
             self.clear();
@@ -705,7 +705,7 @@ impl qobject::Catalog {
         }
     }
 
-    // --- меню трека ----------------------------------------------------------
+    // --- track menu ----------------------------------------------------------
 
     fn copy_link(&self, url: &QString) {
         crate::qt::copy_to_clipboard(&url.to_string());

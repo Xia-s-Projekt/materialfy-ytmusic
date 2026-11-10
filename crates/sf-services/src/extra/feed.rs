@@ -1,5 +1,5 @@
-//! Полки главной из главной Spotify и страницы «Для тебя» (data::home_feed), запасной топ из локальной истории
-//! и недавнее Spotify как записи истории: чистые функции без сети.
+//! Home shelves from Spotify's home and the "For You" page (data::home_feed), fallback top from local history
+//! and Spotify's recent as history records: pure functions without the network.
 use std::collections::{HashMap, HashSet};
 
 use md3_model::{ArtistItem, EpisodeItem, HomeShelf, LibraryEntry, PlayContext, TrackItem, contexts};
@@ -7,35 +7,35 @@ use md3_model::{ArtistItem, EpisodeItem, HomeShelf, LibraryEntry, PlayContext, T
 use crate::data::home_feed::{FeedCard, FeedSection, RecentContext};
 use crate::history::PlayRecord;
 
-/// Ключи полок из разделов Spotify: "feed:<id раздела>" (id стабильны — скрытие полки переживает обновления).
+/// Shelf keys from Spotify sections: "feed:<section id>" (the ids are stable — a hidden shelf survives updates).
 pub const FEED_PREFIX: &str = "feed:";
-/// Разделы главной Spotify, проверенные вживую (2026-10); id одинаковы у всех аккаунтов.
-/// «Только для тебя, …» (homeview): Discover Weekly и др. — в «Сделано для вас».
+/// Spotify home sections, verified live (2026-10); the ids are the same for all accounts.
+/// "Only For You, …" (homeview): Discover Weekly and others — into "Made For You".
 pub const MADE_FOR_SECTION: &str = "spotify:section:0JQ5DAUnp4wcj0bCb3wh3S";
-/// «Любимые исполнители» — запасной «Топ-исполнители».
+/// "Favorite artists" — the fallback "Top artists".
 pub const FAVORITE_ARTISTS_SECTION: &str = "spotify:section:0JQ5DAnM3wGh0gz1MXnu3z";
-/// «Рекомендуемые станции» (плейлисты «… Radio»).
+/// "Recommended stations" ("… Radio" playlists).
 const STATIONS_SECTION: &str = "spotify:section:0JQ5DAnM3wGh0gz1MXnu3R";
-/// «Лучшие треки» (This Is …).
+/// "Best of tracks" (This Is …).
 const BEST_OF_ARTISTS_SECTION: &str = "spotify:section:0JQ5DAnM3wGh0gz1MXnu3n";
-/// «Новые релизы для тебя» — у главной уже есть «Новинки» (ReleasesService).
+/// "New releases for you" — the home already has "New releases" (ReleasesService).
 const NEW_RELEASES_SECTION: &str = "spotify:section:0JQ5DAKjwZmJ0lVR7e0D2E";
-/// «Слушать музыку» — одиночные треки, плитками не играются.
+/// "Start listening" — single tracks, not played as tiles.
 const START_LISTENING_SECTION: &str = "spotify:section:0JQ5DBa4E2rlwCe7ty23US";
-/// Личные разделы — отдельными полками; прочие — только если в них в основном личные миксы (MIX_FORMATS).
-/// Атрибут madeFor.username Spotify ставит и редакционным плейлистам — по нему не судим.
+/// Personal sections — as separate shelves; the rest — only if they are mostly personal mixes (MIX_FORMATS).
+/// Spotify sets the madeFor.username attribute on editorial playlists too — it is not judged by.
 const PERSONAL_SECTIONS: &[&str] = &[STATIONS_SECTION, BEST_OF_ARTISTS_SECTION];
 const SKIPPED_SECTIONS: &[&str] =
     &[MADE_FOR_SECTION, FAVORITE_ARTISTS_SECTION, NEW_RELEASES_SECTION, START_LISTENING_SECTION];
-/// Полок из разделов Spotify, не больше: главная — не витрина редакции.
+/// Shelves from Spotify sections, no more: the home is not an editorial showcase.
 pub const MAX_FEED_SHELVES: usize = 4;
 pub const FEED_TILES: usize = 16;
 pub const MADE_FOR_YOU_TILES: usize = 24;
-/// Из одного раздела «Для тебя» (жанровых миксов там до сотни).
+/// From one "For You" section (there are up to a hundred genre mixes in it).
 pub const MADE_FOR_YOU_PER_SECTION: usize = 6;
-/// format плейлистов «Для тебя», которым не место среди миксов (станции — своя полка).
+/// format of "For You" playlists that have no place among the mixes (stations have their own shelf).
 const NOT_MIXES: &[&str] = &["concerts-near-you", "inspiredby-mix"];
-/// format личных миксов Spotify (проверено 2026-10; у редакционных — editorial, artistsets, format-shows-shuffle).
+/// format of Spotify's personal mixes (verified 2026-10; the editorial ones are editorial, artistsets, format-shows-shuffle).
 const MIX_FORMATS: &[&str] = &[
     "discover-weekly",
     "release-radar",
@@ -48,7 +48,7 @@ const MIX_FORMATS: &[&str] = &[
     "descripto",
     crate::data::home_feed::RESOLVED,
 ];
-/// Самые личные — первыми в «Сделано для вас» (миксы дня приходят без format и дочитываются сессией).
+/// The most personal — first in "Made For You" (day mixes come without a format and are read in full by the session).
 const FIRST_FORMATS: &[&str] =
     &["discover-weekly", "release-radar", "daily-mix", "daylist", "on-repeat", "repeat-rewind", crate::data::home_feed::RESOLVED];
 const SUBTITLE_CHARS: usize = 90;
@@ -61,7 +61,7 @@ fn short(text: &str) -> String {
     format!("{}…", cut.trim_end())
 }
 
-/// Плитка главной по карточке Spotify; выпуски и треки плитками не бывают.
+/// A home tile from a Spotify card; episodes and tracks are never tiles.
 pub fn card_entry(card: &FeedCard) -> Option<LibraryEntry> {
     if card.title.is_empty() {
         return None;
@@ -118,21 +118,21 @@ pub fn card_episode(card: &FeedCard) -> EpisodeItem {
     }
 }
 
-/// Плейлист Spotify с подписью, не из NOT_MIXES.
+/// A Spotify playlist with a label, not from NOT_MIXES.
 fn is_playlist(card: &FeedCard) -> bool {
     card.kind() == "playlist" && !card.title.is_empty() && !NOT_MIXES.contains(&card.format.as_str())
 }
 
-/// «Сделано для вас»: раздел «Только для тебя» главной (homeview: Discover Weekly…) и страница «Для тебя» —
-/// по разделам, ≤ 6 из каждого; Discover Weekly, «Радар», миксы дня, daylist, «На повторе» — первыми.
-/// Из страницы — только миксы с format (у «Videos For You» его нет).
+/// "Made For You": the home's "Only For You" section (homeview: Discover Weekly…) and the "For You" page —
+/// by sections, ≤ 6 from each; Discover Weekly, "Radar", day mixes, daylist, "On Repeat" — first.
+/// From the page — only mixes with a format ("Videos For You" does not have one).
 pub fn made_for_you_tiles(home: &[FeedSection], browse: &[FeedSection]) -> Vec<LibraryEntry> {
     let from_home = home.iter().filter(|s| s.uri == MADE_FOR_SECTION).flat_map(|s| s.cards.iter()).filter(|c| is_playlist(c));
     let from_browse = browse.iter().flat_map(|s| {
         s.cards.iter().filter(|c| is_playlist(c) && !c.format.is_empty()).take(MADE_FOR_YOU_PER_SECTION)
     });
     let mut cards: Vec<&FeedCard> = from_home.chain(from_browse).collect();
-    // устойчивая сортировка: порядок Spotify внутри групп сохраняется
+    // stable sort: Spotify's order inside the groups is preserved
     cards.sort_by_key(|c| !(c.format.is_empty() || FIRST_FORMATS.contains(&c.format.as_str())));
     let mut seen = HashSet::new();
     cards
@@ -175,7 +175,7 @@ fn section_id(uri: &str) -> &str {
     uri.rsplit(':').next().unwrap_or(uri)
 }
 
-/// Личные разделы главной Spotify — полками с заголовками Spotify, ≤ MAX_FEED_SHELVES.
+/// Spotify home's personal sections — as shelves with Spotify's titles, ≤ MAX_FEED_SHELVES.
 pub fn feed_shelves(home: &[FeedSection]) -> Vec<HomeShelf> {
     home.iter()
         .filter(|s| !s.title.is_empty() && !SKIPPED_SECTIONS.contains(&s.uri.as_str()))
@@ -206,7 +206,7 @@ fn section_shelf(section: &FeedSection) -> Option<HomeShelf> {
     })
 }
 
-/// «Любимые исполнители» главной Spotify (запасной «Топ-исполнители»).
+/// Spotify home's "Favorite artists" (the fallback "Top artists").
 pub fn favorite_artists(home: &[FeedSection]) -> Vec<ArtistItem> {
     home.iter()
         .filter(|s| s.uri == FAVORITE_ARTISTS_SECTION)
@@ -216,7 +216,7 @@ pub fn favorite_artists(home: &[FeedSection]) -> Vec<ArtistItem> {
         .collect()
 }
 
-/// Запасной «Топ-треки»: чаще слушаемые треки истории (новые первыми), при равенстве — недавние.
+/// Fallback "Top tracks": the history's most often played tracks (newest first), on a tie — recent.
 pub fn top_tracks_from_plays(plays: &[TrackItem], limit: usize) -> Vec<TrackItem> {
     let mut counts: HashMap<&str, (usize, usize)> = HashMap::new();
     for (index, track) in plays.iter().enumerate() {
@@ -230,7 +230,7 @@ pub fn top_tracks_from_plays(plays: &[TrackItem], limit: usize) -> Vec<TrackItem
     ranked.into_iter().take(limit).map(|(_, (_, index))| plays[index].clone()).collect()
 }
 
-/// Запасной «Топ-исполнители» по истории; обложки берутся из `known` (исполнители, у кого они есть).
+/// Fallback "Top artists" by history; the covers are taken from `known` (artists that have them).
 pub fn top_artists_from_plays(plays: &[TrackItem], known: &[ArtistItem], limit: usize) -> Vec<ArtistItem> {
     let mut counts: HashMap<&str, (usize, usize, &str)> = HashMap::new();
     let mut order = 0;
@@ -257,7 +257,7 @@ pub fn top_artists_from_plays(plays: &[TrackItem], known: &[ArtistItem], limit: 
         .collect()
 }
 
-/// Вид контекста по URI недавнего Spotify.
+/// The context kind by the URI of Spotify's recent.
 fn context_kind(uri: &str) -> &'static str {
     if uri.ends_with(":collection") {
         return contexts::LIKED;
@@ -272,8 +272,8 @@ fn context_kind(uri: &str) -> &'static str {
     }
 }
 
-/// Недавние контексты Spotify → записи истории: подписи и обложки — из `cards` (lookup), трек — последний
-/// сыгранный в контексте (если Spotify его назвал).
+/// Spotify's recent contexts → history records: labels and covers — from `cards` (lookup), the track — the last
+/// played in the context (if Spotify named it).
 pub fn recent_records(recent: &[RecentContext], cards: &[FeedCard]) -> Vec<PlayRecord> {
     let card = |uri: &str| cards.iter().find(|c| c.uri == uri);
     recent
@@ -340,21 +340,21 @@ mod tests {
     #[test]
     fn made_for_you_puts_the_most_personal_first() {
         let home = vec![
-            // madeFor бывает и у редакционных: из прочих разделов главной ничего не берётся
-            section("spotify:section:other", "Хиты", vec![mix("spotify:playlist:hits", "Hot Hits", "editorial")]),
-            section(MADE_FOR_SECTION, "Только для тебя", vec![card("spotify:playlist:dw", "Открытия недели")]),
+            // madeFor happens on editorial ones too: nothing is taken from the home's other sections
+            section("spotify:section:other", "Hits", vec![mix("spotify:playlist:hits", "Hot Hits", "editorial")]),
+            section(MADE_FOR_SECTION, "Only For You", vec![card("spotify:playlist:dw", "Discover Weekly")]),
         ];
         let niche: Vec<FeedCard> =
             (0..10).map(|i| mix(&format!("spotify:playlist:n{i}"), &format!("Mix {i}"), "descripto")).collect();
         let browse = vec![
             section("spotify:section:n", "Your Niche Mixes", niche),
-            section("spotify:section:p", "Персональные подборки", vec![
+            section("spotify:section:p", "Personal mixes", vec![
                 mix("spotify:playlist:day", "daylist", "daylist"),
                 FeedCard { uri: "spotify:playlist:unresolved".into(), ..Default::default() },
-                mix("spotify:playlist:cn", "Концерты поблизости", "concerts-near-you"),
+                mix("spotify:playlist:cn", "Concerts Near You", "concerts-near-you"),
                 mix("spotify:playlist:video", "Videos For You", ""),
             ]),
-            section("spotify:section:new", "Новая музыка", vec![mix("spotify:playlist:dw", "Открытия недели", "discover-weekly")]),
+            section("spotify:section:new", "New Music", vec![mix("spotify:playlist:dw", "Discover Weekly", "discover-weekly")]),
         ];
         let tiles = made_for_you_tiles(&home, &browse);
         let ids: Vec<_> = tiles.iter().map(|t| t.id.as_str()).collect();
@@ -367,19 +367,19 @@ mod tests {
     #[test]
     fn feed_shelves_keep_personal_sections_with_spotify_titles() {
         let home = vec![
-            section(STATIONS_SECTION, "Рекомендуемые станции", vec![mix("spotify:playlist:r1", "IMANU Radio", "inspiredby-mix")]),
-            section(FAVORITE_ARTISTS_SECTION, "Любимые исполнители", vec![card("spotify:artist:a1", "IMANU")]),
+            section(STATIONS_SECTION, "Recommended Stations", vec![mix("spotify:playlist:r1", "IMANU Radio", "inspiredby-mix")]),
+            section(FAVORITE_ARTISTS_SECTION, "Favorite Artists", vec![card("spotify:artist:a1", "IMANU")]),
             section("spotify:section:editorial", "Bollywood", vec![mix("spotify:playlist:b", "Bollywood & Chill", "editorial")]),
-            section("spotify:section:radios", "Популярные радиостанции", vec![mix("spotify:playlist:r2", "KK Radio", "inspiredby-mix")]),
-            section("spotify:section:mixes", "Миксы", vec![mix("spotify:playlist:m", "Mix", "topic-mix"), card("spotify:episode:e", "Ep")]),
-            section(BEST_OF_ARTISTS_SECTION, "Лучшие треки", vec![card("spotify:artist:a2", "Muse")]),
+            section("spotify:section:radios", "Popular Radio Stations", vec![mix("spotify:playlist:r2", "KK Radio", "inspiredby-mix")]),
+            section("spotify:section:mixes", "Mixes", vec![mix("spotify:playlist:m", "Mix", "topic-mix"), card("spotify:episode:e", "Ep")]),
+            section(BEST_OF_ARTISTS_SECTION, "Best of Tracks", vec![card("spotify:artist:a2", "Muse")]),
         ];
         let shelves = feed_shelves(&home);
         let keys: Vec<_> = shelves.iter().map(|s| (s.key.as_str(), s.kind.as_str(), s.title.as_str())).collect();
         assert_eq!(keys, [
-            ("feed:0JQ5DAnM3wGh0gz1MXnu3R", "tiles", "Рекомендуемые станции"),
-            ("feed:mixes", "tiles", "Миксы"),
-            ("feed:0JQ5DAnM3wGh0gz1MXnu3n", "artists", "Лучшие треки"),
+            ("feed:0JQ5DAnM3wGh0gz1MXnu3R", "tiles", "Recommended Stations"),
+            ("feed:mixes", "tiles", "Mixes"),
+            ("feed:0JQ5DAnM3wGh0gz1MXnu3n", "artists", "Best of Tracks"),
         ]);
         assert_eq!(shelves[0].items[0]["subtitle"], "Playlist · Spotify");
         assert_eq!(shelves[1].items.len(), 1, "an episode is never a tile");
@@ -415,12 +415,12 @@ mod tests {
             RecentContext { uri: "spotify:user:me:collection".into(), played_at_ms: 1_759_000_000_000, last_track_uri: String::new() },
         ];
         let cards = vec![
-            card("spotify:playlist:p", "Мой плейлист"),
+            card("spotify:playlist:p", "My playlist"),
             FeedCard { subtitle: "Muse".into(), ..card("spotify:track:t", "Uprising") },
         ];
         let records = recent_records(&recent, &cards);
         assert_eq!(records.len(), 2);
-        assert_eq!((records[0].context.kind.as_str(), records[0].context.title.as_str()), ("playlist", "Мой плейлист"));
+        assert_eq!((records[0].context.kind.as_str(), records[0].context.title.as_str()), ("playlist", "My playlist"));
         assert_eq!((records[0].track.title.as_str(), records[0].track.artists.as_str()), ("Uprising", "Muse"));
         assert_eq!(records[0].played_at, "2025-10-09T08:53:20Z");
         assert_eq!(records[1].context.kind, contexts::LIKED);

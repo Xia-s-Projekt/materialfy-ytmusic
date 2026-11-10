@@ -1,17 +1,17 @@
 import QtQuick
 import "Shapes.js" as Shapes
 
-// Состояние морфа фигуры для шейдеров shape/shapeimage (MorphShape, MorphImage).
-// Текущая фигура = mix(mix(A, B, s), C, t): анимируется одно число t, контур считает GPU.
-// Прерванный морф «замораживается» в паре (A, B, s) — без пересчёта точек на CPU.
+// Shape morph state for the shape/shapeimage shaders (MorphShape, MorphImage).
+// Current shape = mix(mix(A, B, s), C, t): a single number t is animated, the GPU computes the outline.
+// An interrupted morph "freezes" in the pair (A, B, s) — without recomputing points on the CPU.
 QtObject {
     id: root
 
     property var shape: "circle"
     property int duration: Theme.motion.spatialDefault
     property real overshoot: 1.4
-    property real livingSpeed: 1           // скорость «дыхания» клякс, 0 — заморозить
-    property bool active: true             // не виден — морф откладывается до появления, «дыхание» стоит
+    property real livingSpeed: 1           // blob "breathing" speed, 0 — freeze
+    property bool active: true             // not visible — the morph waits until it appears, "breathing" is paused
 
     property var a: Shapes.pack("circle")
     property var b: a
@@ -20,7 +20,7 @@ QtObject {
     property real t: 0
     property real time: 0
     property bool _living: false
-    property var _pending: undefined       // фигура, сменённая, пока элемент скрыт
+    property var _pending: undefined       // shape changed while the element was hidden
 
     onActiveChanged: {
         if (active && _pending !== undefined) {
@@ -30,8 +30,8 @@ QtObject {
         }
     }
 
-    // При создании привязка `shape` срабатывает после значения по умолчанию — без _ready каждая
-    // фигура морфилась бы из круга при каждом появлении строки в списке.
+    // On creation the shape binding fires after the default value — without _ready every
+    // shape would morph from a circle every time a row appears in a list.
     property bool _ready: false
     Component.onCompleted: { _set(shape); _ready = true }
     onShapeChanged: if (_ready) morphTo(shape)
@@ -45,7 +45,7 @@ QtObject {
         _living = Shapes.isLiving(next)
     }
 
-    // Сменить фигуру сразу, без морфа
+    // Change the shape at once, without a morph
     function jumpTo(next) {
         _ready = false
         shape = next
@@ -58,7 +58,7 @@ QtObject {
             _set(next)
             return
         }
-        // скрытая фигура не анимируется: морф сыграет, когда её покажут
+        // a hidden shape is not animated: the morph plays when it is shown
         if (!active) {
             _anim.stop()
             if (t !== 0 || s !== 0) {
@@ -68,7 +68,7 @@ QtObject {
             return
         }
         if (_anim.running) {
-            // прерванный морф: из пары (A, B) остаётся преобладающая, к ней — прежняя цель с долей t
+            // interrupted morph: the dominant one of the pair (A, B) remains, joined by the previous target with share t
             a = s < 0.5 ? a : b
             b = c
             s = t

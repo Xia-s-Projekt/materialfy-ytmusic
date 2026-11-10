@@ -3,9 +3,9 @@ import QtQuick.Templates as T
 import Md3
 import Materialfy.Core
 
-// Лист устройств снизу для узкого окна (layoutMode === "compact"): scrim 32 %, surfaceContainerLow,
-// радиус 28 сверху, ручка; содержимое — DeviceList, как во вкладке правой панели, действия — кнопками.
-// Закрывается по scrim, Esc и свайпу ручки вниз.
+// Device sheet at the bottom for a narrow window (layoutMode === "compact"): scrim 32 %, surfaceContainerLow,
+// radius 28 at the top, handle; content — DeviceList, like in the right panel's tab, actions — as buttons.
+// Closes on the scrim, Esc, and a downward swipe of the handle.
 T.Popup {
     id: root
 
@@ -30,7 +30,7 @@ T.Popup {
     closePolicy: T.Popup.CloseOnEscape
     background: null
 
-    // открытие: scrim проявляется, лист выезжает снизу
+    // opening: the scrim fades in, the sheet slides up from the bottom
     property real reveal: 0
     enter: Transition {
         NumberAnimation {
@@ -69,14 +69,14 @@ T.Popup {
             color: Theme.surfaceContainerLow
             Behavior on drag { enabled: !dragHandler.active; NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutCubic } }
 
-            // нажатие на пустое место листа (подписи, поля) не должно пройти к scrim под ним и закрыть лист
+            // a press on empty sheet space (labels, fields) must not pass through to the scrim under it and close the sheet
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.AllButtons
                 onWheel: wheel => wheel.accepted = true
             }
 
-            // ручка: тянуть вниз — закрыть
+            // handle: drag down — close
             Item {
                 id: handleBox
                 width: parent.width

@@ -3,13 +3,13 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Главы выпуска из меток времени в описании («4:12 Что такое битрейт»). Клик — перемотка, если выпуск
-// играет, иначе запуск с этой позиции. Текущая глава подсвечена.
+// Episode chapters from timestamps in the description ("4:12 What bitrate is"). Click — seek if the episode
+// is playing, otherwise start from that position. The current chapter is highlighted.
 ColumnLayout {
     id: root
 
-    property string text                // описание выпуска
-    property string uri                 // URI выпуска
+    property string text                // episode description
+    property string uri                 // episode URI
     property int durationMs: 0
 
     readonly property bool isCurrent: uri !== "" && Player.uri === uri
@@ -24,7 +24,7 @@ ColumnLayout {
         return cur
     }
 
-    // метка — в начале строки или после пробела/скобки; название — до следующей метки или конца строки
+    // a timestamp is at the start of a line or after a space/paren; the title runs to the next timestamp or end of line
     function parse(text, duration) {
         const re = /(^|[\s(\[])((?:\d{1,2}:)?\d{1,2}:\d{2})\)?\]?\s*[-–—:.|]?\s*/gm
         const found = []
@@ -42,7 +42,7 @@ ColumnLayout {
                 title = title.slice(0, 88).trim() + "…"
             out.push({ ms: found[i].ms, label: found[i].label, title: title })
         }
-        // главы — только возрастающие метки внутри выпуска, хотя бы две
+        // chapters — only increasing timestamps inside the episode, at least two
         const ok = out.length >= 2 && out.every((c, i) => i === 0 || c.ms > out[i - 1].ms)
             && (duration <= 0 || out[out.length - 1].ms < duration)
         return ok ? out : []

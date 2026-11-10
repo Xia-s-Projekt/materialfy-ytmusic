@@ -4,8 +4,8 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Подкаст: шапка (обложка, издатель, «Слушать последний» / «Продолжить» / «Пауза», подписка),
-// описание, выпуски с фильтрами и сортировкой (локально), догрузка страницами по 50.
+// Podcast: header (cover, publisher, "Play latest" / "Continue" / "Pause", subscribe),
+// description, episodes with filters and sorting (local), loading more in pages of 50.
 Page {
     id: page
 
@@ -13,7 +13,7 @@ Page {
     readonly property QtObject show: Catalog.show(showId)
     readonly property var info: show ? show.info : ({})
     readonly property var episodes: show ? show.episodes : null
-    readonly property bool compact: width < 840     // окно 900 px (рейл) или 1280 с правой панелью
+    readonly property bool compact: width < 840     // 900 px window (rail) or 1280 with the right panel
     readonly property bool saved: Library.savedRevision >= 0 && (info.uri ?? "") !== "" ? Library.isSaved(info.uri) : info.saved === true
 
     property string filter: "all"          // all | unfinished | new | saved
@@ -22,14 +22,14 @@ Page {
 
     title: info.name ?? ""
     showHeader: false
-    readonly property bool heroTitle: true     // название — в шапке; в верхней панели — после прокрутки
+    readonly property bool heroTitle: true     // the title is in the header; in the top bar — after scrolling
 
     readonly property var filters: [
         { key: "all", text: I18n.t("All") }, { key: "unfinished", text: I18n.t("In progress") },
         { key: "new", text: I18n.t("New") }, { key: "saved", text: I18n.t("Saved") }
     ]
 
-    // ---- Выпуски: фильтр и порядок на стороне QML ----
+    // ---- Episodes: filter and order on the QML side ----
     property int _revision: 0
     Connections {
         target: page.episodes
@@ -56,7 +56,7 @@ Page {
             }
             return true
         })
-        // с сервера выпуски приходят от новых к старым
+        // from the server episodes arrive newest first
         if (!newestFirst)
             list = list.slice().reverse()
         return list
@@ -73,13 +73,13 @@ Page {
         else if (allEpisodes.length > 0)
             Player.playEpisode(allEpisodes[0].uri, allEpisodes[0].fullyPlayed ? 0 : (allEpisodes[0].resumeMs ?? 0))
     }
-    // идёт догрузка следующей страницы (ShowData.loadingMore; повторный loadMore() безопасен)
+    // the next page is loading (ShowData.loadingMore; calling loadMore() again is safe)
     readonly property bool loadingMore: show !== null && show.loadingMore === true
     function loadMore() {
         if (hasMore && show && !show.loading && !loadingMore)
             show.loadMore()
     }
-    // догрузка, когда до конца списка остаётся меньше экрана
+    // load more when less than a screen is left to the end of the list
     Connections {
         target: page.flickable
         function onContentYChanged() {
@@ -99,7 +99,7 @@ Page {
         shapesOpacity: 0.6
     }
 
-    // ---- Шапка ----
+    // ---- Header ----
     Item {
         id: hero
         visible: (page.info.name ?? "") !== "" || (page.show !== null && page.show.loading)
@@ -189,7 +189,7 @@ Page {
         }
     }
 
-    // ---- Описание ----
+    // ---- Description ----
     ColumnLayout {
         Layout.fillWidth: true
         Layout.maximumWidth: 880
@@ -220,7 +220,7 @@ Page {
         }
     }
 
-    // ---- Выпуски ----
+    // ---- Episodes ----
     SectionHeader {
         visible: (page.info.name ?? "") !== ""
         text: I18n.t("Episodes")
@@ -254,7 +254,7 @@ Page {
         }
         Chip {
             icon: "swap_vert"
-            // в узкой странице — только значок: место нужнее фильтрам
+            // on a narrow page — icon only: the filters need the space more
             text: page.width < 640 ? "" : page.newestFirst ? I18n.t("Newest first") : I18n.t("Oldest first")
             onClicked: page.newestFirst = !page.newestFirst
         }
@@ -287,7 +287,7 @@ Page {
         }
     }
 
-    // загрузка: три строки-заготовки
+    // loading: three placeholder rows
     ColumnLayout {
         Layout.fillWidth: true
         visible: page.show !== null && page.show.loading

@@ -3,15 +3,15 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Общий Client ID упёрся в лимит Spotify, а своего приложения нет: окно с инструкцией, как подключить своё
-// (бесплатно, пара минут). Само открывается раз за запуск, пока не нажали «Больше не показывать»;
-// open() — вручную. Client ID подключается прямо здесь: браузер → «Разрешить» → готово.
+// The shared Client ID hit Spotify's limit and there is no app of your own: a window with instructions on how to connect your own
+// (free, a couple of minutes). It opens by itself once per launch until "Do not show again" is pressed;
+// open() — manually. The Client ID is connected right here: browser → "Allow" → done.
 Item {
     id: root
 
     property bool opened: false
     property bool _shownThisRun: false
-    // Client ID отправлен: ждём браузер и показываем, чем кончилось
+    // Client ID submitted: we wait for the browser and show how it ended
     property bool _connecting: false
 
     readonly property bool _wanted: Auth.state === "signedIn" && Settings.webApiLimit !== ""
@@ -33,7 +33,7 @@ Item {
         Auth.setPersonalClientId(id)
     }
 
-    // лимит должен продержаться пару секунд: короткая заминка окна не стоит
+    // the limit must hold for a couple of seconds: a brief window delay is acceptable
     Timer {
         interval: 2500
         running: root._wanted && !root.opened
@@ -128,7 +128,7 @@ Item {
                     elide: Text.ElideNone
                 }
 
-                // ---- 1. Кабинет разработчика ----
+                // ---- 1. Developer dashboard ----
                 Step {
                     number: 1
                     title: I18n.t("Open the Spotify developer dashboard and sign in with your Spotify account")
@@ -141,7 +141,7 @@ Item {
                     }
                 }
 
-                // ---- 2. Приложение и redirect URI ----
+                // ---- 2. App and redirect URI ----
                 Step {
                     number: 2
                     title: I18n.t("Create an app with any name and description. Add this address to Redirect URIs, tick Web API and save")
@@ -193,7 +193,7 @@ Item {
                     }
                 }
 
-                // как идёт подключение
+                // how the connection is going
                 RowLayout {
                     Layout.fillWidth: true
                     visible: root._st === "authorizing" || root._st === "ready"
@@ -232,7 +232,7 @@ Item {
         }
     }
 
-    // Шаг: номер в круге, текст и что под ним
+    // Step: number in a circle, text, and what is under it
     component Step: RowLayout {
         property int number
         property string title

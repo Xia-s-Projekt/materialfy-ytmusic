@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Заглушка карточки (обложка + две строки), пока нет данных.
+// Card placeholder (cover + two lines) while there is no data.
 ColumnLayout {
     property var shape: "softSquare"
     property real size: 156

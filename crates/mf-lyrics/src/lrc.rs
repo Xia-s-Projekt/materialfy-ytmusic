@@ -1,5 +1,5 @@
-//! Разбор и сборка строк (lyrics_sources.py: lines_from_lrc, build_from_timed_lines, interpolate_words,
-//! word_from_parts, group_syllables, parse_yrc, add_gaps). Округление времени — round(x, 3).
+//! Parsing and assembling lines (lyrics_sources.py: lines_from_lrc, build_from_timed_lines, interpolate_words,
+//! word_from_parts, group_syllables, parse_yrc, add_gaps). Time rounding is round(x, 3).
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -12,7 +12,7 @@ static LRC_WORD_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[0-9]+:[0-
 static YRC_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([0-9]+),([0-9]+)\](.*)$").unwrap());
 static YRC_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(([0-9]+),([0-9]+),[0-9]+\)([^(]*)").unwrap());
 
-/// round(x, 3) Python: точное десятичное округление (половина — к чётному), а не (x·1000).round()/1000
+/// Python's round(x, 3): exact decimal rounding (halves to even), not (x·1000).round()/1000
 pub fn round3(x: f64) -> f64 {
     if !x.is_finite() {
         return x;
@@ -20,7 +20,7 @@ pub fn round3(x: f64) -> f64 {
     format!("{x:.3}").parse().unwrap_or(x)
 }
 
-/// [mm:ss.xx] LRC → (время, текст), по времени; enhanced-теги <mm:ss.xx> вырезаются; несколько меток на строку — несколько пар.
+/// [mm:ss.xx] LRC → (time, text), ordered by time; enhanced <mm:ss.xx> tags are cut out; several tags on a line — several pairs.
 pub fn lines_from_lrc(lrc: &str) -> Vec<(f64, String)> {
     let mut out = Vec::new();
     for raw in py_splitlines(lrc) {
@@ -42,7 +42,7 @@ pub fn lines_from_lrc(lrc: &str) -> Vec<(f64, String)> {
     out
 }
 
-/// Построчный текст → строки со словами, интерполированными по длине (i = true). Мета-строки (автор, композитор…) выкидываются.
+/// Line-by-line text → lines with words interpolated by length (i = true). Meta lines (author, composer…) are dropped.
 pub fn build_from_timed_lines(pairs: &[(f64, String)], duration: f64) -> Vec<Line> {
     let pairs: Vec<&(f64, String)> = pairs.iter().filter(|(_, x)| !is_meta_line(x)).collect();
     let mut lines = Vec::new();
@@ -67,7 +67,7 @@ pub fn build_from_timed_lines(pairs: &[(f64, String)], duration: f64) -> Vec<Lin
     lines
 }
 
-/// \S+\s* в смысле Python
+/// \S+\s* in the Python sense
 fn tokens(text: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut start: Option<usize> = None;
@@ -94,7 +94,7 @@ fn tokens(text: &str) -> Vec<&str> {
     out
 }
 
-/// Слова строки равномерно по весу len(слово)+1.5.
+/// The line's words evenly by the weight len(word)+1.5.
 pub fn interpolate_words(text: &str, start: f64, end: f64) -> Vec<Word> {
     let tokens = tokens(text);
     if tokens.is_empty() {
@@ -112,7 +112,7 @@ pub fn interpolate_words(text: &str, start: f64, end: f64) -> Vec<Word> {
     out
 }
 
-/// Слоги одного слова (текст, начало, конец) → слово; у составного — "p" [[символов, s, e], …].
+/// The syllables of one word (text, start, end) → a word; for a compound one — "p" [[characters, s, e], …].
 pub fn word_from_parts(parts: &[(String, f64, f64)]) -> Word {
     let x: String = parts.iter().map(|p| p.0.as_str()).collect();
     let p = (parts.len() > 1).then(|| {
@@ -121,7 +121,7 @@ pub fn word_from_parts(parts: &[(String, f64, f64)]) -> Word {
     Word { x, s: round3(parts[0].1), e: round3(parts[parts.len() - 1].2), p }
 }
 
-/// Слоги (текст, начало, конец) → слова: граница — пробел в конце слога или CJK-символ.
+/// Syllables (text, start, end) → words: the boundary is a space at the end of a syllable or a CJK character.
 pub fn group_syllables(syllables: &[(String, f64, f64)]) -> Vec<Word> {
     let mut words = Vec::new();
     let mut cur: Vec<(String, f64, f64)> = Vec::new();
@@ -139,7 +139,7 @@ pub fn group_syllables(syllables: &[(String, f64, f64)]) -> Vec<Word> {
     words
 }
 
-/// NetEase YRC: строки "[start,dur](s,d,0)слог…"; JSON-строки с авторами пропускаются.
+/// NetEase YRC: lines "[start,dur](s,d,0)syllable…"; JSON lines with authors are skipped.
 pub fn parse_yrc(yrc: &str) -> Vec<Line> {
     let mut lines = Vec::new();
     for raw in py_splitlines(yrc) {
@@ -166,9 +166,9 @@ pub fn parse_yrc(yrc: &str) -> Vec<Line> {
     lines
 }
 
-/// Паузы ≥ GAP_MIN между строками → {"gap": true, "t": prev_end + (0.3 если prev_end), "e": t - 0.15}.
+/// Pauses of ≥ GAP_MIN between lines → {"gap": true, "t": prev_end + (0.3 if prev_end), "e": t - 0.15}.
 pub fn add_gaps(lines: Vec<Line>, duration: f64) -> Vec<Line> {
-    // duration в Python тоже не используется — оставлен ради сигнатуры
+    // duration is not used in Python either — kept for the signature
     let _ = duration;
     let mut out = Vec::with_capacity(lines.len() + 4);
     let mut prev_end = 0.0_f64;
@@ -199,22 +199,22 @@ mod tests {
         Line::words(t, e, Vec::new(), false)
     }
 
-    // ── порт LyricsSourcesTest.kt ──
+    // ── port of LyricsSourcesTest.kt ──
 
     #[test]
     fn lrc_is_parsed_and_sorted() {
-        let pairs = lines_from_lrc("[00:12.50]вторая строка\n[00:05.00][01:10.00]первая и повтор\n[ar:кто-то]\nбез метки");
+        let pairs = lines_from_lrc("[00:12.50]second line\n[00:05.00][01:10.00]first and repeat\n[ar:someone]\nno tag");
         assert_eq!(pairs.iter().map(|p| p.0).collect::<Vec<_>>(), vec![5.0, 12.5, 70.0]);
-        assert_eq!(pairs[0].1, "первая и повтор");
+        assert_eq!(pairs[0].1, "first and repeat");
     }
 
     #[test]
     fn words_are_interpolated_inside_the_line() {
-        let pairs = [(10.0, "раз два три".to_owned()), (14.0, String::new()), (20.0, "конец".to_owned())];
+        let pairs = [(10.0, "one two three".to_owned()), (14.0, String::new()), (20.0, "end".to_owned())];
         let lines = build_from_timed_lines(&pairs, 30.0);
-        assert_eq!(lines.len(), 2); // пустая строка — не текст
+        assert_eq!(lines.len(), 2); // an empty line is not text
         let w = words(&lines[0]);
-        assert_eq!(w.iter().map(|w| w.x.as_str()).collect::<Vec<_>>(), vec!["раз ", "два ", "три"]);
+        assert_eq!(w.iter().map(|w| w.x.as_str()).collect::<Vec<_>>(), vec!["one ", "two ", "three"]);
         assert!((w[0].s - 10.0).abs() < 0.001);
         assert!(lines[0].end() <= 13.95 + 0.001);
         assert!(w.windows(2).all(|p| p[0].e <= p[1].s + 0.001));
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn credits_are_not_lyrics() {
-        let pairs = [(0.0, "作词 : 某人".to_owned()), (1.0, "Lyrics: someone".to_owned()), (5.0, "настоящая строка".to_owned())];
+        let pairs = [(0.0, "作词 : 某人".to_owned()), (1.0, "Lyrics: someone".to_owned()), (5.0, "real line".to_owned())];
         assert_eq!(build_from_timed_lines(&pairs, 10.0).len(), 1);
     }
 
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(lines[3], Line::Gap { gap: true, t: 12.3, e: 19.85 });
     }
 
-    // ── прочее ──
+    // ── misc ──
 
     #[test]
     fn round3_is_python_round() {
@@ -247,8 +247,8 @@ mod tests {
 
     #[test]
     fn enhanced_tags_are_stripped() {
-        let pairs = lines_from_lrc("[00:01.00]<00:01.00>раз <00:01.50>два\r\n[00:02:50] три ");
-        assert_eq!(pairs, vec![(1.0, "раз два".to_owned()), (2.5, "три".to_owned())]);
+        let pairs = lines_from_lrc("[00:01.00]<00:01.00>one <00:01.50>two\r\n[00:02:50] three ");
+        assert_eq!(pairs, vec![(1.0, "one two".to_owned()), (2.5, "three".to_owned())]);
     }
 
     #[test]
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(w[0], Word { x: "Hello ".into(), s: 1.0, e: 2.0, p: Some(vec![(3, 1.0, 1.5), (2, 1.5, 2.0)]) });
         assert_eq!(w[1], Word { x: "world".into(), s: 2.0, e: 3.0, p: None });
         assert_eq!(lines[0].end(), 3.0);
-        // каждый иероглиф — отдельное слово; конец строки — по последнему слову
+        // each Chinese character is a separate word; the line's end is by the last word
         assert_eq!(words(&lines[1]).len(), 2);
         assert_eq!(lines[1].end(), 4.2);
     }

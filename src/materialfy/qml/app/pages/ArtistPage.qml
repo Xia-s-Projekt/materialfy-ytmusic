@@ -4,8 +4,8 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Исполнитель: шапка (широкое фото фоном, если есть; фото в фигуре, слушатели в месяц, подписчики, Слушать / Радио / Подписаться), популярные треки,
-// альбомы и синглы, релизы с участием, «Об исполнителе», похожие исполнители.
+// Artist: header (a wide photo as the background, if there is one; the photo in a shape, monthly listeners, followers, Listen / Radio / Follow), popular tracks,
+// albums and singles, releases with appearances, "About the artist", similar artists.
 Page {
     id: page
 
@@ -17,11 +17,11 @@ Page {
 
     title: info.name ?? ""
     showHeader: false
-    readonly property bool heroTitle: true     // имя — в шапке; в верхней панели — после прокрутки
+    readonly property bool heroTitle: true     // the name is in the header; in the top bar — after scrolling
 
     readonly property bool followed: Library.savedRevision >= 0 && (info.uri ?? "") !== "" ? Library.isSaved(info.uri) : info.followed === true
 
-    // 12,3 млн / 450 тыс. / 8 765 — I18n.nCompact (после «млн»/«тыс.» — родительный множественного)
+    // 12.3M / 450K / 8,765 — I18n.nCompact (after the million/thousand abbreviation — the genitive plural)
     function followersText(n) {
         return n > 0 ? I18n.nCompact(n, "{0} follower", "{0} followers") : ""
     }
@@ -29,12 +29,12 @@ Page {
         return n > 0 ? I18n.nCompact(n, "{0} monthly listener", "{0} monthly listeners") : ""
     }
 
-    // Биография приходит без HTML (sf-services), но на всякий случай теги срезаем и здесь
+    // The biography arrives without HTML (sf-services), but just in case the tags are stripped here too
     readonly property string biography: (info.biography ?? "").replace(/<[^>]*>/g, "").trim()
     property bool bioOpen: false
     readonly property int bioLines: 4
 
-    // Широкая шапка исполнителя — фон шапки страницы; пока не загрузилась или её нет — фигуры, как раньше
+    // The artist wide header — the page header background; until it loads or if it is absent — shapes, as before
     readonly property string headerImage: info.headerImage ?? ""
     readonly property bool hasBanner: headerImage !== "" && bannerImage.status !== Image.Error
     readonly property bool bannerShown: bannerImage.status === Image.Ready
@@ -50,15 +50,15 @@ Page {
             seed: page.info.name ?? ""
             shapesOpacity: 0.6
         },
-        // Фото во всю ширину: уходит под прозрачную верхнюю панель, внизу растворяется в поверхности.
-        // Поверх — скрим цвета поверхности: текст шапки читается и в светлой, и в тёмной теме.
+        // The full-width photo: goes under the transparent top bar, at the bottom it dissolves into the surface.
+        // On top — a scrim of the surface color: the header text is readable in both light and dark themes.
         Item {
             id: banner
-            readonly property real above: 64      // верхняя панель над страницей
-            readonly property real below: 120     // запас под шапкой на растворение
+            readonly property real above: 64      // the top bar over the page
+            readonly property real below: 120     // reserve under the header for the dissolve
             readonly property color tone: Theme.surfaceContainer
-            // Высота слоя — ступенями 128 px, ниже фото — пустая полоса (cut): пока шапка дорастает,
-            // текстура слоя не пересоздаётся каждый кадр (драйвер D3D11 копит освобождённые текстуры)
+            // The layer height — in 128 px steps, below the photo — an empty strip (cut): while the header grows,
+            // the layer texture is not recreated every frame (the D3D11 driver accumulates freed textures)
             readonly property real contentHeight: above + 8 + hero.height + below
             width: page.width
             height: Math.ceil(contentHeight / 128) * 128
@@ -80,15 +80,15 @@ Page {
                 id: bannerImage
                 width: parent.width
                 height: banner.contentHeight
-                // без параллакса: смещение от contentY перерисовывало слой баннера в каждом кадре прокрутки
+                // no parallax: an offset from contentY redrew the banner layer on every scroll frame
                 source: page.headerImage
-                // декодируется под размер на экране (PreserveAspectCrop — с запасом до покрытия), ступенями 256 px
+                // decoded to the on-screen size (PreserveAspectCrop — with margin up to full cover), in 256 px steps
                 sourceSize: Qt.size(Math.ceil(banner.width * Screen.devicePixelRatio / 256) * 256,
                                     Math.ceil(banner.height * Screen.devicePixelRatio / 256) * 256)
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
             }
-            // сверху — чуть приглушить под кнопками панели, к низу шапки — почти поверхность
+            // at the top — dim slightly under the bar buttons, at the bottom of the header — almost the surface
             Rectangle {
                 width: parent.width
                 height: banner.contentHeight
@@ -101,7 +101,7 @@ Page {
                     GradientStop { position: 1.0; color: Qt.alpha(banner.tone, 0.95) }
                 }
             }
-            // слева, под текстом шапки, плотнее; справа фото остаётся ярким
+            // on the left, under the header text, denser; on the right the photo stays bright
             Rectangle {
                 width: parent.width
                 height: banner.contentHeight
@@ -115,11 +115,11 @@ Page {
         }
     ]
 
-    // ---- Шапка ----
+    // ---- Header ----
     Item {
         id: hero
         Layout.fillWidth: true
-        // с фото шапка выше: имя и кнопки опускаются к низу картинки
+        // with a photo the header is taller: the name and buttons drop to the bottom of the image
         Layout.preferredHeight: page.hasBanner ? Math.max(heroRow.implicitHeight + 32, Math.round(Math.min(440, Math.max(260, page.width * 0.3))))
                                                : heroRow.implicitHeight + 32
 
@@ -168,7 +168,7 @@ Page {
                     type: "bodyLarge"
                     color: Theme.fgSurfaceVariant
                 }
-                // в узком окне кнопки переносятся, а не распирают шапку
+                // in a narrow window the buttons wrap, rather than stretching the header
                 Flow {
                     Layout.fillWidth: true
                     Layout.topMargin: 14
@@ -223,7 +223,7 @@ Page {
         text: page.artist ? page.artist.errorText : ""
     }
 
-    // ---- Популярные треки ----
+    // ---- Popular tracks ----
     SectionHeader {
         visible: page.artist && page.artist.popular.count > 0
         text: I18n.t("Popular tracks")
@@ -266,7 +266,7 @@ Page {
         }
     }
 
-    // ---- Альбомы ----
+    // ---- Albums ----
     SectionHeader {
         visible: page.artist && page.artist.albums.count > 0
         text: I18n.t("Albums and singles")
@@ -277,7 +277,7 @@ Page {
         id: tilesPerRow
         readonly property int value: Math.max(1, Math.floor((page.width - 2 * page.sideMargin + 20) / (168 + 20)))
     }
-    // Плитки — через Loader: скрытые (за «Все») не создаются, у крупного исполнителя это сотни обложек
+    // Tiles — via a Loader: hidden ones (beyond "All") are not created; for a big artist that is hundreds of covers
     Flow {
         Layout.fillWidth: true
         spacing: 20
@@ -295,13 +295,13 @@ Page {
                     coverArtist: page.info.name ?? ""
                     coverTitle: slot.model.title
                     title: slot.model.title
-                    // первая плитка — самый свежий релиз (сервис ставит его первым): подпись объясняет,
-                    // почему он первый. Без года подписи нет — значит свежего релиза у исполнителя и нет
+                    // the first tile — the newest release (the service puts it first): the label explains
+                    // why it is first. Without a year there is no label — meaning the artist has no fresh release
                     subtitle: [slot.index === 0 && slot.model.year > 0 ? I18n.t("Latest release") : "",
                                slot.model.year || "",
                                slot.model.kind ? I18n.any(slot.model.kind) : ""].filter(x => x).join(" · ")
                     explicit: slot.model.explicit
-                    // «Слушать» по наведению, как на главной: играющий альбом ставится на паузу
+                    // "Listen" on hover, as on the home page: the playing album is paused
                     readonly property string albumUri: slot.model.uri || ("ytmusic:album:" + slot.model.albumId)
                     showPlay: true
                     playing: Player.playing && Player.contextUri === albumUri
@@ -335,7 +335,7 @@ Page {
                     title: slot.model.title
                     subtitle: slot.model.artists
                     explicit: slot.model.explicit
-                    // «Слушать» по наведению, как на главной: играющий альбом ставится на паузу
+                    // "Listen" on hover, as on the home page: the playing album is paused
                     readonly property string albumUri: slot.model.uri || ("ytmusic:album:" + slot.model.albumId)
                     showPlay: true
                     playing: Player.playing && Player.contextUri === albumUri
@@ -346,7 +346,7 @@ Page {
         }
     }
 
-    // ---- Об исполнителе ----
+    // ---- About the artist ----
     SectionHeader {
         visible: page.biography !== ""
         text: I18n.t("About")
@@ -384,7 +384,7 @@ Page {
         }
     }
 
-    // ---- Похожие ----
+    // ---- Similar ----
     SectionHeader {
         visible: page.artist && page.artist.similar.count > 0
         text: I18n.t("Fans also like")

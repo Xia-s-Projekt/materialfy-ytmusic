@@ -1,17 +1,17 @@
 //! MPRIS2 (org.mpris.MediaPlayer2.materialfy, /org/mpris/MediaPlayer2).
-//! Только Linux (zbus, сессионная шина); на других ОС `MprisServer::start` возвращает Err(Unsupported).
+//! Linux only (zbus, the session bus); on other OSes `MprisServer::start` returns Err(Unsupported).
 //!
-//! Сервер не знает о плеере: читает [`MprisState`] из watch-канала и шлёт [`MprisCommand`] в mpsc.
-//! Связку с плеером делает sf-services (`glue::start_media_controls`).
-//! Свойства/методы/сигналы — как в mpris.py из yamusic-md3: Identity "Materialfy", DesktopEntry "materialfy",
+//! The server knows nothing about the player: it reads [`MprisState`] from a watch channel and sends [`MprisCommand`] to an mpsc.
+//! sf-services wires it to the player (`glue::start_media_controls`).
+//! Properties/methods/signals — as in mpris.py from yamusic-md3: Identity "Materialfy", DesktopEntry "materialfy",
 //! CanQuit/CanRaise true, HasTrackList false; Player: PlaybackStatus, LoopStatus (None/Playlist/Track),
-//! Shuffle, Volume, Rate=1 (запись игнорируется), Metadata (mpris:trackid /org/materialfy/track/<id с _ вместо не-алфавитно-цифровых>,
-//! mpris:length, xesam:title, xesam:artist [split ","], xesam:album, xesam:url https://open.spotify.com/track/<id> (выпуск — /episode/),
+//! Shuffle, Volume, Rate=1 (writes are ignored), Metadata (mpris:trackid /org/materialfy/track/<id with _ in place of non-alphanumerics>,
+//! mpris:length, xesam:title, xesam:artist [split ","], xesam:album, xesam:url https://open.spotify.com/track/<id> (an episode is /episode/),
 //! mpris:artUrl), Position, Min/MaxRate 1, CanGoNext/CanGoPrevious/CanPlay/CanPause/CanSeek = has_track, CanControl true;
-//! PropertiesChanged — только по изменившимся полям (правила _sync в mpris.py); Seeked — при скачке позиции > 2 с.
+//! PropertiesChanged — only for changed fields (the _sync rules in mpris.py); Seeked — on a position jump > 2 s.
 //!
-//! Запись LoopStatus/Shuffle/Volume с шины сразу отражается в отдаваемом состоянии (PropertiesChanged уходит
-//! с новым значением), команда уходит плееру; подтверждение из watch повторного сигнала не даёт.
+//! Writing LoopStatus/Shuffle/Volume from the bus is reflected immediately in the reported state (PropertiesChanged goes out
+//! with the new value), and the command goes to the player; the confirmation from watch does not produce a second signal.
 use tokio::sync::{mpsc, watch};
 
 use crate::PlatformError;
@@ -24,13 +24,13 @@ pub const NO_TRACK: &str = "/org/mpris/MediaPlayer2/TrackList/NoTrack";
 pub struct MprisState {
     pub has_track: bool,
     pub playing: bool,
-    /// base62 id трека или URI `spotify:track|episode:<id>`
+    /// the track's base62 id or the URI `spotify:track|episode:<id>`
     pub track_id: String,
     pub title: String,
-    /// "A, B" — делится по запятой в xesam:artist
+    /// "A, B" — split on commas into xesam:artist
     pub artist: String,
     pub album: String,
-    /// file://<coverFile> или https-обложка; пусто — без artUrl
+    /// file://<coverFile> or an https cover; empty — no artUrl
     pub art_url: String,
     pub duration_us: i64,
     pub position_us: i64,
@@ -41,7 +41,7 @@ pub struct MprisState {
 }
 
 impl MprisState {
-    /// Объектный путь текущего трека (NO_TRACK, если id пуст).
+    /// The current track's object path (NO_TRACK if the id is empty).
     pub fn track_path(&self) -> String {
         let id: String = self
             .track_id
@@ -51,7 +51,7 @@ impl MprisState {
         if id.is_empty() { NO_TRACK.to_owned() } else { format!("/org/materialfy/track/{id}") }
     }
 
-    /// xesam:url — ссылка open.spotify.com; пусто, если трека нет.
+    /// xesam:url — the open.spotify.com link; empty if there is no track.
     pub fn url(&self) -> String {
         let (kind, id) = match self.track_id.strip_prefix("spotify:").and_then(|rest| rest.split_once(':')) {
             Some((kind, id)) => (kind, id),
@@ -87,7 +87,7 @@ impl MprisState {
             .collect()
     }
 
-    /// Имена свойств Player, которые нужно объявить изменившимися при переходе old → self (как _sync).
+    /// The Player property names to report as changed on the transition old → self (like _sync).
     pub fn changed_properties(&self, old: &MprisState) -> Vec<&'static str> {
         let mut changed = Vec::new();
         if (old.playing, old.has_track) != (self.playing, self.has_track) {
@@ -114,13 +114,13 @@ impl MprisState {
         changed
     }
 
-    /// Скачок позиции больше 2 с — сигнал Seeked.
+    /// A position jump greater than 2 s — the Seeked signal.
     pub fn seeked_from(&self, old: &MprisState) -> bool {
         (self.position_us - old.position_us).abs() > 2_000_000
     }
 }
 
-/// LoopStatus MPRIS → режим повтора плеера.
+/// MPRIS LoopStatus → the player's repeat mode.
 pub fn repeat_from_loop_status(value: &str) -> &'static str {
     match value {
         "Playlist" => "all",
@@ -137,10 +137,10 @@ pub enum MprisCommand {
     Previous,
     Pause,
     PlayPause,
-    /// Stop — как Pause
+    /// Stop — like Pause
     Stop,
     Play,
-    /// абсолютная позиция, мкс (Seek(offset) пересчитывается в сервере от position_us)
+    /// absolute position, µs (Seek(offset) is recomputed in the server from position_us)
     SeekTo(i64),
     /// "off" | "all" | "one"
     SetRepeat(String),
@@ -154,7 +154,7 @@ pub struct MprisServer {
 }
 
 impl MprisServer {
-    /// Подключиться к сессионной шине, экспортировать объекты, занять BUS_NAME и следить за `state`.
+    /// Connect to the session bus, export the objects, take BUS_NAME and watch `state`.
     pub async fn start(
         state: watch::Receiver<MprisState>,
         commands: mpsc::UnboundedSender<MprisCommand>,
@@ -170,7 +170,7 @@ impl MprisServer {
         }
     }
 
-    /// Отключиться от шины.
+    /// Disconnect from the bus.
     pub async fn close(self) {
         #[cfg(target_os = "linux")]
         self.inner.close().await;
@@ -207,7 +207,7 @@ mod imp {
     }
 
     fn owned(value: Value<'_>) -> OwnedValue {
-        // наши значения не содержат файловых дескрипторов — ошибка невозможна
+        // our values contain no file descriptors — an error is impossible
         value.try_into_owned().unwrap_or_else(|_| OwnedValue::from(0u8))
     }
 
@@ -239,7 +239,7 @@ mod imp {
         meta
     }
 
-    /// Значение свойства Player по имени (для PropertiesChanged).
+    /// A Player property's value by name (for PropertiesChanged).
     fn player_property(s: &MprisState, name: &str) -> Option<Value<'static>> {
         Some(match name {
             "PlaybackStatus" => Value::from(s.playback_status()),
@@ -475,7 +475,7 @@ mod imp {
                 .build()
                 .await
                 .map_err(dbus_err)?;
-            // как dbus-fast: занятое имя (второй экземпляр с --new-instance) — не ошибка
+            // like dbus-fast: a taken name (a second instance with --new-instance) is not an error
             if let Err(err) = conn.request_name(BUS_NAME).await {
                 tracing::warn!("MPRIS: could not acquire name {BUS_NAME}: {err}");
             }
@@ -528,9 +528,9 @@ mod tests {
             has_track: true,
             playing: true,
             track_id: "123:45".into(),
-            title: "Песня".into(),
+            title: "Song".into(),
             artist: "A, B ,".into(),
-            album: "Альбом".into(),
+            album: "Album".into(),
             duration_us: 180_000_000,
             repeat: "off".into(),
             volume: 0.7,

@@ -1,14 +1,14 @@
-//! «Новинки»: личный «Радар новинок» Spotify и свежие альбомы и синглы исполнителей, на которых подписан
-//! пользователь (и тех, кого он часто слушает в этом приложении).
+//! "New releases": Spotify's personal "Release Radar" plus fresh albums and singles by artists the
+//! user follows (and by those they listen to a lot in this application).
 //!
-//! Всё читается через сессию librespot (sf_player::engine::new_releases): общий ключ Web API упирается в 429.
-//! «Радар» — главная Spotify (homeview) и страница «Для тебя» (GraphQL) через сессию → категория «Made For You»
-//! общим ключом (фоном, с таймаутом) → плейлист из библиотеки, если пользователь его сохранил. Его строки потом читает LibraryService, как у любого
-//! плейлиста. Новинки — подписки из коллекции, запись каждого исполнителя (не больше CONCURRENCY сразу) и
-//! даты релизов пачками extended-metadata. Даты уже виденных релизов хранятся на диске, поэтому повторный обход
-//! спрашивает подробности только у новых. Без сессии — запасной обход Web API, ограниченный по времени: 429 и
-//! квота его останавливают, но страницу не роняют. Итог — на диске по аккаунту: страница и полка главной видны
-//! сразу, сеть — не чаще раза в REFRESH_EVERY без force.
+//! Everything is read through a librespot session (sf_player::engine::new_releases): the Web API's shared key hits 429.
+//! The "Radar" is Spotify home (homeview) and the "Made for you" page (GraphQL) through the session → the "Made For You"
+//! category by the shared key (in the background, with a timeout) → a playlist from the library if the user saved it. LibraryService then reads its rows, as for any
+//! playlist. New releases are follows from the collection, a record for each artist (no more than CONCURRENCY at once) and
+//! release dates in extended-metadata batches. Dates of already seen releases are stored on disk, so a repeated pass
+//! asks for details only about new ones. Without a session — a time-limited fallback pass over the Web API: 429 and
+//! the quota stop it, but do not take the page down. The result is on disk per account: the page and the home shelf are visible
+//! at once, the network — no more often than once per REFRESH_EVERY without force.
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::PathBuf;
@@ -37,58 +37,58 @@ use crate::history::HistoryService;
 use crate::library::{LibraryEvent, LibraryService};
 use crate::lock;
 
-/// Не чаще раза в 6 часов без force: релизы выходят по пятницам, «Радар» обновляется раз в неделю.
+/// No more often than once in 6 hours without force: releases come out on Fridays, the "Radar" updates once a week.
 pub const REFRESH_EVERY: Duration = Duration::from_secs(6 * 3600);
-/// Окно свежести, дней.
+/// The freshness window, in days.
 pub const WINDOW_DAYS: i64 = 42;
-/// Сколько исполнителей обходить (подписки первыми, потом часто слушаемые).
+/// How many artists to walk (follows first, then frequently listened).
 pub const MAX_ARTISTS: usize = 150;
-/// Релизов на странице и в кэше.
+/// Releases on the page and in the cache.
 pub const MAX_RELEASES: usize = 60;
-/// Часто слушаемых исполнителей из локальной истории.
+/// Frequently listened artists from the local history.
 const FREQUENT_ARTISTS: usize = 20;
 const HISTORY_PLAYS: usize = 400;
-/// Одновременных чтений записей исполнителей; пачек подробностей — меньше (они крупнее).
+/// Concurrent artist record reads; detail batches — fewer (they are larger).
 const CONCURRENCY: usize = 4;
 const BATCH_CONCURRENCY: usize = 2;
-/// Одно чтение через сессию.
+/// One read through the session.
 const READ_TIMEOUT: Duration = Duration::from_secs(20);
-/// Запасные запросы Web API (общий ключ может часами отвечать 429 — ждать его нельзя).
+/// Fallback Web API requests (the shared key may answer 429 for hours — it cannot be waited for).
 const WEB_TIMEOUT: Duration = Duration::from_secs(15);
-/// Весь запасной обход Web API.
+/// The whole fallback Web API pass.
 const WEB_CRAWL_TIMEOUT: Duration = Duration::from_secs(90);
-/// Исполнителей в запасном обходе (каждый — 1–2 запроса Web API).
+/// Artists in the fallback pass (each — 1–2 Web API requests).
 const WEB_MAX_ARTISTS: usize = 40;
 const FOLLOWED_PAGES: usize = 4;
 const ALBUMS_PER_ARTIST: u32 = 20;
 const SINGLES_PER_ARTIST: u32 = 10;
-/// После входа подождать, пока загрузятся библиотека и главная.
+/// After sign-in, wait for the library and home to load.
 const START_DELAY: Duration = Duration::from_secs(5);
 const RADAR_TIMEOUT: Duration = Duration::from_secs(30);
-/// Сколько ждать сессию, пока движок librespot подключается.
+/// How long to wait for the session while the librespot engine connects.
 const SESSION_WAIT: Duration = Duration::from_secs(20);
 const CACHE_VERSION: u32 = 1;
 
-/// Свежий релиз: AlbumItem (ключи плиток) + дата.
+/// A fresh release: AlbumItem (tile keys) + date.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NewRelease {
     #[serde(flatten)]
     pub album: AlbumItem,
-    /// release_date Spotify: «2026-10-03» или «2026-10»
+    /// Spotify release_date: "2026-10-03" or "2026-10"
     pub release_date: String,
-    /// «Сегодня», «Вчера», «3 октября» — пересчитывается при каждой публикации
+    /// "Today", "Yesterday", "October 3" — recalculated at each publication
     pub date_label: String,
-    /// album | single — группа у исполнителя
+    /// album | single — the group at the artist
     pub group: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ReleasesSnapshot {
     pub loading: bool,
-    /// личный «Радар новинок»; None — не найден или ещё ищется
+    /// the personal "Release Radar"; None — not found or still being looked for
     pub radar: Option<PlaylistItem>,
-    /// поиск «Радара» закончен (иначе страница показывает загрузку, а не «не найден»)
+    /// the "Radar" search is finished (otherwise the page shows loading, not "not found")
     pub radar_checked: bool,
     pub releases: Arc<Vec<NewRelease>>,
     pub error_text: String,
@@ -99,15 +99,15 @@ struct State {
     account: String,
     loaded_at: Option<Instant>,
     radar: Option<PlaylistItem>,
-    /// «Радар» ответила сессия (личный наверняка); иначе после готовности сессии спросим ещё раз
+    /// the session answered for the "Radar" (personal for sure); otherwise we ask again once the session is ready
     radar_from_session: bool,
     radar_checked: bool,
     releases: Vec<NewRelease>,
-    /// id релиза → release_date всех виденных релизов (подробности спрашиваются только у новых)
+    /// release id → release_date of every seen release (details are asked only about new ones)
     known: HashMap<String, String>,
-    /// последний обход шёл через сессию (иначе, когда она появится, обойти ещё раз)
+    /// the last pass went through the session (otherwise, when it appears, walk again)
     via_session: bool,
-    /// сессия встала во время обхода без неё — по его окончании обойти ещё раз
+    /// the session came up during a pass without it — walk again once it finishes
     session_pending: bool,
 }
 
@@ -116,17 +116,17 @@ struct State {
 struct Cached {
     version: u32,
     account: String,
-    /// unix-время загрузки, мс
+    /// unix load time, ms
     fetched_at: i64,
     radar: Option<PlaylistItem>,
     radar_from_session: bool,
     releases: Vec<NewRelease>,
     known: HashMap<String, String>,
-    /// обход шёл через сессию: после входа его не повторять, когда она встанет
+    /// the pass went through the session: after sign-in do not repeat it when the session comes up
     via_session: bool,
 }
 
-/// Итог обхода: релизы, даты виденных и шёл ли он через сессию.
+/// The result of a pass: releases, dates of seen ones and whether it went through the session.
 struct Crawl {
     releases: Vec<NewRelease>,
     known: HashMap<String, String>,
@@ -173,7 +173,7 @@ impl ReleasesService {
         service
     }
 
-    /// Обновить (force — без 6-часового ограничения).
+    /// Refresh (force — without the 6-hour limit).
     pub fn refresh(&self, force: bool) {
         if !self.auth.is_signed_in() {
             self.snapshot.send_replace(ReleasesSnapshot {
@@ -208,7 +208,7 @@ impl ReleasesService {
         self.snapshot.subscribe()
     }
 
-    // --- внутреннее ----------------------------------------------------------------------------
+    // --- internals -----------------------------------------------------------------------------
 
     fn current(&self, generation: u64) -> bool {
         self.generation.load(Ordering::SeqCst) == generation
@@ -265,7 +265,7 @@ impl ReleasesService {
             }
             Err(error) => {
                 tracing::debug!("new releases: {error}");
-                // неудача не ждёт 6 часов: следующее открытие страницы спросит снова
+                // a failure does not wait 6 hours: the next page open will ask again
                 lock(&self.state).loaded_at = None;
                 Some(error)
             }
@@ -274,10 +274,10 @@ impl ReleasesService {
         let empty = lock(&self.state).releases.is_empty();
         self.snapshot.send_modify(|s| {
             s.loading = false;
-            // ошибка видна, только если показать нечего
+            // the error is visible only if there is nothing to show
             s.error_text = error.filter(|_| empty).unwrap_or_default();
         });
-        // сессия встала, пока шёл обход без неё, — обойти через неё (без квоты Web API)
+        // the session came up while a pass without it was running — walk again through it (no Web API quota)
         let again = {
             let mut state = lock(&self.state);
             std::mem::take(&mut state.session_pending) && !state.via_session
@@ -291,8 +291,8 @@ impl ReleasesService {
         route::account_session(&self.auth.api(), &self.player)
     }
 
-    /// Сессия, подождав её до SESSION_WAIT: после входа движок librespot поднимается не сразу, а без него
-    /// остаётся только Web API.
+    /// A session, waiting for it up to SESSION_WAIT: after sign-in the librespot engine does not come up at once, and without it
+    /// only the Web API is left.
     async fn wait_session(&self) -> Option<Session> {
         let started = Instant::now();
         loop {
@@ -308,8 +308,8 @@ impl ReleasesService {
         }
     }
 
-    /// Сессия готова: обход без неё (Web API) повторить через неё, иначе — только «Радар». Идущий обход
-    /// не дублируется: он повторится по окончании, если так и прошёл без сессии.
+    /// The session is ready: repeat a pass without it (Web API) through it, otherwise — the "Radar" only. A running pass
+    /// is not duplicated: it repeats once it finishes, if it went without the session after all.
     fn session_ready(&self) {
         let loading = self.snapshot.borrow().loading;
         let again = {
@@ -327,8 +327,8 @@ impl ReleasesService {
         }
     }
 
-    /// «Радар» и ответила ли сессия: главная Spotify (homeview) → страница «Для тебя» (GraphQL) через
-    /// сессию → общий ключ Web API (фоном) → библиотека.
+    /// The "Radar" and whether the session answered: Spotify home (homeview) → the "Made for you" page (GraphQL) through the
+    /// session → the Web API shared key (in the background) → the library.
     async fn discover_radar(&self) -> (Option<PlaylistItem>, bool) {
         let api = self.auth.api();
         let me = self.auth.account_id();
@@ -358,7 +358,7 @@ impl ReleasesService {
         (radar_in_library(&self.library.playlists()), session_answered)
     }
 
-    /// Только «Радар» (сессия стала готова позже входа).
+    /// The "Radar" only (the session became ready later than sign-in).
     fn recheck_radar(&self) {
         {
             let state = lock(&self.state);
@@ -388,8 +388,8 @@ impl ReleasesService {
         });
     }
 
-    /// Чьи релизы смотреть: подписки (коллекция сессии → библиотека → Web API), потом часто слушаемые.
-    /// Err — подписки не узнать ни одним путём, а истории нет: «ничего нового» было бы неправдой.
+    /// Whose releases to look at: follows (session collection → library → Web API), then frequently listened.
+    /// Err — the follows cannot be found out any way and there is no history: "nothing new" would be untrue.
     async fn artist_ids(&self, session: Option<&Session>) -> Result<Vec<String>, String> {
         let mut followed = Vec::new();
         let mut answered = false;
@@ -406,7 +406,7 @@ impl ReleasesService {
         if followed.is_empty() {
             followed = self.library.artists().into_iter().map(|a| a.artist_id).collect();
         }
-        // сессия ответила «ни на кого не подписан» — Web API скажет то же
+        // the session answered "not following anyone" — the Web API will say the same
         if followed.is_empty() && !answered {
             match sf_api::limits::background(within(WEB_TIMEOUT, followed_artists(&self.auth.api()))).await {
                 Ok(ids) => {
@@ -448,7 +448,7 @@ impl ReleasesService {
             Some(session) => session_crawl(&session, &pool, known, &previous, today).await,
             None => {
                 let api = self.auth.api();
-                // фоновый обход: уступает страницам и не идёт в сеть, пока Web API ограничен
+                // a background pass: yields to pages and does not hit the network while the Web API is limited
                 let crawl = sf_api::limits::background(web_crawl(&api, &pool, today));
                 match tokio::time::timeout(WEB_CRAWL_TIMEOUT, crawl).await {
                     Ok(result) => result
@@ -464,7 +464,7 @@ impl ReleasesService {
         }
     }
 
-    // --- кэш на диске ---------------------------------------------------------------------------
+    // --- disk cache -----------------------------------------------------------------------------
 
     fn cache_file(account: &str) -> PathBuf {
         let safe: String = account
@@ -502,14 +502,14 @@ impl ReleasesService {
         });
     }
 
-    /// Вход: показать кэш этого аккаунта и, если он старый, обновить.
+    /// Sign-in: show this account's cache and refresh it if it is old.
     async fn signed_in(self: Arc<Self>, account: String) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         *lock(&self.state) = State {
             account: account.clone(),
             ..Default::default()
         };
-        // «Войдите в аккаунт» от открытой до входа страницы больше не правда
+        // the "Sign in to your account" from the page opened before sign-in is no longer true
         self.snapshot.send_replace(ReleasesSnapshot::default());
         let path = Self::cache_file(&account);
         let cached = tokio::task::spawn_blocking(move || std::fs::read(path).ok())
@@ -546,7 +546,7 @@ impl ReleasesService {
     }
 }
 
-/// Вход/выход, готовность сессии и библиотека → «Радар» и новинки.
+/// Sign-in/sign-out, session readiness and the library → the "Radar" and new releases.
 async fn listen(weak: Weak<ReleasesService>) {
     let Some(me) = weak.upgrade() else { return };
     let mut auth = me.auth.subscribe();
@@ -569,7 +569,7 @@ async fn listen(weak: Weak<ReleasesService>) {
             event = library.recv() => match event {
                 Ok(LibraryEvent::Playlists(_)) => {
                     let Some(me) = weak.upgrade() else { break };
-                    // сохранённый «Радар» из библиотеки — только если не нашёлся иначе
+                    // the saved "Radar" from the library — only if it was not found otherwise
                     let missing = lock(&me.state).radar.is_none();
                     if missing && let Some(radar) = radar_in_library(&me.library.playlists()) {
                         lock(&me.state).radar = Some(radar);
@@ -583,15 +583,15 @@ async fn listen(weak: Weak<ReleasesService>) {
     }
 }
 
-// --- сеть: сессия ----------------------------------------------------------------------------------
+// --- network: session ------------------------------------------------------------------------------
 
-/// Обход исполнителей `artists` через сессию без кэша дат (проверка на живом аккаунте, отладка).
+/// A pass over `artists` through the session without the date cache (a check on a live account, debugging).
 pub async fn crawl_session(session: &Session, artists: &[String]) -> Result<Vec<NewRelease>, String> {
     let today = jiff::Zoned::now().date();
     session_crawl(session, artists, HashMap::new(), &[], today).await.map(|crawl| crawl.releases)
 }
 
-/// Обход через сессию: записи исполнителей → подробности новых релизов пачками → свежие.
+/// A pass through the session: artist records → details of new releases in batches → fresh ones.
 async fn session_crawl(
     session: &Session,
     pool: &[String],
@@ -599,7 +599,7 @@ async fn session_crawl(
     previous: &[NewRelease],
     today: Date,
 ) -> Result<Crawl, String> {
-    // будущие владеют своими данными (сессия — Arc внутри): иначе задача tokio не Send
+    // futures own their data (the session is an Arc inside): otherwise the tokio task is not Send
     let answers: Vec<(usize, Option<Vec<ReleaseRef>>)> = futures::stream::iter(pool.iter().cloned().enumerate())
         .map(|(rank, artist_id)| {
             let session = session.clone();
@@ -648,7 +648,7 @@ async fn session_crawl(
         known.insert(release.album.album_id.clone(), release.release_date.clone());
         details.insert(release.album.album_id.clone(), release);
     }
-    // даты держим только у релизов, которые ещё числятся за исполнителями
+    // we keep dates only for releases still listed under artists
     known.retain(|id, _| refs.contains_key(id));
     let candidates = refs
         .iter()
@@ -660,7 +660,7 @@ async fn session_crawl(
     })
 }
 
-/// Релизы всех исполнителей: id → (лучшее место исполнителя, группа).
+/// Releases of every artist: id → (the artist's best position, group).
 fn best_refs(answers: impl Iterator<Item = (usize, Vec<ReleaseRef>)>) -> HashMap<String, (usize, &'static str)> {
     let mut best: HashMap<String, (usize, &'static str)> = HashMap::new();
     for (rank, refs) in answers {
@@ -674,7 +674,7 @@ fn best_refs(answers: impl Iterator<Item = (usize, Vec<ReleaseRef>)>) -> HashMap
     best
 }
 
-/// У каких релизов спросить подробности: дата неизвестна, или релиз свежий, а показать его нечем.
+/// Which releases to ask details about: the date is unknown, or the release is fresh and there is nothing to show it with.
 fn needs_details(
     refs: &HashMap<String, (usize, &'static str)>,
     known: &HashMap<String, String>,
@@ -701,26 +701,26 @@ fn needs_details(
             )
         })
         .collect();
-    // сначала релизы исполнителей повыше: оборванный обход теряет менее важное
+    // higher artists' releases first: a cut-short pass loses the less important
     wanted.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.album_id.cmp(&b.1.album_id)));
     wanted.into_iter().map(|(_, release)| release).collect()
 }
 
-// --- сеть: Web API (запасной путь) -----------------------------------------------------------------
+// --- network: Web API (fallback path) --------------------------------------------------------------
 
-/// Запрос Web API, который не может держать страницу: дольше `limit` — как ошибка сети.
+/// A Web API request that must not hold the page: longer than `limit` — like a network error.
 async fn within<T>(limit: Duration, request: impl Future<Output = Result<T, ApiError>>) -> Result<T, ApiError> {
     tokio::time::timeout(limit, request)
         .await
         .unwrap_or_else(|_| Err(ApiError::Network("Spotify didn’t respond in time".into())))
 }
 
-/// Личные плейлисты Spotify («Радар», Discover Weekly) — у них подпись дочитывается, если её нет.
+/// Spotify's personal playlists ("Radar", Discover Weekly) — their label is finished reading if it is missing.
 const PERSONAL_PLAYLIST: &str = "37i9dQZEVXb";
 
-/// «Радар» на странице «Для тебя» (GraphQL browsePage через сессию, без квоты Web API). Подписи миксов
-/// приходят не всегда — дочитываются только личные плейлисты без названия. Ok(None) — страница ответила,
-/// а «Радара» на ней нет.
+/// The "Radar" on the "Made for you" page (GraphQL browsePage through the session, no Web API quota). Mix labels
+/// do not always arrive — only personal playlists without a name get finished. Ok(None) — the page answered,
+/// but there is no "Radar" on it.
 async fn browse_radar(http: &sf_api::Http, session: &Session) -> anyhow::Result<Option<sf_api::models::Playlist>> {
     let cards: Vec<FeedCard> = home_feed::made_for_you(http, session)
         .await?
@@ -733,14 +733,14 @@ async fn browse_radar(http: &sf_api::Http, session: &Session) -> anyhow::Result<
     named.extend(home_feed::resolve_playlists(session, unnamed).await);
     let playlists: Vec<sf_api::models::Playlist> = named.iter().map(card_playlist).collect();
     let Some(radar) = new_releases::pick_release_radar(&playlists) else { return Ok(None) };
-    // полная шапка (обложка, описание, число треков) — через сессию; не вышло — хватит карточки
+    // the full header (cover, description, track count) — through the session; if it fails a card will do
     match session_reads::playlist(session, &radar.id).await {
         Ok(playlist) => Ok(Some(playlist)),
         Err(_) => Ok(Some(radar.clone())),
     }
 }
 
-/// Карточка страницы «Для тебя» как шапка плейлиста.
+/// A "Made for you" page card as a playlist header.
 fn card_playlist(card: &FeedCard) -> sf_api::models::Playlist {
     let mut playlist = sf_api::models::Playlist {
         id: card.id().to_owned(),
@@ -780,8 +780,8 @@ async fn followed_artists(api: &ApiGateway) -> Result<Vec<String>, ApiError> {
     Ok(artists)
 }
 
-/// Без сессии: /artists/{id}/albums по первым WEB_MAX_ARTISTS исполнителям. 429 надолго, квота или вход
-/// останавливают обход; что успели — показываем.
+/// Without a session: /artists/{id}/albums for the first WEB_MAX_ARTISTS artists. A long 429, the quota or sign-in
+/// stops the pass; whatever we managed — we show.
 async fn web_crawl(api: &ApiGateway, pool: &[String], today: Date) -> Result<Vec<NewRelease>, ApiError> {
     let client = api.client_for(Operation::Catalog).await?;
     let stop = Arc::new(AtomicBool::new(false));
@@ -831,8 +831,8 @@ async fn web_crawl(api: &ApiGateway, pool: &[String], today: Date) -> Result<Vec
     Ok(select(candidates, today, WINDOW_DAYS, MAX_RELEASES))
 }
 
-/// Альбомы и синглы исполнителя, новые сверху в каждой группе. Spotify отдаёт сначала альбомы: если страница
-/// кончилась на них, синглы спрашиваются отдельно.
+/// An artist's albums and singles, newest first in each group. Spotify returns albums first: if the page
+/// ran out on them, singles are asked for separately.
 async fn web_artist_releases(client: &ApiClient, artist_id: &str) -> Result<Vec<Album>, ApiError> {
     let page = client
         .artist_albums(artist_id, "album,single", 0, ALBUMS_PER_ARTIST)
@@ -848,7 +848,7 @@ async fn web_artist_releases(client: &ApiClient, artist_id: &str) -> Result<Vec<
     Ok(albums)
 }
 
-/// Дальше спрашивать бессмысленно: квота, долгий 429 или вход.
+/// Asking further is pointless: the quota, a long 429 or sign-in.
 fn stops_the_crawl(error: &ApiError) -> bool {
     matches!(
         error,
@@ -856,9 +856,9 @@ fn stops_the_crawl(error: &ApiError) -> bool {
     )
 }
 
-// --- чистые функции ------------------------------------------------------------------------------
+// --- pure functions ------------------------------------------------------------------------------
 
-/// «Радар», сохранённый в библиотеке.
+/// The "Radar" saved in the library.
 pub fn radar_in_library(playlists: &[PlaylistItem]) -> Option<PlaylistItem> {
     playlists
         .iter()
@@ -866,7 +866,7 @@ pub fn radar_in_library(playlists: &[PlaylistItem]) -> Option<PlaylistItem> {
         .cloned()
 }
 
-/// Исполнители из истории прослушиваний (по трекам, каждый — список id), чаще слушаемые первыми; ≤ max.
+/// Artists from the listening history (by tracks, each a list of ids), most listened first; ≤ max.
 pub fn frequent_artists(plays: &[Vec<String>], max: usize) -> Vec<String> {
     let mut counts: HashMap<&str, (usize, usize)> = HashMap::new();
     for (order, artists) in plays.iter().enumerate() {
@@ -875,12 +875,12 @@ pub fn frequent_artists(plays: &[Vec<String>], max: usize) -> Vec<String> {
         }
     }
     let mut ranked: Vec<(&str, (usize, usize))> = counts.into_iter().collect();
-    // чаще — выше; поровну — кого слушали позже (история новые сверху)
+    // more often — higher; equal — whoever was listened to later (history is newest first)
     ranked.sort_by(|a, b| b.1.0.cmp(&a.1.0).then(a.1.1.cmp(&b.1.1)));
     ranked.into_iter().take(max).map(|(id, _)| id.to_owned()).collect()
 }
 
-/// Чьи релизы смотреть: подписки в порядке коллекции, потом часто слушаемые; без повторов, ≤ max.
+/// Whose releases to look at: follows in collection order, then frequently listened; without repeats, ≤ max.
 pub fn artist_pool(followed: &[String], frequent: &[String], max: usize) -> Vec<String> {
     let mut seen = HashSet::new();
     followed
@@ -901,12 +901,12 @@ fn group_of(album: &Album) -> &str {
         .unwrap_or("album")
 }
 
-/// Страница кончилась, а синглов в ней нет — они за её краем.
+/// The page ran out and there are no singles in it — they are past its edge.
 pub fn singles_cut_off(page: &Page<Album>) -> bool {
     page.total as usize > page.items.len() && !page.items.iter().any(|a| group_of(a) == "single")
 }
 
-/// Релиз в виде плитки (подпись даты — при публикации).
+/// A release as a tile (the date label — at publication).
 pub fn release_of(album: &Album) -> NewRelease {
     NewRelease {
         album: sf_api::map::album_item(album),
@@ -916,7 +916,7 @@ pub fn release_of(album: &Album) -> NewRelease {
     }
 }
 
-/// День выхода из release_date: «2026-10-03» — он сам, «2026-10» — первое число; один год — неизвестно.
+/// The release day from release_date: "2026-10-03" — itself, "2026-10" — the first; a year alone — unknown.
 pub fn release_day(date: &str) -> Option<Date> {
     let mut parts = date.trim().splitn(3, '-');
     let year: i16 = parts.next()?.parse().ok()?;
@@ -928,7 +928,7 @@ pub fn release_day(date: &str) -> Option<Date> {
     Date::new(year, month, day).ok()
 }
 
-/// Вышел за последние `window_days` дней (не в будущем: такие ещё не слушаются).
+/// Came out in the last `window_days` days (not in the future: those are not listened to yet).
 pub fn is_fresh(day: Date, today: Date, window_days: i64) -> bool {
     let Ok(since) = today.checked_sub(window_days.days()) else {
         return false;
@@ -936,7 +936,7 @@ pub fn is_fresh(day: Date, today: Date, window_days: i64) -> bool {
     since <= day && day <= today
 }
 
-/// «{0}» — число месяца (ключи словаря: по-русски «{0} января»).
+/// "{0}" — the day of the month (the dictionary key carries the month name: "{0} January").
 const MONTH_DAY: [&str; 12] = [
     "January {0}",
     "February {0}",
@@ -952,7 +952,7 @@ const MONTH_DAY: [&str; 12] = [
     "December {0}",
 ];
 
-/// То же с годом: «{0}» — число, «{1}» — год.
+/// The same with the year: "{0}" — the day, "{1}" — the year.
 const MONTH_DAY_YEAR: [&str; 12] = [
     "January {0}, {1}",
     "February {0}, {1}",
@@ -968,7 +968,7 @@ const MONTH_DAY_YEAR: [&str; 12] = [
     "December {0}, {1}",
 ];
 
-/// «Today», «Yesterday», «October 3», в другом году — «December 28, 2025» (по-русски «3 октября», «28 декабря 2025»).
+/// "Today", "Yesterday", "October 3", in another year — "December 28, 2025" (each language translates these keys with its own word order).
 pub fn date_label(day: Date, today: Date) -> String {
     if day == today {
         return mf_i18n::t("Today");
@@ -984,7 +984,7 @@ pub fn date_label(day: Date, today: Date) -> String {
     }
 }
 
-/// Подписи дат на сегодня.
+/// Date labels for today.
 fn labelled(releases: &[NewRelease], today: Date) -> Vec<NewRelease> {
     releases
         .iter()
@@ -997,8 +997,8 @@ fn labelled(releases: &[NewRelease], today: Date) -> Vec<NewRelease> {
         .collect()
 }
 
-/// Свежие релизы (rank — место исполнителя в подборке): без повторов (релиз двух исполнителей — у того, кто
-/// выше), новые сверху, при равной дате — по месту исполнителя; ≤ limit.
+/// Fresh releases (rank — the artist's position in the selection): without repeats (a release by two artists — under the one who
+/// is higher), newest first, on an equal date — by the artist's position; ≤ limit.
 pub fn select(found: Vec<(usize, NewRelease)>, today: Date, window_days: i64, limit: usize) -> Vec<NewRelease> {
     let mut best: HashMap<String, (Date, usize, NewRelease)> = HashMap::new();
     for (rank, release) in found {
@@ -1124,7 +1124,7 @@ mod tests {
         let plays = vec![ids(&["x"]), ids(&["y", "x"]), ids(&["z"]), ids(&["y"]), ids(&["x", ""])];
         assert_eq!(frequent_artists(&plays, 10), ["x", "y", "z"]);
         assert_eq!(frequent_artists(&plays, 1), ["x"]);
-        // поровну — кого слушали позже (раньше в истории)
+        // equal — whoever was listened to later (earlier in the history)
         assert_eq!(
             frequent_artists(&[ids(&["late"]), ids(&["early"])], 2),
             ["late", "early"]
@@ -1222,7 +1222,7 @@ mod tests {
         };
         let radar = PlaylistItem {
             playlist_id: "37i9dQZEVXbsGPw6v9FjFR".into(),
-            title: "Радар новинок".into(),
+            title: "Release Radar".into(),
             owner_id: "spotify".into(),
             ..Default::default()
         };

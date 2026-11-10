@@ -1,6 +1,6 @@
 import QtQuick
 
-// Переключатель MD3 с иконками в бегунке.
+// MD3 switch with icons in the thumb.
 Item {
     id: root
 
@@ -32,7 +32,7 @@ Item {
         x: (root.checked ? root.width - root.height / 2 : root.height / 2) - width / 2
         Behavior on x { NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
 
-        // слой состояния вокруг бегунка
+        // state layer around the thumb
         Rectangle {
             anchors.fill: parent
             radius: width / 2
@@ -58,7 +58,7 @@ Item {
                 name: root.checked ? "check" : "close"
                 size: 16
                 weight: 600
-                color: root.checked ? Theme.primary : Theme.surfaceContainerHighest  // fgPrimaryContainer в схеме 2025 сливается с бегунком
+                color: root.checked ? Theme.primary : Theme.surfaceContainerHighest  // fgPrimaryContainer in the 2025 scheme blends into the thumb
             }
         }
     }

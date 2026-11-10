@@ -1,5 +1,5 @@
-//! Список устройств Spotify Connect для меню (spotifast ui/devices.rs: receiver_is_listed, name_devices):
-//! устройства Web API + этот ПК + приёмники из локальной сети, которых аккаунт ещё не знает.
+//! The Spotify Connect device list for the menu (spotifast ui/devices.rs: receiver_is_listed, name_devices):
+//! Web API devices + this PC + receivers from the local network the account does not know yet.
 use std::collections::HashSet;
 
 use md3_model::DeviceItem;
@@ -8,7 +8,7 @@ use sf_player::engine::zeroconf::Receiver;
 pub const SOURCE_API: &str = "api";
 pub const SOURCE_ZEROCONF: &str = "zeroconf";
 
-/// Приёмник уже есть в списке Web API (по id, без id — по имени).
+/// The receiver is already in the Web API list (by id, without an id — by name).
 pub fn receiver_is_listed(receiver: &Receiver, devices: &[DeviceItem]) -> bool {
     devices.iter().any(|d| match receiver.device_id.as_deref() {
         Some(id) => d.id == id,
@@ -16,7 +16,7 @@ pub fn receiver_is_listed(receiver: &Receiver, devices: &[DeviceItem]) -> bool {
     })
 }
 
-/// Имя из mDNS точнее, чем у Web API (там часто модель вместо имени, данного пользователем).
+/// The name from mDNS is more precise than Web API's (there it is often the model instead of the user-given name).
 pub fn name_devices(devices: &mut [DeviceItem], receivers: &[Receiver]) {
     for device in devices.iter_mut().filter(|d| !d.id.is_empty()) {
         if let Some(receiver) = receivers.iter().find(|r| r.device_id.as_deref() == Some(device.id.as_str())) {
@@ -25,7 +25,7 @@ pub fn name_devices(devices: &mut [DeviceItem], receivers: &[Receiver]) {
     }
 }
 
-/// id строки приёмника в списке (у приёмника без deviceID — по имени).
+/// id of the receiver row in the list (for a receiver without deviceID — by name).
 pub fn receiver_row_id(receiver: &Receiver) -> String {
     match receiver.device_id.as_deref().filter(|id| !id.is_empty()) {
         Some(id) => id.to_owned(),
@@ -44,7 +44,7 @@ pub fn receiver_item(receiver: &Receiver) -> DeviceItem {
     }
 }
 
-/// Что известно об этом ПК, когда движок готов.
+/// What is known about this PC when the engine is ready.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ThisDevice {
     pub id: String,
@@ -53,8 +53,8 @@ pub struct ThisDevice {
     pub volume: i32,
 }
 
-/// Итоговый список: активное первым, затем этот ПК, затем остальные (порядок Web API); без повторов id.
-/// `active_id` — устройство, которое показывает плеер (оптимистично, после переноса), "" — нигде.
+/// The final list: active first, then this PC, then the rest (Web API order); without repeated ids.
+/// `active_id` — the device the player shows (optimistically, after a transfer), "" — nowhere.
 pub fn merge(
     api: &[DeviceItem],
     receivers: &[Receiver],
@@ -91,7 +91,7 @@ pub fn merge(
     for d in &mut devices {
         d.is_active = !active_id.is_empty() && d.id == active_id;
     }
-    // стабильная сортировка: активное, этот ПК, остальные
+    // stable sort: active, this PC, the rest
     devices.sort_by_key(|d| (!d.is_active, !d.is_this_computer));
     devices.extend(receivers.iter().filter(|r| !receiver_is_listed(r, api)).map(receiver_item).filter(|r| {
         let fresh = !seen.contains(&r.id);
@@ -123,20 +123,20 @@ mod tests {
 
     #[test]
     fn listed_receivers_are_matched_by_id_then_name() {
-        let api = [device("a", "Кухня"), device("b", "Model X")];
-        assert!(receiver_is_listed(&receiver("Другое", Some("a")), &api));
-        assert!(receiver_is_listed(&receiver("Кухня", None), &api));
-        assert!(!receiver_is_listed(&receiver("Кухня", Some("zz")), &api));
+        let api = [device("a", "Kitchen"), device("b", "Model X")];
+        assert!(receiver_is_listed(&receiver("Other", Some("a")), &api));
+        assert!(receiver_is_listed(&receiver("Kitchen", None), &api));
+        assert!(!receiver_is_listed(&receiver("Kitchen", Some("zz")), &api));
     }
 
     #[test]
     fn receivers_rename_devices_and_unlisted_ones_are_offered() {
         let api = [device("b", "Model X")];
-        let receivers = [receiver("Спальня", Some("b")), receiver("Гостиная", None)];
+        let receivers = [receiver("Bedroom", Some("b")), receiver("Living room", None)];
         let list = merge(&api, &receivers, None, "");
         let names: Vec<_> = list.iter().map(|d| (d.name.as_str(), d.source.as_str())).collect();
-        assert_eq!(names, [("Спальня", "api"), ("Гостиная", "zeroconf")]);
-        assert_eq!(list[1].id, "zeroconf:Гостиная");
+        assert_eq!(names, [("Bedroom", "api"), ("Living room", "zeroconf")]);
+        assert_eq!(list[1].id, "zeroconf:Living room");
         assert_eq!(list[1].volume, -1);
     }
 

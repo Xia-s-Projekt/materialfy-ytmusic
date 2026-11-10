@@ -1,4 +1,4 @@
-//! Помощники Qt для мостов (владелец — «shell»). Всё вызывать только из GUI-потока Qt.
+//! Qt helpers for the bridges (owned by the "shell"). Call everything only from the Qt GUI thread.
 pub mod ffi;
 pub mod variant;
 
@@ -13,32 +13,32 @@ pub use variant::{
     qvariantmap_to_json,
 };
 
-/// Текст в системный буфер обмена.
+/// Text into the system clipboard.
 pub fn copy_to_clipboard(text: &str) {
     ffi::ffi::copy_to_clipboard(&QString::from(text));
 }
 
-/// QObject, который отдаётся в QML из Q_INVOKABLE, остаётся во владении Rust/C++.
+/// A QObject handed to QML from Q_INVOKABLE stays owned by Rust/C++.
 /// # Safety
-/// `object` — живой QObject (или null).
+/// `object` is a live QObject (or null).
 pub unsafe fn set_cpp_ownership(object: *mut QObject) {
     unsafe { ffi::ffi::set_cpp_ownership(object) }
 }
 
-/// Системная тёмная тема (QStyleHints::colorScheme() != Light).
+/// System dark theme (QStyleHints::colorScheme() != Light).
 pub fn system_dark() -> bool {
     ffi::ffi::system_color_scheme_dark()
 }
 
-/// Открыть каталог в файловом менеджере (QDesktopServices). false — система не смогла.
+/// Open a directory in the file manager (QDesktopServices). false - the system could not.
 pub fn open_local_folder(path: &std::path::Path) -> bool {
     ffi::ffi::open_local_folder(&QString::from(path.to_string_lossy().as_ref()))
 }
 
 static SYSTEM_DARK: OnceLock<watch::Sender<bool>> = OnceLock::new();
 
-/// Канал системной темы для AppContext::system_dark: начальное значение — [`system_dark`],
-/// дальше обновляется по QStyleHints::colorSchemeChanged. Вызывать после создания QApplication.
+/// The system theme channel for AppContext::system_dark: the initial value is [`system_dark`],
+/// after that it is updated on QStyleHints::colorSchemeChanged. Call after creating QApplication.
 pub fn system_dark_watch() -> watch::Receiver<bool> {
     let mut first = false;
     let sender = SYSTEM_DARK.get_or_init(|| {

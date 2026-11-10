@@ -4,8 +4,8 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Главная: сверху сцена «Радио» (сиды станций на орбите), ниже — полки Home.shelves: «Быстрый доступ»,
-// «Недавно прослушанное», «Сделано для вас», «Продолжить подкасты», «Топ-исполнители», «Топ-треки».
+// Home: the "Radio" scene at the top (station seeds on the orbit), below — the Home.shelves shelves: "Quick access",
+// "Recently played", "Made for you", "Continue podcasts", "Top artists", "Top tracks".
 Page {
     id: page
 
@@ -14,13 +14,13 @@ Page {
 
     readonly property bool signedIn: Auth.state === "signedIn"
     readonly property bool compact: width < 760
-    // Полки: Repeater по составу полок [{key, kind}] — он меняется, только если полки добавились, ушли
-    // или переставились. Данные полки кладутся в её Loader на месте и только если изменились: обновление
-    // «Недавно прослушанного» не пересоздаёт «Сделано для вас» и остальные плитки.
+    // Shelves: a Repeater over the shelf composition [{key, kind}] — it changes only if shelves were added, removed
+    // or reordered. A shelf data goes into its Loader in place and only if changed: updating
+    // "Recently played" does not recreate "Made for you" and the other tiles.
     property var shelfIds: []
     function _syncShelves() {
-        // Главная YouTube Music работает и без входа (гостевые полки: подборки, новинки) —
-        // поэтому полки показываем всегда, как только сервис их отдал.
+        // The YouTube Music home page also works without sign-in (guest shelves: picks, new releases) —
+        // so the shelves are always shown as soon as the service provides them.
         const list = Home.shelves ?? []
         const ids = list.map(s => ({ key: s.key ?? "", kind: s.kind ?? "" }))
         if (JSON.stringify(ids) !== JSON.stringify(shelfIds))
@@ -57,13 +57,13 @@ Page {
         if (w && typeof w.notify === "function")
             w.notify(text, actionText ?? "", onAction ?? null)
     }
-    // Прокрутить к сцене радио (после «Радио по треку» из меню)
+    // Scroll to the radio scene (after "Radio by track" from the menu)
     function scrollToTop() { flickable.contentY = 0 }
 
-    // ---- Плитки: открыть / играть / меню ----
+    // ---- Tiles: open / play / menu ----
     function openEntry(e) {
         const k = e.kind ?? ""
-        if (k === "dj")             // у DJ нет списка треков: плитка сразу включает его
+        if (k === "dj")             // a DJ has no track list: the tile starts it right away
             playEntry(e)
         else if (k === "liked")
             router.push("liked")
@@ -77,18 +77,18 @@ Page {
             router.push("show", { showId: e.id, cover: e.cover ?? "" })
         else if (k === "episode")
             router.push("episode", { episodeId: e.id })
-        else if (k === "radio")     // id — сид (spotify:track:…), uri — станция; Radio.open понимает оба
+        else if (k === "radio")     // id — the seed (spotify:track:...), uri — the station; Radio.open understands both
             router.push("radio", { seed: (e.id ?? "") !== "" ? e.id : (e.uri ?? "") })
         else if (e.uri)
             Catalog.openUri(e.uri)
     }
-    // играет (или стоит на паузе) именно отсюда
+    // is playing (or paused) exactly from here
     function isCurrent(e) {
         return Player.hasTrack && ((e.kind ?? "") === "liked" ? Player.source === "liked"
                                    : (e.uri ?? "") !== "" && Player.contextUri === e.uri)
     }
-    // toggle — кнопка на плитке: у играющего отсюда она показывает паузу и ставит на паузу, а не запускает
-    // заново (у радио — без новой подборки из 50 треков); «Слушать» в меню только продолжает
+    // toggle — the button on the tile: for something playing from here it shows pause and pauses, rather than starts
+    // again (for radio — without a new selection of 50 tracks); "Listen" in the menu only resumes
     function playEntry(e, toggle) {
         const k = e.kind ?? ""
         if (isCurrent(e)) {
@@ -148,11 +148,11 @@ Page {
         }
     }
 
-    // ---- Сцена «Радио» ----
+    // ---- "Radio" scene ----
     RadioOrbit {
         id: orbit
-        // сцена «Радио» видна по умолчанию; в настройках её можно скрыть — страница «Радио» и
-        // «Радио по треку» остаются
+        // the "Radio" scene is visible by default; it can be hidden in settings — the "Radio" page and
+        // "Radio by track" remain
         visible: Settings.homeRadioHidden !== true
         Layout.fillWidth: true
         Layout.topMargin: 8
@@ -180,14 +180,14 @@ Page {
         onLoginRequested: page.router.reset("account")
     }
 
-    // ---- Полки ----
+    // ---- Shelves ----
     ColumnLayout {
         Layout.fillWidth: true
         visible: true
         spacing: 12
 
 
-        // Загрузка: заглушки без мерцания
+        // Loading: placeholders without flicker
         ColumnLayout {
             visible: Home.loading && page.shelfIds.length === 0
             Layout.fillWidth: true
@@ -204,7 +204,7 @@ Page {
                 }
             }
             SectionHeader { text: I18n.t("Recently played") }
-            // полка заглушек шире страницы: обрезается, а не растягивает колонку (и сцену над ней)
+            // the placeholder shelf is wider than the page: it is clipped, rather than stretching the column (and the scene above it)
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: skelRow.implicitHeight
@@ -244,7 +244,7 @@ Page {
         }
     }
 
-    // Топ-треки: две колонки строк (в узком окне — одна), «Показать ещё»
+    // Top tracks: two columns of rows (one in a narrow window), "Show more"
     Component {
         id: tracksShelf
         ColumnLayout {
@@ -289,7 +289,7 @@ Page {
                         liked: Library.likesRevision >= 0 && Library.isLiked(trackId)
                         current: trackId !== "" && trackId === Player.trackId
                         onActivated: {
-                            // строка главной приходит из Web API, а не из каталога: без неё экран ждал бы звука
+                            // the home page row comes from the Web API, not the catalog: without it the screen would wait for sound
                             Player.rememberTrack(modelData)
                             Player.playUris(tracksCol.tracks.map(t => t.uri), index)
                         }
@@ -300,21 +300,21 @@ Page {
         }
     }
 
-    // Горизонтальная полка (плитки, выпуски, исполнители): стрелки листают, колесо листает страницу
+    // Horizontal shelf (tiles, episodes, artists): the arrows page through it, the wheel scrolls the page
     Component {
         id: rowShelf
         ColumnLayout {
             id: rowCol
             readonly property var shelfData: parent ? parent.shelfData : ({})
             readonly property string kind: shelfData.kind ?? "tiles"
-            // Полка шире страницы? Условие для стрелок листания (см. ниже, почему не через `visible`)
+            // Is the shelf wider than the page? The condition for the paging arrows (see below why not via visible)
             readonly property bool scrollable: strip.contentWidth > strip.width + 1
             spacing: 12
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 8
                 spacing: 8
-                z: 1        // подсказка у «ⓘ» длиннее строки заголовка: поверх плиток полки, а не под ними
+                z: 1        // the info tooltip is longer than the title line: over the shelf tiles, not under them
                 Label {
                     Layout.fillWidth: true
                     Layout.maximumWidth: Math.ceil(implicitWidth)
@@ -323,10 +323,10 @@ Page {
                     weight: 600
                 }
                 Item { Layout.fillWidth: true }
-                // Стрелки не скрываются через `visible`: показ/скрытие меняет ширину строки, от неё
-                // зависит `strip.width`, и условие «контент шире полки» начинало мигать — ColumnLayout
-                // переполировывался бесконечно (в раскладке полки «possible polish() loop», карточки
-                // наезжали друг на друга). Место под стрелки занято всегда, а невидимые выключены.
+                // The arrows are not hidden via visible: showing/hiding changes the row width, on which
+                // strip.width depends, and the "content is wider than the shelf" condition would start flickering — ColumnLayout
+                // would re-polish endlessly (in the shelf layout, "possible polish() loop", the cards
+                // would overlap each other). The space for the arrows is always reserved, and the invisible ones are disabled.
                 IconButton {
                     icon: "chevron_left"
                     size: "xs"
@@ -354,7 +354,7 @@ Page {
                 rightMargin: 32
                 interactive: false
                 clip: true
-                // плитки за краем не создаются, ушедшие за край переиспользуются
+                // tiles beyond the edge are not created, the ones that went beyond the edge are reused
                 reuseItems: true
                 cacheBuffer: 360
                 model: rowCol.shelfData.items ?? []
@@ -372,7 +372,7 @@ Page {
                     easing.type: Easing.BezierSpline
                     easing.bezierCurve: Theme.motion.emphasized
                 }
-                // Shift + колесо — листать полку
+                // Shift + wheel — page the shelf
                 WheelHandler {
                     acceptedModifiers: Qt.ShiftModifier
                     onWheel: event => {
@@ -385,7 +385,7 @@ Page {
                     required property var modelData
                     sourceComponent: rowCol.kind === "episode" ? episodeCard : rowCol.kind === "artist" ? artistTile : mediaTile
                 }
-                // Плитки — одни компоненты на всю полку, а не по три на каждую плитку
+                // Tiles — one component per shelf, not three per tile
                 Component {
                     id: mediaTile
                     MediaTile {

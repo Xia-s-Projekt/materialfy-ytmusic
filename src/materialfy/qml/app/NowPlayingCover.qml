@@ -2,8 +2,8 @@ import QtQuick
 import Materialfy.Core
 import Md3
 
-// Обложка полноэкранного плеера. Статичная фигура MD3: смена трека — просто кроссфейд,
-// без морфа и вращения. Две обложки — двойной буфер: новая показывается, когда загрузилась.
+// Cover of the fullscreen player. A static MD3 shape: a track change is just a cross-fade,
+// with no morph and no rotation. Two covers — a double buffer: the new one shows once it has loaded.
 Item {
     id: root
 
@@ -11,7 +11,7 @@ Item {
     property var restShape: "softSquare"
     property real pulse: 0
     property bool spinning: false
-    property int direction: 1              // +1 — вперёд по очереди, -1 — назад: куда вращаться
+    property int direction: 1              // +1 — forward in the queue, -1 — back: which way to rotate
 
     property int _front: 0
     property bool _pending: false
@@ -19,7 +19,7 @@ Item {
 
     onSourceChanged: {
         const front = _layers[_front], back = _layers[1 - _front]
-        if (front.source.toString() === "" || !visible) {   // первая обложка / плеер закрыт — без анимации
+        if (front.source.toString() === "" || !visible) {   // first cover / player closed — no animation
             front.source = source
             return
         }
@@ -65,7 +65,7 @@ Item {
         id: layer
         required property int index
         anchors.fill: parent
-        eager: true                        // закрытый плеер держит обложку готовой: раскрытие без подгрузки
+        eager: true                        // a closed player keeps the cover ready: opening with no loading
         fallbackKind: Player.album !== "" ? "album" : "track"
         fallbackArtist: Player.artist.split(", ")[0]
         fallbackTitle: Player.album !== "" ? Player.album : Player.title

@@ -1,17 +1,17 @@
-//! Коллекция аккаунта через сессию librespot (spclient /collection/v2/*), без квоты Web API.
+//! Account collection through the librespot session (spclient /collection/v2/*), without the Web API quota.
 //!
-//! Наборы (set) проверены на живом аккаунте: «collection» — любимые треки и сохранённые альбомы вместе,
-//! «artist» — подписки на исполнителей, «show» — сохранённые подкасты, «listenlater» — «Ваши выпуски»
-//! (набора «album» нет: 403). Сервис отдаёт набор по URI, а не по времени добавления — порядок
-//! «новые сверху» наводится здесь. Протокол — collection2v2 (librespot его не собирает, поля пишутся
-//! и читаются вручную):
+//! Sets verified on a live account: "collection" — liked tracks and saved albums together,
+//! "artist" — artist subscriptions, "show" — saved podcasts, "listenlater" — "Your episodes"
+//! (there is no "album" set: 403). The service returns a set by URI, not by time added — the
+//! "newest first" order is produced here. The protocol is collection2v2 (librespot does not build it; the fields are written
+//! and read by hand):
 //!   PageRequest { username = 1; set = 2; pagination_token = 3; limit = 4 }
 //!   PageResponse { repeated CollectionItem items = 1; next_page_token = 2; sync_token = 3 }
-//!   CollectionItem { uri = 1; added_at = 2 (секунды); is_removed = 3 }
+//!   CollectionItem { uri = 1; added_at = 2 (seconds); is_removed = 3 }
 //!   WriteRequest { username = 1; set = 2; repeated CollectionItem items = 3; client_update_id = 4 }
 //!   /contains: { username = 1; set = 2; repeated CollectionItem items = 3 } → { repeated bool found = 1 }
-//!     (строки в поле 3 вместо сообщений — 400).
-//! Подробности строк — пачками extended-metadata (TRACK_V4, ALBUM_V4, ARTIST_V4).
+//!     (strings in field 3 instead of messages — 400).
+//! Row details — in extended-metadata batches (TRACK_V4, ALBUM_V4, ARTIST_V4).
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -28,37 +28,37 @@ use sf_api::models::{Album, Artist, PlayableItem, Track};
 use super::new_releases::{self, ReleaseRef};
 use super::session_reads::{self, Failure};
 
-/// Любимые треки и сохранённые альбомы.
+/// Liked tracks and saved albums.
 pub const SET_COLLECTION: &str = "collection";
-/// Подписки на исполнителей.
+/// Artist subscriptions.
 pub const SET_ARTIST: &str = "artist";
-/// Сохранённые подкасты.
+/// Saved podcasts.
 pub const SET_SHOW: &str = "show";
-/// «Ваши выпуски» (сохранённые выпуски подкастов).
+/// "Your episodes" (saved podcast episodes).
 pub const SET_LISTEN_LATER: &str = "listenlater";
 
-/// Тип тела коллекции: на application/x-protobuf сервис отвечает 400.
+/// Collection body type: on application/x-protobuf the service answers 400.
 const COLLECTION_TYPE: &str = "application/vnd.collection-v2.spotify.proto";
-/// Строк в одной странице чтения (сервис сам режет больше — тогда просто будет больше страниц).
+/// Rows in one read page (the service cuts anything larger itself — there are just more pages then).
 const PAGE_LIMIT: i32 = 500;
-/// Потолок страниц одного набора.
+/// Page ceiling for a single set.
 const MAX_PAGES: usize = 200;
-/// URI в одном запросе /contains и /write.
+/// URIs in a single /contains and /write request.
 const URI_CHUNK: usize = 100;
-/// Сущностей в одном пакетном запросе extended-metadata.
+/// Entities in a single batched extended-metadata request.
 const METADATA_BATCH: usize = 50;
-/// Пакетов метаданных в полёте одновременно.
+/// Metadata batches in flight at once.
 const METADATA_PARALLEL: usize = 4;
-/// Сколько ждать одну страницу набора или один пакет метаданных (весь набор большой библиотеки —
-/// десятки страниц, поэтому срок — на страницу, а не на чтение целиком).
+/// How long to wait for one set page or one metadata batch (a whole large-library set is
+/// dozens of pages, so the deadline is per page, not for the entire read).
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
-/// Пауза перед повтором страницы или пакета, не ответивших с первого раза.
+/// Pause before retrying a page or batch that did not answer the first time.
 const RETRY_PAUSE: Duration = Duration::from_millis(600);
-/// Сколько живёт прочитанный набор: «Любимые треки» и альбомы при входе читают один и тот же
-/// «collection» — второй берёт ответ первого. Запись в набор его сбрасывает.
+/// How long a read set lives: "Liked tracks" and albums read the same
+/// "collection" at startup — the second takes the first's answer. A write to the set invalidates it.
 const SET_CACHE_TTL: Duration = Duration::from_secs(20);
 
-/// Строка набора: URI и время добавления (секунды с эпохи; 0 — неизвестно).
+/// Set row: URI and time added (seconds since epoch; 0 — unknown).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CollectionItem {
     pub uri: String,
@@ -66,7 +66,7 @@ pub struct CollectionItem {
 }
 
 impl CollectionItem {
-    /// Время добавления, как его пишет Web API (added_at); None — неизвестно.
+    /// Time added as Web API writes it (added_at); None — unknown.
     pub fn added_at_iso(&self) -> Option<String> {
         (self.added_at > 0)
             .then(|| jiff::Timestamp::from_second(self.added_at).ok())
@@ -75,18 +75,18 @@ impl CollectionItem {
     }
 }
 
-/// Страница набора: живые строки (снятые пропущены) и токен следующей ("" — последняя).
+/// Set page: live rows (removed ones skipped) and the next token ("" — last).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CollectionPage {
     pub items: Vec<CollectionItem>,
     pub next_token: String,
     pub sync_token: String,
-    /// строк в ответе вместе со снятыми: страница из одних снятых — не конец набора
+    /// rows in the answer together with the removed ones: a page of only removed rows is not the end of the set
     pub rows: usize,
 }
 
-/// Набор, в котором Spotify держит URI: трек и альбом — «collection», исполнитель — «artist»,
-/// подкаст — «show», выпуск — «listenlater». Плейлисты живут в rootlist, не здесь.
+/// The set in which Spotify keeps a URI: track and album — "collection", artist — "artist",
+/// podcast — "show", episode — "listenlater". Playlists live in rootlist, not here.
 pub fn set_for(uri: &str) -> Option<&'static str> {
     match uri.split(':').nth(1)? {
         "track" | "album" => Some(SET_COLLECTION),
@@ -97,7 +97,7 @@ pub fn set_for(uri: &str) -> Option<&'static str> {
     }
 }
 
-// --- protobuf вручную ------------------------------------------------------------------------------
+// --- protobuf by hand ------------------------------------------------------------------------------
 
 fn put_varint(buf: &mut Vec<u8>, mut value: u64) {
     while value >= 0x80 {
@@ -143,7 +143,7 @@ pub fn page_request(username: &str, set: &str, token: &str, limit: i32) -> Vec<u
     buf
 }
 
-/// WriteRequest: добавить (с временем `now`) или снять каждый из `uris`.
+/// WriteRequest: add (with time `now`) or remove each of `uris`.
 pub fn write_request(
     username: &str,
     set: &str,
@@ -167,7 +167,7 @@ pub fn write_request(
     buf
 }
 
-/// Запрос /contains: строки — сообщениями CollectionItem в поле 3.
+/// /contains request: rows as CollectionItem messages in field 3.
 pub fn contains_request(username: &str, set: &str, uris: &[String]) -> Vec<u8> {
     let mut buf = Vec::new();
     put_bytes(&mut buf, 1, username.as_bytes());
@@ -210,7 +210,7 @@ impl<'a> Reader<'a> {
         Some(head)
     }
 
-    /// Следующее поле; None — конец (или битые данные: дальше не читаем).
+    /// Next field; None — end (or corrupt data: nothing further is read).
     fn field(&mut self) -> Option<(u32, Value<'a>)> {
         if self.bytes.is_empty() {
             return None;
@@ -235,7 +235,7 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// PageResponse → страница (снятые строки пропускаются).
+/// PageResponse → page (removed rows skipped).
 pub fn parse_page(bytes: &[u8]) -> CollectionPage {
     let mut page = CollectionPage::default();
     let mut reader = Reader { bytes };
@@ -248,7 +248,7 @@ pub fn parse_page(bytes: &[u8]) -> CollectionPage {
                 while let Some((number, value)) = fields.field() {
                     match (number, value) {
                         (1, Value::Bytes(bytes)) => uri = text(bytes),
-                        // int32 со знаком: отрицательное время — «неизвестно»
+                        // signed int32: negative time means "unknown"
                         (2, Value::Varint(value)) => added_at = (value as i64).max(0),
                         (3, Value::Varint(flag)) => removed = flag != 0,
                         _ => {}
@@ -266,7 +266,7 @@ pub fn parse_page(bytes: &[u8]) -> CollectionPage {
     page
 }
 
-/// Ответ /contains: repeated bool found = 1 (упакованный или по одному).
+/// /contains answer: repeated bool found = 1 (packed or one by one).
 pub fn parse_contains(bytes: &[u8]) -> Vec<bool> {
     let mut found = Vec::new();
     let mut reader = Reader { bytes };
@@ -285,12 +285,12 @@ pub fn parse_contains(bytes: &[u8]) -> Vec<bool> {
     found
 }
 
-/// Новые сверху (как отдаёт Web API); при равном времени — по URI, чтобы порядок не прыгал.
+/// Newest first (as Web API returns them); on equal time — by URI, so the order does not jump.
 pub fn newest_first(items: &mut [CollectionItem]) {
     items.sort_by(|a, b| b.added_at.cmp(&a.added_at).then_with(|| a.uri.cmp(&b.uri)));
 }
 
-// --- запросы ---------------------------------------------------------------------------------------
+// --- requests ---------------------------------------------------------------------------------------
 
 async fn post(session: &Session, endpoint: &str, body: &[u8]) -> anyhow::Result<Vec<u8>> {
     let mut headers = HeaderMap::new();
@@ -303,7 +303,7 @@ async fn post(session: &Session, endpoint: &str, body: &[u8]) -> anyhow::Result<
         .to_vec())
 }
 
-/// Одна страница набора `set` аккаунта сессии; `token` — "" для первой.
+/// One page of set `set` for the session account; `token` — "" for the first.
 pub async fn collection_page(
     session: &Session,
     set: &str,
@@ -314,9 +314,9 @@ pub async fn collection_page(
     Ok(parse_page(&post(session, "/collection/v2/paging", &body).await?))
 }
 
-/// Все страницы набора по токенам: `fetch(token)` — страница с токеном ("" — первая). Конец — пустой
-/// токен, пустая страница или токен, который уже был (сервис зациклился); строка, встреченная
-/// дважды (набор менялся между страницами), остаётся одна. Итог — новые сверху.
+/// All pages of a set by token: `fetch(token)` — the page with token ("" — the first). The end is an empty
+/// token, an empty page, or a token already seen (the service looped); a row met
+/// twice (the set changed between pages) stays once. The result is newest first.
 pub async fn collect_pages<F, Fut>(max_pages: usize, mut fetch: F) -> anyhow::Result<Vec<CollectionItem>>
 where
     F: FnMut(String) -> Fut,
@@ -338,7 +338,7 @@ where
     Ok(items)
 }
 
-/// `call` не дольше REQUEST_TIMEOUT; не вышло — ещё раз после паузы.
+/// `call` no longer than REQUEST_TIMEOUT; if it fails — once more after a pause.
 async fn twice<T, Fut>(what: &str, mut call: impl FnMut() -> Fut) -> anyhow::Result<T>
 where
     Fut: Future<Output = anyhow::Result<T>>,
@@ -356,7 +356,7 @@ where
     }
 }
 
-/// Весь набор `set` страницами по `limit` строк, новые сверху — без общего кэша.
+/// The whole set `set` in pages of `limit` rows, newest first — no shared cache.
 pub async fn collection_all_paged(session: &Session, set: &str, limit: i32) -> anyhow::Result<Vec<CollectionItem>> {
     collect_pages(MAX_PAGES, |token| async move {
         twice("collection page", || collection_page(session, set, &token, limit)).await
@@ -366,7 +366,7 @@ pub async fn collection_all_paged(session: &Session, set: &str, limit: i32) -> a
 
 type SetSlot = Arc<tokio::sync::Mutex<Option<(Instant, Arc<Vec<CollectionItem>>)>>>;
 
-/// Прочитанные наборы: (аккаунт, набор) → когда и что прочитано.
+/// Read sets: (account, set) → when and what was read.
 fn set_cache() -> &'static Mutex<HashMap<(String, String), SetSlot>> {
     static CACHE: std::sync::OnceLock<Mutex<HashMap<(String, String), SetSlot>>> = std::sync::OnceLock::new();
     CACHE.get_or_init(Default::default)
@@ -377,14 +377,14 @@ fn set_slot(username: &str, set: &str) -> SetSlot {
     cache.entry((username.to_owned(), set.to_owned())).or_default().clone()
 }
 
-/// Забыть прочитанный набор (после записи в него).
+/// Forget a read set (after writing to it).
 fn forget_set(username: &str, set: &str) {
     let mut cache = set_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     cache.remove(&(username.to_owned(), set.to_owned()));
 }
 
-/// Весь набор `set`, новые сверху. Одновременные чтения одного набора ждут одно; ответ живёт
-/// SET_CACHE_TTL (запись в набор его сбрасывает).
+/// The whole set `set`, newest first. Concurrent reads of one set wait for a single one; the answer lives
+/// SET_CACHE_TTL (a write to the set invalidates it).
 pub async fn collection_all(session: &Session, set: &str) -> anyhow::Result<Vec<CollectionItem>> {
     let username = session.username();
     let slot = set_slot(&username, set);
@@ -399,7 +399,7 @@ pub async fn collection_all(session: &Session, set: &str) -> anyhow::Result<Vec<
     Ok(items.as_ref().clone())
 }
 
-/// Добавить (`add`) или снять `uris` в наборе `set` — как это делают клиенты Spotify.
+/// Add (`add`) or remove `uris` in set `set` — the way Spotify clients do it.
 pub async fn collection_write(
     session: &Session,
     set: &str,
@@ -417,7 +417,7 @@ pub async fn collection_write(
     Ok(())
 }
 
-/// Есть ли каждый из `uris` в наборе `set` — в том же порядке.
+/// Whether each of `uris` is in set `set` — in the same order.
 pub async fn collection_contains(
     session: &Session,
     set: &str,
@@ -439,7 +439,7 @@ pub async fn collection_contains(
     Ok(found)
 }
 
-/// URI по наборам, с их местами в исходном списке; URI без набора (плейлист…) — отдельно.
+/// URIs by set, with their positions in the original list; URIs without a set (playlist…) — separately.
 fn by_set(uris: &[String]) -> (Vec<(&'static str, Vec<usize>)>, Vec<usize>) {
     let mut groups: Vec<(&'static str, Vec<usize>)> = Vec::new();
     let mut unknown = Vec::new();
@@ -455,7 +455,7 @@ fn by_set(uris: &[String]) -> (Vec<(&'static str, Vec<usize>)>, Vec<usize>) {
     (groups, unknown)
 }
 
-/// Сохранить/снять URI разных видов: каждый — в своём наборе. URI без набора — ошибка.
+/// Save/remove URIs of different kinds: each in its own set. A URI without a set is an error.
 pub async fn write(session: &Session, uris: &[String], add: bool) -> anyhow::Result<()> {
     let (groups, unknown) = by_set(uris);
     if let Some(&index) = unknown.first() {
@@ -468,8 +468,8 @@ pub async fn write(session: &Session, uris: &[String], add: bool) -> anyhow::Res
     Ok(())
 }
 
-/// Как /me/library/contains: для каждого URI — сохранён ли он (каждый вид — в своём наборе).
-/// URI без набора — ошибка (плейлисты знает rootlist).
+/// Like /me/library/contains: for each URI — whether it is saved (each kind in its own set).
+/// A URI without a set is an error (rootlist knows playlists).
 pub async fn contains(session: &Session, uris: &[String]) -> anyhow::Result<Vec<bool>> {
     let (groups, unknown) = by_set(uris);
     if let Some(&index) = unknown.first() {
@@ -485,12 +485,12 @@ pub async fn contains(session: &Session, uris: &[String]) -> anyhow::Result<Vec<
     Ok(found)
 }
 
-// --- подробности строк -----------------------------------------------------------------------------
+// --- row details -----------------------------------------------------------------------------
 
-/// Треки по URI одним пакетом (≤ ~100 за раз разумно). Трека, которого Spotify больше не отдаёт
-/// (404, 451) или о котором ответил невнятно (другой код, нечитаемые байты, нет ответа), в ответе
-/// нет: длинная коллекция не должна вставать из-за одной странной строки. Не ответил пакет целиком
-/// (сеть, ошибка провайдера) — ещё раз, затем Failure::Retry.
+/// Tracks by URI in one batch (≤ ~100 at a time is reasonable). A track Spotify no longer returns
+/// (404, 451) or answers vaguely about (another code, unreadable bytes, no answer) is not in the
+/// answer: a long collection must not stall over one strange row. If a whole batch does not answer
+/// (network, provider error) — once more, then Failure::Retry.
 pub async fn tracks(session: &Session, uris: &[String]) -> Result<HashMap<String, Track>, Failure> {
     let parsed: Vec<SpotifyUri> = uris
         .iter()
@@ -516,8 +516,8 @@ pub async fn tracks(session: &Session, uris: &[String]) -> Result<HashMap<String
         .collect())
 }
 
-/// Альбомы по URI (пачками ALBUM_V4, с датой выхода и числом треков). Альбома, которого Spotify
-/// не отдаёт, в ответе нет.
+/// Albums by URI (ALBUM_V4 batches, with release date and track count). An album Spotify
+/// does not return is not in the answer.
 pub async fn albums(session: &Session, uris: &[String]) -> anyhow::Result<HashMap<String, Album>> {
     let refs: Vec<ReleaseRef> = uris
         .iter()
@@ -527,7 +527,7 @@ pub async fn albums(session: &Session, uris: &[String]) -> anyhow::Result<HashMa
             group: "album",
         })
         .collect();
-    // futures собраны заранее: замыкание внутри потока не проходит проверку Send у tokio::spawn
+    // futures collected up front: a closure inside the thread fails tokio::spawn's Send check
     let requests: Vec<_> = refs
         .chunks(METADATA_BATCH)
         .map(|chunk| twice("album metadata", move || new_releases::release_details(session, chunk)))
@@ -543,8 +543,8 @@ pub async fn albums(session: &Session, uris: &[String]) -> anyhow::Result<HashMa
         .collect())
 }
 
-/// Исполнители по URI (пачками ARTIST_V4: имя, фото, популярность). Исполнителя, которого Spotify
-/// не отдаёт, в ответе нет.
+/// Artists by URI (ARTIST_V4 batches: name, photo, popularity). An artist Spotify
+/// does not return is not in the answer.
 pub async fn artists(session: &Session, uris: &[String]) -> anyhow::Result<HashMap<String, Artist>> {
     let uris: Vec<&String> = uris
         .iter()
@@ -607,7 +607,7 @@ async fn artist_batch(session: &Session, uris: &[&String]) -> anyhow::Result<Vec
 mod tests {
     use super::*;
 
-    /// Ответ живого аккаунта (две строки набора «artist» и токен следующей страницы).
+    /// Live account answer (two "artist" set rows and the next page token).
     fn sample_page() -> Vec<u8> {
         let mut buf = Vec::new();
         for (uri, at, removed) in [
@@ -645,7 +645,7 @@ mod tests {
         assert_eq!(parse_page(b"\xff\xff"), CollectionPage::default(), "broken bytes read as nothing");
     }
 
-    /// Ответ /paging: строки (uri, время, снята ли) и токен следующей страницы.
+    /// /paging answer: rows (uri, time, removed or not) and the next page token.
     fn wire_page(rows: &[(&str, i64, bool)], next: &str) -> Vec<u8> {
         let mut buf = Vec::new();
         for (uri, at, removed) in rows {
@@ -656,7 +656,7 @@ mod tests {
         buf
     }
 
-    /// Сервис из готовых страниц: токен → байты ответа; запросы пишутся в `asked`.
+    /// Service from ready pages: token → answer bytes; requests are recorded in `asked`.
     async fn serve(
         pages: &HashMap<&str, Vec<u8>>,
         asked: &Mutex<Vec<String>>,
@@ -676,7 +676,7 @@ mod tests {
 
     #[tokio::test]
     async fn every_page_is_followed_by_its_token_and_sorted_newest_first() {
-        // limit 2: 5 треков и альбом на трёх страницах, порядок сервиса — по URI
+        // limit 2: 5 tracks and an album on three pages, the service's order is by URI
         let pages = HashMap::from([
             ("", wire_page(&[("spotify:album:a", 50, false), ("spotify:track:1", 10, false)], "p2")),
             ("p2", wire_page(&[("spotify:track:2", 40, false), ("spotify:track:3", 30, false)], "p3")),
@@ -707,7 +707,7 @@ mod tests {
 
     #[tokio::test]
     async fn paging_stops_on_an_empty_page_a_repeated_token_or_the_page_cap() {
-        // пустая страница с токеном — конец
+        // an empty page with a token is the end
         let pages = HashMap::from([
             ("", wire_page(&[("spotify:track:1", 10, false)], "p2")),
             ("p2", wire_page(&[], "p3")),
@@ -715,7 +715,7 @@ mod tests {
         let asked = Mutex::new(Vec::new());
         assert_eq!(uris(&serve(&pages, &asked, 200).await.unwrap()), ["spotify:track:1"]);
         assert_eq!(asked.lock().unwrap().len(), 2);
-        // сервис зациклился: p2 → p3 → p2; строка, пришедшая дважды, остаётся одна
+        // the service looped: p2 → p3 → p2; a row that came twice stays once
         let pages = HashMap::from([
             ("", wire_page(&[("spotify:track:1", 10, false)], "p2")),
             ("p2", wire_page(&[("spotify:track:2", 20, false)], "p3")),
@@ -725,7 +725,7 @@ mod tests {
         let items = serve(&pages, &asked, 200).await.unwrap();
         assert_eq!(uris(&items), ["spotify:track:2", "spotify:track:1", "spotify:track:3"]);
         assert_eq!(*asked.lock().unwrap(), ["", "p2", "p3"]);
-        // потолок страниц
+        // page ceiling
         let asked = Mutex::new(Vec::new());
         assert_eq!(serve(&pages, &asked, 1).await.unwrap().len(), 1);
     }
@@ -777,7 +777,7 @@ mod tests {
     fn contains_wraps_each_uri_and_reads_packed_or_single_flags() {
         let body = contains_request("me", "artist", &["spotify:artist:x".to_owned()]);
         assert_eq!(&body[12..], [0x1a, 18, 0x0a, 16, b's', b'p', b'o', b't', b'i', b'f', b'y', b':', b'a', b'r', b't', b'i', b's', b't', b':', b'x']);
-        // живые ответы: «0a 02 01 00» — [true, false]
+        // live answers: "0a 02 01 00" — [true, false]
         assert_eq!(parse_contains(&[0x0a, 0x02, 0x01, 0x00]), vec![true, false]);
         assert_eq!(parse_contains(&[0x08, 0x01, 0x08, 0x00]), vec![true, false]);
         assert!(parse_contains(&[]).is_empty());

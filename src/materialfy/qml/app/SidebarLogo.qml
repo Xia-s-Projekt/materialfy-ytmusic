@@ -3,19 +3,19 @@ import QtQuick.Shapes
 import Md3
 import "../Md3/Shapes.js" as Shapes
 
-// Шапка боковой панели: знак «Волна-M» и надпись «Materialfy» (локап как в wordmark.svg).
-// Знак — кнопка «свернуть / развернуть панель», как в ChatGPT и Claude: при наведении или фокусе с клавиатуры
-// печенька морфится в круг, «M» с бегунком растворяется, на её месте проявляется иконка действия.
-// Морф и смена иконки — переходы свойств по токенам Theme.motion; при Theme.reducedMotion — мгновенно.
+// Sidebar header: the "Wave-M" mark and the "Materialfy" wordmark (lockup as in wordmark.svg).
+// The mark is a "collapse / expand the panel" button, as in ChatGPT and Claude: on hover or keyboard focus
+// the cookie morphs into a circle, the "M" with the runner dissolves, and the action icon appears in its place.
+// The morph and the icon swap are property transitions on Theme.motion tokens; with Theme.reducedMotion they are instant.
 Item {
     id: root
 
     LogoPaths { id: logo }
 
-    property real markSize: 40                 // диаметр печеньки
-    property bool expanded: true               // true — действие «свернуть», false — «развернуть»
+    property real markSize: 40                 // cookie diameter
+    property bool expanded: true               // true — the "collapse" action, false — "expand"
     property bool wordmarkVisible: expanded
-    // Наведение или фокус; стенды и снимки могут выставить вручную
+    // Hover or focus; stands and snapshots may set it manually
     property bool highlighted: area.containsMouse || mark.activeFocus
     readonly property string actionIcon: expanded ? "left_panel_close" : "left_panel_open"
     readonly property string actionText: expanded ? I18n.t("Collapse sidebar") : I18n.t("Expand sidebar")
@@ -23,7 +23,7 @@ Item {
 
     signal activated()
 
-    readonly property real _k: markSize / 480  // координаты LogoPaths: печенька — квадрат 0..480
+    readonly property real _k: markSize / 480  // LogoPaths coordinates: the cookie is a 0..480 square
     readonly property bool _instant: Theme.reducedMotion
 
     implicitWidth: wordmark.x + wordmark.width
@@ -48,25 +48,25 @@ Item {
             }
         }
 
-        // 0 — знак (печенька + M), 1 — кнопка (круг + иконка действия)
+        // 0 — mark (cookie + M), 1 — button (circle + action icon)
         property real t: root.highlighted ? 1 : 0
         Behavior on t {
             enabled: !root._instant
             NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized }
         }
-        // «M» гаснет в первой половине морфа, иконка проявляется во второй (с небольшим нахлёстом,
-        // чтобы не было пустого кадра) — без каши из двух глифов
+        // The "M" fades out in the first half of the morph, the icon appears in the second (with a slight overlap,
+        // so there is no empty frame) — without a smear of two glyphs
         readonly property real glyphOut: Math.max(0, 1 - t / 0.55)
         readonly property real iconIn: Math.max(0, (t - 0.45) / 0.55)
 
-        // Нажатие — короткое сжатие с пружиной
+        // Press — a short squeeze with a spring
         scale: area.pressed ? 0.9 : 1
         Behavior on scale {
             enabled: !root._instant
             NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutBack; easing.overshoot: Theme.motion.overshoot }
         }
 
-        // Слой состояния MD3 (Lilac поверх Ultraviolet): наведение 8 %, фокус 10 %, нажатие 10 %
+        // MD3 state layer (Lilac over Ultraviolet): hover 8 %, focus 10 %, pressed 10 %
         property real stateOpacity: area.pressed ? Theme.stateLayer.pressed
                                     : root.highlighted ? (mark.activeFocus && !area.containsMouse ? Theme.stateLayer.focus : Theme.stateLayer.hover) : 0
         Behavior on stateOpacity { enabled: !root._instant; NumberAnimation { duration: Theme.motion.effectsFast } }
@@ -77,7 +77,7 @@ Item {
             ShapePath {
                 strokeColor: "transparent"
                 strokeWidth: 0
-                // градиент icon.svg: (80, 40) → (432, 472) при печеньке 16..496
+                // gradient of icon.svg: (80, 40) → (432, 472) with the cookie at 16..496
                 fillGradient: LinearGradient {
                     x1: mark.width * 64 / 480; y1: mark.height * 24 / 480
                     x2: mark.width * 416 / 480; y2: mark.height * 456 / 480
@@ -85,13 +85,13 @@ Item {
                     GradientStop { position: 1; color: Qt.tint(logo.ultraviolet[1], Qt.alpha(logo.lilac, mark.stateOpacity)) }
                 }
                 PathPolyline {
-                    // зубцы доворачиваются на полшага, пока сглаживаются в круг
+                    // the teeth turn by another half step as they smooth into a circle
                     path: Shapes.outline(logo.cookie, "circle", mark.t, 96, mark.width, mark.height, mark.t * Math.PI / 8, 0, 0, 0)
                 }
             }
         }
 
-        // Знак: волна-M и бегунок
+        // Mark: the wave-M and the runner
         Shape {
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer
@@ -126,7 +126,7 @@ Item {
             rotation: (1 - mark.iconIn) * (root.expanded ? 45 : -45)
         }
 
-        // Индикатор фокуса MD3: кольцо 3 px с зазором 2 px, только при фокусе с клавиатуры
+        // MD3 focus indicator: a 3 px ring with a 2 px gap, only on keyboard focus
         Rectangle {
             anchors.centerIn: parent
             width: parent.width + 10
@@ -148,7 +148,7 @@ Item {
         }
     }
 
-    // Надпись в кривых из wordmark.svg (без знака), цвет onSurface; гаснет в рейле
+    // Wordmark in curves from wordmark.svg (without the mark), onSurface color; fades out in the rail
     Shape {
         id: wordmark
         x: mark.x + logo.textLeft * root._k
@@ -175,8 +175,8 @@ Item {
         }
     }
 
-    // Подсказка MD3 (plain tooltip). Живёт в корне окна: панель обрезает своё содержимое, а в рейле
-    // подсказка стоит справа от знака, за краем панели. В развёрнутой панели — под знаком.
+    // MD3 tooltip (plain). It lives in the window root: the panel clips its own content, while in the rail
+    // the tooltip stands to the right of the mark, past the panel edge. In the expanded panel — under the mark.
     Timer {
         id: tipDelay
         interval: 600

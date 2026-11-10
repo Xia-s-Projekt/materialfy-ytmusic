@@ -1,5 +1,5 @@
-//! Известные треки на весь процесс: строки для оптимистичных вставок (добавить в плейлист по URI) и «записи»
-//! (ISRC): один трек на разных рынках имеет разные URI, лайк любого — лайк всех.
+//! Known tracks for the whole process: rows for optimistic inserts (add to a playlist by URI) and "records"
+//! (ISRC): one track on different markets has different URIs, liking any of them likes them all.
 use std::collections::{HashMap, VecDeque};
 use std::sync::{LazyLock, Mutex};
 
@@ -21,7 +21,7 @@ fn known() -> std::sync::MutexGuard<'static, Known> {
     crate::lock(&KNOWN)
 }
 
-/// Запомнить строки (обновляет уже известные).
+/// Remember rows (updates the ones already known).
 pub fn remember<'a>(items: impl IntoIterator<Item = &'a TrackItem>) {
     let mut known = known();
     for item in items {
@@ -40,7 +40,7 @@ pub fn remember<'a>(items: impl IntoIterator<Item = &'a TrackItem>) {
     }
 }
 
-/// Запомнить «запись» трека Web API (ISRC или linked_from).
+/// Remember a Web API track "record" (ISRC or linked_from).
 pub fn remember_recordings<'a>(tracks: impl IntoIterator<Item = &'a Track>) {
     let mut known = known();
     for track in tracks {
@@ -65,12 +65,12 @@ pub fn recording(uri: &str) -> Option<String> {
     known().recordings.get(uri).cloned()
 }
 
-/// URI трека по id или URI.
+/// A track's URI by id or URI.
 pub fn track_uri(id_or_uri: &str) -> String {
     if id_or_uri.starts_with("spotify:") { id_or_uri.to_owned() } else { format!("spotify:track:{id_or_uri}") }
 }
 
-/// Строка QML → модель Web API (для кэша «Любимых треков»).
+/// QML row → Web API model (for the "Liked Songs" cache).
 pub fn track_from_item(item: &TrackItem) -> Track {
     let images = [(&item.cover_large, 640), (&item.cover, 300)]
         .into_iter()
@@ -123,7 +123,7 @@ mod tests {
     fn a_row_round_trips_through_the_web_api_model() {
         let item = TrackItem {
             track_id: "t1".into(),
-            title: "Песня".into(),
+            title: "Song".into(),
             album_id: "a1".into(),
             cover: "c300".into(),
             duration_ms: 1000,
@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(track.uri, "spotify:track:t1");
         assert_eq!(track.album.unwrap().uri, "spotify:album:a1");
         remember([&item]);
-        assert_eq!(get("spotify:track:t1").unwrap().title, "Песня");
+        assert_eq!(get("spotify:track:t1").unwrap().title, "Song");
         assert_eq!(track_uri("t1"), "spotify:track:t1");
     }
 }

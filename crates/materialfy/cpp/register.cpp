@@ -1,6 +1,6 @@
-// Регистрация типов QML-модуля Materialfy.Core.
-// Владелец — «bridges-player». Синглтоны создаются здесь, ДО движка, и живут до конца процесса.
-// Имена типов — контракт с QML.
+// Registration of the Materialfy.Core QML module's types.
+// Owner — "bridges-player". The singletons are created here, BEFORE the engine, and live until the process ends.
+// The type names are a contract with QML.
 #include "register.h"
 
 #include <QtQml/QQmlEngine>
@@ -45,7 +45,7 @@ singleton(const char* name)
 void
 register_qml_types()
 {
-  // Порядок важен: Settings и ThemeEngine первыми (их читают остальные при создании)
+  // Order matters: Settings and ThemeEngine first (the others read them when they are created)
   singleton<Settings>("Settings");
   singleton<Translations>("Translations");
   singleton<ThemeEngine>("ThemeEngine");

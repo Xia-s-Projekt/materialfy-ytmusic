@@ -1,7 +1,7 @@
-//! Строковые id Spotify (base62). Сериализуются строкой.
+//! Spotify string ids (base62). Serialized as a string.
 use serde::{Deserialize, Serialize};
 
-/// id аккаунта Spotify (`User.id`), не числовой.
+/// the id of a Spotify account (`User.id`), not numeric.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AccountId(pub String);
@@ -16,7 +16,7 @@ impl AccountId {
     }
 }
 
-/// id плейлиста (base62, без префикса `spotify:playlist:`).
+/// the id of a playlist (base62, without the `spotify:playlist:` prefix).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PlaylistId(pub String);
@@ -35,7 +35,7 @@ impl PlaylistId {
         format!("spotify:playlist:{}", self.0)
     }
 
-    /// Из id, URI `spotify:playlist:<id>` или ссылки `https://open.spotify.com/playlist/<id>?…`.
+    /// From an id, a `spotify:playlist:<id>` URI or a `https://open.spotify.com/playlist/<id>?…` link.
     pub fn from_uri_or_id(text: &str) -> Self {
         let text = text.trim();
         if let Some((_, rest)) = text.split_once("/playlist/") {

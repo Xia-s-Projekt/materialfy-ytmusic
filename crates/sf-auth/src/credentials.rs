@@ -1,9 +1,9 @@
-//! Защищённое хранилище грантов (перенос spotifast/src/credentials.rs): keyring-core + store ОС.
+//! Secure grant storage (ported from spotifast/src/credentials.rs): keyring-core + the OS store.
 //!
-//! Все вызовы хранилища ОС — в одном потоке «spotify-credentials» с таймаутом 20 с: заблокированное хранилище
-//! не держит интерфейс, команды и завершение. Поколения (Lease) отбрасывают работу, начатую до выхода, в том числе
-//! запись, вернувшуюся после выхода. Маркеры отзыва в state-каталоге (без секретов) не дают войти обратно, если
-//! удалить запись не удалось. Секреты в обычных файлах не хранятся.
+//! All OS store calls happen on a single "spotify-credentials" thread with a 20 s timeout: a locked store
+//! does not hold up the UI, commands or shutdown. Generations (Lease) discard work started before a logout, including
+//! a write that came back after the logout. Revocation markers in the state directory (no secrets) prevent signing back in if
+//! deleting the entry failed. Secrets are never kept in plain files.
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 
 use crate::oauth::{DEFAULT_WEB_CLIENT_ID, StoredToken};
 
-/// Имя сервиса в хранилище ОС (Windows Credential Manager и т. п.).
+/// The service name in the OS store (Windows Credential Manager and so on).
 pub const SERVICE: &str = "materialfy";
 const TIMEOUT: Duration = Duration::from_secs(20);
 const RECORD_VERSION: u32 = 1;
@@ -49,7 +49,7 @@ impl Slot {
     }
 }
 
-/// Секрет слота. Без Debug: содержит рабочие секреты.
+/// A slot's secret. No Debug: it holds live secrets.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Grant {
     Web(StoredToken),
@@ -71,7 +71,7 @@ impl Grant {
     }
 }
 
-/// Пароль прокси для одной пары host:port + username. Без Debug.
+/// The proxy password for one host:port + username pair. No Debug.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProxyPassword {
     pub host: String,
@@ -81,7 +81,7 @@ pub struct ProxyPassword {
 }
 
 impl ProxyPassword {
-    /// Запись совпадает с той, что получается из её же адреса (как при сохранении).
+    /// The entry matches the one derived from its own address (as when saving).
     pub fn valid(&self) -> bool {
         crate::proxy::password_is_valid(self)
     }
@@ -94,7 +94,7 @@ struct Record {
     grant: Grant,
 }
 
-/// Ошибки хранилища. Display — текст интерфейса через mf_i18n (показываются в Auth.errorText / Settings).
+/// Store errors. Display — UI text via mf_i18n (shown in Auth.errorText / Settings).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Unavailable,
@@ -130,7 +130,7 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl Error {
-    /// Текст той же ошибки для пароля прокси.
+    /// The same error's text for the proxy password.
     pub fn proxy_message(self) -> String {
         match self {
             Self::Unavailable | Self::Locked => {
@@ -157,7 +157,7 @@ pub type StoreFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 type Request<T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send>>;
 
 fn native_error(error: keyring_core::Error) -> Error {
-    // текст ошибок провайдера может содержать секрет — наружу не передаём
+    // the provider's error text may contain a secret — we do not pass it out
     match error {
         keyring_core::Error::NoStorageAccess(_) => Error::Locked,
         _ => Error::Unavailable,
@@ -241,19 +241,19 @@ struct Inner {
     state_dir: PathBuf,
     profile: String,
     generations: [AtomicU64; 4],
-    // только вокруг крошечных файлов-маркеров, никогда вокруг вызова хранилища ОС
+    // only around tiny marker files, never around an OS store call
     markers: Mutex<()>,
     jobs: mpsc::SyncSender<Job>,
     available: Arc<AtomicBool>,
 }
 
-/// Хранилище. Clone — дешёвый (Arc внутри).
+/// The store. Clone is cheap (an Arc inside).
 #[derive(Clone)]
 pub struct Store {
     inner: Arc<Inner>,
 }
 
-/// Право читать/писать один слот в одном поколении авторизации.
+/// The right to read/write one slot in one authorization generation.
 #[derive(Clone)]
 pub struct Lease {
     store: Store,
@@ -273,18 +273,18 @@ pub struct Loaded {
 }
 
 impl Store {
-    /// `state_dir` — mf_platform::dirs::state_dir() (маркеры отзыва, профиль).
-    /// Поток хранилища входит в текущий tokio-рантайм, если он есть (нужно Secret Service на Linux).
+    /// `state_dir` — mf_platform::dirs::state_dir() (revocation markers, profile).
+    /// The store thread joins the current tokio runtime if there is one (needed for Secret Service on Linux).
     pub fn new(state_dir: PathBuf) -> Self {
         Self::with_backend(state_dir, tokio::runtime::Handle::try_current().ok(), Box::new(NativeStore::default()))
     }
 
-    /// Как `new`, но с явным рантаймом для потока хранилища (вызов вне контекста рантайма).
+    /// Like `new`, but with an explicit runtime for the store thread (a call outside a runtime context).
     pub fn with_runtime(state_dir: PathBuf, runtime: tokio::runtime::Handle) -> Self {
         Self::with_backend(state_dir, Some(runtime), Box::new(NativeStore::default()))
     }
 
-    /// Для тестов соседних крейтов: секреты в памяти, маркеры отзыва — в `state_dir`.
+    /// For neighboring crates' tests: secrets in memory, revocation markers in `state_dir`.
     #[doc(hidden)]
     pub fn in_memory(state_dir: PathBuf) -> Self {
         Self::with_backend(state_dir, None, Box::new(MemoryStore::default()))
@@ -326,20 +326,20 @@ impl Store {
         Lease { store: self.clone(), slot, generation: self.inner.generations[slot.index()].load(Ordering::SeqCst) }
     }
 
-    /// Сделать устаревшей текущую работу со слотом — до отмены задач и удаления грантов.
+    /// Make the current work with the slot stale — before cancelling tasks and deleting grants.
     pub fn invalidate(&self, slot: Slot) {
         self.inner.generations[slot.index()].fetch_add(1, Ordering::SeqCst);
     }
 
-    /// Отзыв записывается до обращения к хранилищу ОС: даже заблокированное хранилище или прерванное удаление
-    /// не вернут вход при следующем запуске. Саму запись удаляет `Lease::delete`.
+    /// Revocation is recorded before touching the OS store: even a locked store or an interrupted deletion
+    /// will not restore the login on the next launch. The entry itself is deleted by `Lease::delete`.
     pub fn revoke(&self, slot: Slot) -> Result<(), Error> {
         self.invalidate(slot);
         let _guard = self.inner.markers.lock().unwrap_or_else(|p| p.into_inner());
         self.write_marker(slot, true)
     }
 
-    /// Выход: отозвать все три слота Spotify (прокси остаётся).
+    /// Logout: revoke all three Spotify slots (the proxy stays).
     pub fn revoke_spotify(&self) -> Result<(), Error> {
         let mut error = None;
         for slot in Slot::SPOTIFY {
@@ -350,7 +350,7 @@ impl Store {
         error.map_or(Ok(()), Err)
     }
 
-    /// "keyring" — секреты в хранилище ОС, "" — недоступно (для Auth.tokenStorage).
+    /// "keyring" — secrets in the OS store, "" — unavailable (for Auth.tokenStorage).
     pub fn backend_name(&self) -> &'static str {
         if self.inner.available.load(Ordering::Relaxed) { "keyring" } else { "" }
     }
@@ -389,7 +389,7 @@ impl Lease {
         self.slot
     }
 
-    /// Поколение ещё актуально (не было выхода/повторной авторизации).
+    /// The generation is still current (there was no logout/re-authorization).
     pub fn current(&self) -> bool {
         self.store.inner.generations[self.slot.index()].load(Ordering::SeqCst) == self.generation
     }
@@ -449,7 +449,7 @@ impl Lease {
         self.request(true, |lease, backend| {
             let marker = lease.store.marker(lease.slot)?;
             if marker.as_ref().is_some_and(|marker| marker.revoked) {
-                // отозванный слот не требует даже доступа к хранилищу
+                // a revoked slot does not even need store access
                 return Ok(Loaded { grant: None, warning: None });
             }
             let Some(bytes) = backend.read(&lease.key())? else {
@@ -476,7 +476,7 @@ impl Lease {
             .map_err(|_| Error::Invalid)?;
         backend.write(&self.key(), &bytes)?;
         if !self.current() {
-            // операции хранилища последовательны: более новая запись ещё в очереди за этой и не сотрётся
+            // store operations are sequential: a newer write is still queued behind this one and will not be erased
             let _ = backend.delete(&self.key());
             return Err(Error::Stale);
         }
@@ -488,14 +488,14 @@ impl Lease {
         self.store.write_marker(self.slot, false)
     }
 
-    /// Ставится в очередь сразу: обновления токена сохраняют порядок записи, даже если их ждут вне мьютекса.
+    /// Queued at once: token refreshes keep their write order even when they are waited on outside the mutex.
     pub fn save(&self, grant: Grant) -> StoreFuture {
         self.request(true, move |lease, backend| lease.save_inner(backend, grant))
     }
 
-    /// Вызывать после `Store::revoke`. Ошибка удаления видна, а маркер отзыва не даст восстановить грант.
+    /// Call after `Store::revoke`. The deletion error is visible, and the revocation marker stops the grant from being restored.
     pub fn delete(&self) -> StoreFuture {
-        // удаление стоит в очереди раньше новой записи: выполняется, даже если поколение уже сменилось
+        // the deletion is queued ahead of the new write: it runs even if the generation has already changed
         self.request(false, |lease, backend| backend.delete(&lease.key()))
     }
 }
@@ -629,7 +629,7 @@ mod tests {
         let grant = web(DEFAULT_WEB_CLIENT_ID);
         fixture.store.lease(Slot::Shared).save(grant.clone()).await.unwrap();
         fixture.store.revoke(Slot::Playback).unwrap();
-        // профиль, перенесённый в другой каталог, хранит идентичность исходного — гранты остаются доступны
+        // a profile moved to another directory keeps the identity of the original one — the grants stay available
         let renamed = fixture.root.join("new-state");
         std::fs::rename(&fixture.state, &renamed).unwrap();
         std::fs::write(renamed.join("credential-profile"), &fixture.store.inner.profile).unwrap();
@@ -752,7 +752,7 @@ mod tests {
         std::fs::write(f.state.join("credential-storage"), b"not a directory").unwrap();
         assert_eq!(f.store.revoke(Slot::Shared), Err(Error::Filesystem));
         assert_eq!(f.store.revoke_spotify(), Err(Error::Filesystem));
-        // поколение всё равно сменилось: работа до выхода отбрасывается
+        // the generation changed anyway: work from before the logout is discarded
         assert_eq!(f.store.lease(Slot::Shared).generation(), 2);
     }
 
@@ -819,7 +819,7 @@ mod tests {
         f.store.revoke_spotify().unwrap();
         assert_eq!(f.store.lease(Slot::Shared).delete().await, Err(Error::Locked));
         assert_eq!(f.fake.lock().unwrap().values.len(), 1);
-        // отозванный слот не требует даже доступа к заблокированному хранилищу
+        // a revoked slot does not even need access to a locked store
         f.fake.lock().unwrap().read_error = Some(Error::Locked);
         assert!(f.restart().lease(Slot::Shared).load().await.unwrap().grant.is_none());
     }

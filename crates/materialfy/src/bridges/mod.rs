@@ -1,5 +1,5 @@
-//! QML-синглтоны Materialfy.Core. Каждый файл с #[cxx_qt::bridge]
-//! подхватывается build.rs автоматически; здесь — объявления модулей и общие помощники мостов.
+//! Materialfy.Core QML singletons. Every file with #[cxx_qt::bridge]
+//! is picked up by build.rs automatically; this file holds the module declarations and shared bridge helpers.
 pub mod auth;
 pub mod catalog;
 pub mod covers;
@@ -32,15 +32,15 @@ use crate::context::ctx;
 use crate::models::DictListModel;
 use crate::qt::{QVariantMap, qvariantmap_to_json};
 
-/// Что пришло из broadcast-канала сервиса.
+/// What arrived from the service's broadcast channel.
 pub(crate) enum Delivery<E> {
     Event(E),
-    /// пропущены события — мост перечитывает состояние сервиса целиком
+    /// events were missed — the bridge re-reads the entire service state
     Lagged,
 }
 
-/// Слушатель событий сервиса на tokio: каждое событие переносится в GUI-поток.
-/// Канал закрыт или объект уничтожен — задача завершается.
+/// Service event listener on tokio: every event is moved into the GUI thread.
+/// The channel is closed or the object is destroyed — the task finishes.
 pub(crate) fn forward_events<T, E>(
     thread: CxxQtThread<T>,
     mut events: broadcast::Receiver<E>,
@@ -63,7 +63,7 @@ pub(crate) fn forward_events<T, E>(
     });
 }
 
-/// Слушатель снимка (watch): каждое изменение — снимок в GUI-поток.
+/// Snapshot (watch) listener: every change becomes a snapshot in the GUI thread.
 pub(crate) fn forward_watch<T, S>(thread: CxxQtThread<T>, mut snapshot: watch::Receiver<S>, apply: fn(Pin<&mut T>, S))
 where
     T: Threading + 'static,
@@ -79,28 +79,28 @@ where
     });
 }
 
-/// Модель во владении моста → указатель для QML (свойство CONSTANT или возврат из invokable).
+/// Model owned by the bridge → a pointer for QML (a CONSTANT property or an invokable return value).
 pub(crate) fn model_ptr(model: &UniquePtr<DictListModel>) -> *mut cxx_qt::QObject {
     model.as_ref().map_or(std::ptr::null_mut(), |m| unsafe {
         <DictListModel as Upcast<cxx_qt::QObject>>::upcast_ptr(m).cast_mut()
     })
 }
 
-/// Применить изменение к модели, если она есть.
+/// Apply a change to the model, if there is one.
 pub(crate) fn with_model(model: &mut UniquePtr<DictListModel>, f: impl FnOnce(Pin<&mut DictListModel>)) {
     if let Some(m) = model.as_mut() {
         f(m);
     }
 }
 
-/// Сколько держать локально записанное значение, не принимая «эхо» из сервиса (оно может быть старше записи).
+/// How long to hold a locally written value without accepting an "echo" from the service (it may be older than the write).
 pub(crate) const ECHO_HOLD: Duration = Duration::from_millis(500);
 
 pub(crate) fn held(since: Option<Instant>) -> bool {
     since.is_some_and(|at| at.elapsed() < ECHO_HOLD)
 }
 
-/// Словарь из QML → JSON с числами, приведёнными как в Python (5.0 → 5; id числом → строка).
+/// Dictionary from QML → JSON with numbers normalized as in Python (5.0 → 5; a numeric id → a string).
 pub(crate) fn map_to_json(map: &QVariantMap) -> serde_json::Map<String, Value> {
     let mut object = qvariantmap_to_json(map);
     for (key, value) in object.iter_mut() {
@@ -134,15 +134,15 @@ fn normalize(key: &str, value: &mut Value) {
     }
 }
 
-/// Словарь трека из QML → TrackItem (неполный словарь — поля по умолчанию; без trackId и uri — None).
+/// Track dictionary from QML → TrackItem (a partial dictionary gives default fields; without trackId and uri — None).
 pub(crate) fn track_from_map(map: &QVariantMap) -> Option<TrackItem> {
     track_from_json(map_to_json(map))
 }
 
-/// Разбор словаря трека: без ключа available трек считается доступным; выпуск узнаётся и по URI.
+/// Track dictionary parsing: without the available key the track counts as available; an episode is also recognized by its URI.
 fn track_from_json(mut object: serde_json::Map<String, Value>) -> Option<TrackItem> {
     object.entry("available").or_insert(Value::Bool(true));
-    // строки вместо чисел (durationMs: "1000") не должны ронять разбор всего словаря
+    // strings in place of numbers (durationMs: "1000") must not break parsing of the whole dictionary
     for key in ["durationMs"] {
         if let Some(Value::String(text)) = object.get(key) {
             let number = text.trim().parse::<i64>().unwrap_or(0);
@@ -162,7 +162,7 @@ pub(crate) fn string_list(list: &cxx_qt_lib::QStringList) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
 }
 
-/// Сериализуемое → QVariantMap ({} при ошибке).
+/// Serializable → QVariantMap ({} on error).
 pub(crate) fn to_qmap<T: serde::Serialize>(value: &T) -> QVariantMap {
     match serde_json::to_value(value) {
         Ok(Value::Object(map)) => crate::qt::json_to_qvariantmap(&map),
@@ -170,7 +170,7 @@ pub(crate) fn to_qmap<T: serde::Serialize>(value: &T) -> QVariantMap {
     }
 }
 
-/// Сериализуемый список → QVariantList.
+/// Serializable list → QVariantList.
 pub(crate) fn to_qlist<T: serde::Serialize>(items: &[T]) -> crate::qt::QVariantList {
     match serde_json::to_value(items) {
         Ok(Value::Array(items)) => crate::qt::json_to_qvariantlist(&items),
@@ -178,13 +178,13 @@ pub(crate) fn to_qlist<T: serde::Serialize>(items: &[T]) -> crate::qt::QVariantL
     }
 }
 
-/// file:// URL → локальный путь, иначе строка как есть (QUrl.isLocalFile в Python).
+/// file:// URL → local path, otherwise the string unchanged (QUrl.isLocalFile in Python).
 pub(crate) fn local_path(source: &cxx_qt_lib::QString) -> String {
     let url = cxx_qt_lib::QUrl::from(source);
     if url.is_local_file() { url.to_local_file_or_default().to_string() } else { source.to_string() }
 }
 
-/// Строковое значение ключа словаря (число — текстом).
+/// String value of a dictionary key (a number — as text).
 pub(crate) fn json_str(object: &serde_json::Map<String, Value>, key: &str) -> String {
     match object.get(key) {
         Some(Value::String(s)) => s.clone(),

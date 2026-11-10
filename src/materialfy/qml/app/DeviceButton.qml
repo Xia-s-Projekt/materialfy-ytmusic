@@ -2,16 +2,16 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Кнопка устройств Spotify Connect. Играет здесь (или нигде) — IconButton speaker_group;
-// играет на другом устройстве — залитый чип primary с иконкой и именем; пропало — errorContainer;
-// идёт перенос — secondaryContainer с индикатором. Открывает вкладку «Устройства» правой панели (DevicePanel),
-// а где панели нет (узкое окно, экран «Сейчас играет») — лист снизу DeviceSheet.
+// Spotify Connect device button. Playing here (or nowhere) — the speaker_group IconButton;
+// playing on another device — a filled primary chip with an icon and a name; gone — errorContainer;
+// transfer in progress — secondaryContainer with an indicator. Opens the "Devices" tab of the right panel (DevicePanel),
+// and where there is no panel (narrow window, the "Now Playing" screen) — the DeviceSheet bottom sheet.
 Item {
     id: root
 
-    property bool iconOnly: false          // узкий мини-плеер: в чипе только иконка
-    property bool usePanel: true           // false — всегда лист (над правой панелью, как в «Сейчас играет»)
-    // правая панель сейчас помещается в окне (Main.qml: panelFits, layoutMode)
+    property bool iconOnly: false          // narrow mini player: only an icon in the chip
+    property bool usePanel: true           // false — always a sheet (over the right panel, as in "Now Playing")
+    // the right panel currently fits in the window (Main.qml: panelFits, layoutMode)
     readonly property bool _panelFits: {
         const w = root.Window.window
         return usePanel && w !== null && w.panelFits === true && w.layoutMode === "full"
@@ -65,7 +65,7 @@ Item {
         NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized }
     }
 
-    // ---- Обычная кнопка ----
+    // ---- Ordinary button ----
     IconButton {
         anchors.centerIn: parent
         visible: opacity > 0.01
@@ -78,7 +78,7 @@ Item {
         onClicked: root.toggle()
     }
 
-    // ---- Чип устройства ----
+    // ---- Device chip ----
     Item {
         id: chipBox
         anchors.fill: parent
@@ -139,7 +139,7 @@ Item {
         }
     }
 
-    // Loader грузит только Item, а лист — Popup: оборачиваем
+    // Loader loads only an Item, while the sheet is a Popup: we wrap it
     Loader {
         id: sheetLoader
         active: false

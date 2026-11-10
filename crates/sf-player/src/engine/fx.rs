@@ -1,5 +1,5 @@
-//! Скорость воспроизведения и кроссфейд: живые настройки, которые вывод звука читает на каждом пакете.
-//! Меняются без перезапуска движка; позиция трека в интерфейсе тоже учитывает скорость.
+//! Playback speed and crossfade: live settings that the audio output reads on every packet.
+//! Changed without restarting the engine; the track position in the UI accounts for the speed too.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock};

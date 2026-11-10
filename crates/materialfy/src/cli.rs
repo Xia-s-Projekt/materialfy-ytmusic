@@ -1,16 +1,16 @@
-//! Аргументы командной строки — как parse_args в app.py (неизвестные аргументы игнорируются, как parse_known_args).
-//! Как argparse: `--opt VALUE` и `--opt=VALUE`, однозначные сокращения длинных имён, -h/--help.
+//! Command line arguments - like parse_args in app.py (unknown arguments are ignored, like parse_known_args).
+//! Like argparse: `--opt VALUE` and `--opt=VALUE`, unambiguous abbreviations of long names, -h/--help.
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Default)]
 pub struct Cli {
-    /// --gallery: галерея компонентов MD3 (qml/gallery/Gallery.qml)
+    /// --gallery: MD3 component gallery (qml/gallery/Gallery.qml)
     pub gallery: bool,
-    /// --qml FILE: загрузить произвольный QML
+    /// --qml FILE: load an arbitrary QML
     pub qml: Option<PathBuf>,
-    /// --screenshot PNG: сохранить снимок окна и выйти
+    /// --screenshot PNG: save a window screenshot and exit
     pub screenshot: Option<PathBuf>,
-    /// --delay MS (1500): задержка перед снимком
+    /// --delay MS (1500): delay before the screenshot
     pub delay: u64,
     /// --seed-image PATH
     pub seed_image: Option<PathBuf>,
@@ -26,9 +26,9 @@ pub struct Cli {
     pub debug_fps: bool,
     /// --size WxH
     pub size: Option<(i32, i32)>,
-    /// --config-dir DIR (для --screenshot по умолчанию — временный каталог)
+    /// --config-dir DIR (for --screenshot the default is a temporary directory)
     pub config_dir: Option<PathBuf>,
-    /// --set KEY=VALUE (можно несколько): начальные свойства корня; "true"/"false" → bool, int, float, иначе строка
+    /// --set KEY=VALUE (can be several): initial root properties; "true"/"false" -> bool, int, float, otherwise a string
     pub set: Vec<(String, InitialValue)>,
 }
 
@@ -41,7 +41,7 @@ pub enum InitialValue {
 }
 
 impl InitialValue {
-    /// _parse_value из app.py.
+    /// _parse_value from app.py.
     pub fn parse(value: &str) -> InitialValue {
         if value == "true" || value == "false" {
             return InitialValue::Bool(value == "true");
@@ -108,27 +108,27 @@ const USAGE: &str = "usage: materialfy [-h] [--gallery] [--qml FILE] [--screensh
 const HELP: &str = "
 options:
   -h, --help         show this help message and exit
-  --gallery          галерея компонентов MD3
-  --qml FILE         загрузить произвольный QML (стенды для отладки)
-  --screenshot PNG   сохранить снимок окна и выйти
-  --delay DELAY      задержка перед снимком, мс
-  --seed-image PATH  взять цвет темы из картинки
-  --light            светлая тема
-  --offline          не восстанавливать сессию из keyring
-  --new-instance     запустить второй экземпляр, даже если плеер уже работает
-  --debug-wheel      печатать сырые события колеса мыши
-  --debug-fps        счётчик кадров в углу окна
-  --size SIZE        размер окна, ШxВ (по умолчанию — из настроек)
-  --config-dir DIR   каталог настроек (для --screenshot по умолчанию временный, чтобы не трогать настоящие)
-  --set KEY=VALUE    начальное свойство корневого окна (число или строка)";
+  --gallery          MD3 component gallery
+  --qml FILE         load an arbitrary QML (stands for debugging)
+  --screenshot PNG   save a window screenshot and exit
+  --delay DELAY      delay before the screenshot, ms
+  --seed-image PATH  take the theme color from an image
+  --light            light theme
+  --offline          do not restore the session from the keyring
+  --new-instance     run a second instance, even if the player is already running
+  --debug-wheel      print raw mouse wheel events
+  --debug-fps        frame counter in the window corner
+  --size SIZE        window size, WxH (by default - from settings)
+  --config-dir DIR   settings directory (temporary by default for --screenshot, so as not to touch the real ones)
+  --set KEY=VALUE    initial property of the root window (a number or a string)";
 
-/// Ошибка разбора — как argparse: usage и сообщение в stderr, код 2.
+/// A parse error - like argparse: usage and a message to stderr, code 2.
 fn fail(message: &str) -> ! {
     eprintln!("{USAGE}\nmaterialfy: error: {message}");
     std::process::exit(2);
 }
 
-/// Длинное имя по точному совпадению или однозначному префиксу (allow_abbrev argparse).
+/// A long name by exact match or unambiguous prefix (argparse allow_abbrev).
 fn lookup(name: &str) -> Option<(&'static str, Opt, bool)> {
     if name == "-h" {
         return Some(("--help", Opt::Help, false));
@@ -160,7 +160,7 @@ fn parse_size(text: &str) -> Option<(i32, i32)> {
 }
 
 impl Cli {
-    /// Разбор std::env::args() (первый элемент — программа).
+    /// Parse std::env::args() (the first element is the program).
     pub fn parse(args: &[String]) -> Cli {
         let mut cli = Cli { delay: 1500, ..Cli::default() };
         let mut rest = args.iter().skip(1);
@@ -182,7 +182,7 @@ impl Cli {
                 match inline {
                     Some(v) => v,
                     None => match rest.next() {
-                        // argparse не берёт значением то, что похоже на опцию
+                        // argparse does not take something that looks like an option as a value
                         Some(v) if !(v.starts_with('-') && v.len() > 1 && v.parse::<f64>().is_err()) => v.clone(),
                         _ => fail(&format!("argument {full}: expected one argument")),
                     },
@@ -198,7 +198,7 @@ impl Cli {
                 Opt::Qml => cli.qml = Some(PathBuf::from(value)),
                 Opt::Screenshot => cli.screenshot = Some(PathBuf::from(value)),
                 Opt::Delay => match value.trim().parse::<i64>() {
-                    // QTimer.singleShot с отрицательной задержкой срабатывает сразу
+                    // QTimer.singleShot with a negative delay fires immediately
                     Ok(ms) => cli.delay = ms.max(0) as u64,
                     Err(_) => fail(&format!("argument --delay: invalid int value: '{value}'")),
                 },
@@ -226,7 +226,7 @@ impl Cli {
         cli
     }
 
-    /// Главный режим (не снимок, не --qml, не галерея): трей, единственный экземпляр.
+    /// Main mode (not a screenshot, not --qml, not the gallery): tray, single instance.
     pub fn main_mode(&self) -> bool {
         self.screenshot.is_none() && self.qml.is_none() && !self.gallery
     }

@@ -4,13 +4,13 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Настройки: аккаунт и разрешения, воспроизведение, Spotify Connect, сеть, хранилище, внешний вид.
-// Каждая строка пишет в Settings сразу; прокси — черновиком формы и кнопкой «Применить».
+// Settings: account and permissions, playback, Spotify Connect, network, storage, appearance.
+// Every row writes to Settings at once; the proxy — via a form draft and an "Apply" button.
 Page {
     id: page
     title: I18n.t("Settings")
 
-    property string section           // раздел из маршрута: прокрутить к нему при открытии
+    property string section           // section from the route: scroll to it on open
 
     readonly property bool signedIn: Auth.state === "signedIn"
     readonly property var account: Auth.account ?? ({})
@@ -137,7 +137,7 @@ Page {
         { value: 320, text: "320", hint: I18n.t("320 kbps — high quality on fast connections") }
     ]
 
-    // ---- Прокрутка к разделам ----
+    // ---- Scrolling to sections ----
     function cardFor(key) {
         switch (key) {
         case "account": return accountCard
@@ -168,26 +168,26 @@ Page {
         page.flickable.scrollTo(Math.max(0, _cardY(card)), animated && !Theme.reducedMotion)
         followTimer.restart()
     }
-    // во время программной прокрутки выбранный чип не прыгает по промежуточным карточкам
+    // during a programmatic scroll the selected chip does not jump across the intermediate cards
     property bool _following: true
     Timer { id: followTimer; interval: Theme.motion.spatialDefault + 200; onTriggered: page._following = true }
     function _followScroll() {
         if (!_following)
             return
-        // строка разделов прилипает сверху и закрывает полосу под собой — как в _cardY
+        // the section row sticks to the top and covers the bar below it — as in _cardY
         const viewTop = page.flickable.contentY + nav.height + 16
         const viewBottom = page.flickable.contentY + page.flickable.height
         let cur = currentSection
         let best = 0
-        // смотрим на видимую площадь, а не на верх карточки: следующая может начинаться
-        // ниже экрана, но уже занимать его почти целиком, пока предыдущая уехала наверх
+        // look at the visible area, not the top of the card: the next one may start
+        // below the screen, but already fill almost all of it, while the previous one has moved up
         for (const s of sections) {
             const card = cardFor(s.key)
             if (!card)
                 continue
             const top = _cardTop(card)
             const visible = Math.min(top + card.height, viewBottom) - Math.max(top, viewTop)
-            // доля того, что карточка вообще может показать: короткая целиком на экране не проигрывает высокой соседке
+            // the share of what the card can show at all: a short one fully on screen does not lose to a tall neighbor
             const score = visible / Math.max(1, Math.min(card.height, viewBottom - viewTop))
             if (score > best) {
                 best = score
@@ -213,10 +213,10 @@ Page {
         if (section !== "")
             openSection.start()
     }
-    // раскладка карточек готова не сразу после создания страницы
+    // the card layout is not ready immediately after the page is created
     Timer { id: openSection; interval: 60; onTriggered: page.scrollToSection(page.section, false) }
 
-    // ---- Липкий ряд разделов ----
+    // ---- Sticky section row ----
     Item {
         id: navHost
         Layout.fillWidth: true
@@ -231,7 +231,7 @@ Page {
             width: page.width
             y: -8
             height: nav.height + 16
-            color: Theme.surfaceContainer     // цвет панели контента (Surface level "container")
+            color: Theme.surfaceContainer     // the content panel color (Surface level "container")
             opacity: navHost.stick > 0 ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
         }
@@ -244,7 +244,7 @@ Page {
         }
     }
 
-    // ================= Аккаунт =================
+    // ================= Account =================
     SettingsCard {
         id: accountCard
         title: I18n.t("YouTube Music account")
@@ -315,7 +315,7 @@ Page {
             }
         }
 
-        // Вход — только вставкой заголовков на странице аккаунта; плейбек — на этом компьютере.
+        // Sign-in — only by pasting headers on the account page; playback — on this computer.
         SettingRow {
             id: webRow
             title: I18n.t("YouTube Music sign-in")
@@ -393,7 +393,7 @@ Page {
         }
     }
 
-    // ================= Внешний вид =================
+    // ================= Appearance =================
     SettingsCard {
         id: appearanceCard
         title: I18n.t("Appearance")
@@ -413,7 +413,7 @@ Page {
             title: I18n.t("Language")
             // "system" (default) follows the OS UI language; the language names stay in their own language
             ButtonGroup {
-                model: [I18n.t("System default"), "English", "Русский", "Português"]
+                model: [I18n.t("System default"), "English", "Russian", "Português"]
                 autoSelect: false
                 size: page.compact ? "xs" : "s"
                 currentIndex: Math.max(0, ["system", "en", "ru", "pt"].indexOf(Settings.language))
@@ -504,7 +504,7 @@ Page {
                 }
             }
         }
-        // ---- Фон и обложка ----
+        // ---- Background and cover ----
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 8
@@ -576,7 +576,7 @@ Page {
             description: Settings.backdropMode === "palette" ? I18n.t("The gradient doesn’t depend on the cover")
                 : I18n.t("{0}% · 0 is a sharp cover, 100 is color only", Math.round(Settings.nowPlayingBlur * 100))
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 0
                 to: 1
@@ -593,7 +593,7 @@ Page {
                 ? I18n.t("Background colors slowly shift while music plays")
                 : I18n.t("Off — the blur stays still")
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 0
                 to: 1
@@ -622,7 +622,7 @@ Page {
             Switch { checked: Settings.coverPulse; onToggled: c => Settings.coverPulse = c }
         }
 
-        // ---- Окно и плеер вне окна ----
+        // ---- Window and out-of-window player ----
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 8
@@ -635,8 +635,8 @@ Page {
             }
         }
 
-        // Плеер вне окна: островок — Windows, macOS и X11 (на Wayland окно не встанет у края экрана само),
-        // панель задач — только Windows; где нет ни того ни другого, раздела нет
+        // Out-of-window player: the island — Windows, macOS and X11 (on Wayland the window will not sit at the screen edge by itself),
+        // the taskbar — Windows only; where there is neither, the section is absent
         FloatingPlayerPicker {
             id: floatingPicker
             modes: ["off"]
@@ -741,7 +741,7 @@ Page {
             }
         }
 
-        // Место виджета в панели задач (на каждом мониторе своё); перетаскивание виджета на панели ставит «своё»
+        // The widget place in the taskbar (its own on each monitor); dragging the widget on the taskbar sets "custom"
         Repeater {
             model: floatingPicker.visible && (Settings.floatingPlayer === "taskbar" || Settings.floatingPlayer === "both")
                    ? page.getActiveTaskbarScreenIndices(Settings.taskbarScreens, page.screenCount)
@@ -803,7 +803,7 @@ Page {
             title: I18n.t("Mouse wheel scroll step")
             description: I18n.t("{0} px per notch; grows up to ×2 when scrolling fast", Settings.wheelStep)
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 60
                 to: 480
@@ -814,7 +814,7 @@ Page {
             }
         }
 
-        // ---- Анимации и производительность ----
+        // ---- Animations and performance ----
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 8
@@ -856,7 +856,7 @@ Page {
                 onActivated: i => Settings.lowPowerMode = ["auto", "on", "off"][i]
             }
         }
-        // Видеокарта (Linux, гибридная графика): по умолчанию — как решит система; «Дискретная» включает PRIME offload
+        // GPU (Linux, hybrid graphics): by default — whatever the system decides; "Discrete" enables PRIME offload
         SettingRow {
             visible: Qt.platform.os === "linux"
             title: I18n.t("Graphics processor")
@@ -882,13 +882,13 @@ Page {
         }
     }
 
-    // ================= Текст песни =================
+    // ================= Song lyrics =================
     SettingsCard {
         id: lyricsCard
         title: I18n.t("Lyrics")
         icon: "lyrics"
 
-        // Живое превью: заливка по слову, свечение и размытие как в LyricsView.
+        // Live preview: word-by-word fill, glow and blur as in LyricsView.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: preview.implicitHeight + 28
@@ -922,7 +922,7 @@ Page {
 
         SettingRow {
             id: activeScaleRow
-            // Настройка 0 = по стилю: отображается значение текущего стиля
+            // Setting 0 = by style: the current style value is shown
             readonly property real styleScale: Settings.lyricsMode === "spicy" ? 1.12 : (Settings.lyricsMode === "karaoke" ? 1.16 : 1.0)
             readonly property real activeScaleVal: Settings.lyricsActiveScale > 0 ? Settings.lyricsActiveScale : styleScale
             title: I18n.t("Active line scale")
@@ -1021,7 +1021,7 @@ Page {
 
     }
 
-    // ================= Чтение =================
+    // ================= Reading =================
     SettingsCard {
         id: readingCard
         title: I18n.t("Reading")
@@ -1031,7 +1031,7 @@ Page {
             title: I18n.t("Lyrics size")
             description: I18n.t("{0}% of the default size", Math.round(Settings.lyricsFontScale * 100))
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 0.7
                 to: 1.6
@@ -1073,7 +1073,7 @@ Page {
 
         SettingRow {
             id: idleScaleRow
-            // Настройка 0 = по стилю: отображается значение текущего стиля
+            // Setting 0 = by style: the current style value is shown
             readonly property real styleScale: Settings.lyricsMode === "spicy" ? 0.88 : (Settings.lyricsMode === "karaoke" ? 0.90 : 0.94)
             readonly property real effective: Settings.lyricsIdleScale > 0 ? Settings.lyricsIdleScale : styleScale
             title: I18n.t("Inactive lines size")
@@ -1092,7 +1092,7 @@ Page {
 
         SettingRow {
             id: scrollMsRow
-            // -1 = стиль решает сам (spicy 420, karaoke 440, обычный 600)
+            // -1 = the style decides (spicy 420, karaoke 440, regular 600)
             readonly property int styleMs: Settings.lyricsMode === "spicy" ? 420 : (Settings.lyricsMode === "karaoke" ? 440 : 600)
             readonly property int effectiveMs: Settings.lyricsScrollMs >= 0 ? Settings.lyricsScrollMs : styleMs
             title: I18n.t("Scroll speed")
@@ -1111,7 +1111,7 @@ Page {
 
         SettingRow {
             id: staggerRow
-            // -1 = стиль решает сам (spicy 28, karaoke 26, обычный 42); 0 = весь блок вместе
+            // -1 = the style decides (spicy 28, karaoke 26, regular 42); 0 = the whole block together
             readonly property int styleMs: Settings.lyricsMode === "spicy" ? 28 : (Settings.lyricsMode === "karaoke" ? 26 : 42)
             readonly property int effectiveMs: Settings.lyricsStaggerMs >= 0 ? Settings.lyricsStaggerMs : styleMs
             title: I18n.t("Cascade delay")
@@ -1165,7 +1165,7 @@ Page {
             title: I18n.t("Line spacing")
             description: I18n.t("{0}% of the style spacing", Math.round(Settings.lyricsLineSpacing * 100))
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 0.8
                 to: 1.6
@@ -1207,7 +1207,7 @@ Page {
 
     }
 
-    // ================= Воспроизведение =================
+    // ================= Playback =================
     SettingsCard {
         id: playbackCard
         title: I18n.t("Playback")
@@ -1258,7 +1258,7 @@ Page {
                 : Settings.crossfade > 0 ? I18n.t("The end of a track fades out as the next one fades in")
                 : I18n.t("Off: tracks play back to back")
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 0
                 to: 12
@@ -1272,7 +1272,7 @@ Page {
             title: I18n.t("Playback speed")
             description: I18n.t("Pitch stays the same. Applies on this computer")
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 0.5
                 to: 2
@@ -1304,7 +1304,7 @@ Page {
             opacity: enabled ? 1 : 0.5
             description: Player.remote ? I18n.t("Another device is playing — its volume is in the mini player") : ""
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 0
                 to: 1
@@ -1416,13 +1416,13 @@ Page {
         }
     }
 
-    // ================= Сеть =================
+    // ================= Network =================
     SettingsCard {
         id: networkCard
         title: I18n.t("Network")
         icon: "lan"
 
-        // черновик формы: начальные значения — применённые настройки
+        // form draft: the initial values — the applied settings
         QtObject {
             id: proxy
             property string mode: Settings.proxyMode || "off"
@@ -1563,7 +1563,7 @@ Page {
             }
         }
 
-        // обложки по умолчанию идут через прокси, как всё остальное; CDN картинок часто открыт и напрямую
+        // covers go through the proxy by default, like everything else; the image CDN is often open directly too
         SettingRow {
             visible: (Settings.proxyMode || "off") !== "off"
             title: I18n.t("Covers bypass the proxy")
@@ -1581,7 +1581,7 @@ Page {
         }
     }
 
-    // ================= Хранилище =================
+    // ================= Storage =================
     SettingsCard {
         id: storageCard
         title: I18n.t("Storage")
@@ -1598,7 +1598,7 @@ Page {
             opacity: enabled ? 1 : 0.5
             description: I18n.t("Older tracks are removed when the cache is full")
             Slider {
-                wheelEnabled: false     // колесо прокручивает страницу, а не меняет настройку
+                wheelEnabled: false     // the wheel scrolls the page, rather than changing the setting
                 width: 220
                 from: 256
                 to: 10240
@@ -1622,7 +1622,7 @@ Page {
                 style: "outlined"
                 onClicked: {
                     Settings.clearCache()
-                    // занятые файлы (звук играющего трека) остаются — об этом не сообщаем, объём обновит мост
+                    // in-use files (the playing track audio) remain — we do not report it, the bridge will update the size
                     const w = page.Window.window
                     if (w && typeof w.notify === "function")
                         w.notify(I18n.t("Cache cleared"))
@@ -1644,7 +1644,7 @@ Page {
         }
     }
 
-    // ================= Обновления (app/UpdatesCard.qml) =================
+    // ================= Updates (app/UpdatesCard.qml) =================
     UpdatesCard {
         id: updatesCard
         compact: page.compact

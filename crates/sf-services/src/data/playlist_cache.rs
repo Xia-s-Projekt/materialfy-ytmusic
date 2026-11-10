@@ -1,5 +1,5 @@
-//! Строки плейлистов на диске по аккаунту: <playlist_cache_dir(account)>/<id>.json, действительны только для
-//! своего snapshot_id (иначе — промах, плейлист перечитывается).
+//! Playlist rows on disk per account: <playlist_cache_dir(account)>/<id>.json, valid only for
+//! their own snapshot_id (otherwise — a miss, the playlist is re-read).
 use std::path::{Path, PathBuf};
 
 use md3_model::TrackItem;

@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Базовая страница: плавная прокрутка, крупный заголовок, отступ снизу под плавающий мини-плеер.
-// Содержимое кладётся прямо внутрь: Page { title: "…"; Label { … } } — оно попадает в ColumnLayout.
+// Base page: smooth scrolling, large title, bottom padding for the floating mini player.
+// Content goes directly inside: Page { title: "…"; Label { … } } — it lands in a ColumnLayout.
 Item {
     id: page
 
@@ -15,7 +15,7 @@ Item {
     property real sideMargin: 32
     property real bottomInset: 120
     default property alias content: column.data
-    // Слой под содержимым, вне прокручиваемой области — её clip его не режет (фон шапки, см. HeroShapes)
+    // A layer under the content, outside the scrollable area — its clip does not cut it (header background, see HeroShapes)
     property alias underlay: underlayHost.data
     readonly property alias flickable: flick
     readonly property bool scrolled: flick.contentY > 48

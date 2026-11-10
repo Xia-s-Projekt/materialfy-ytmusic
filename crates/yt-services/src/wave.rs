@@ -70,7 +70,7 @@ impl WaveService {
             let _ = snapshot.send_replace(WaveSnapshot { loading: true, station_title: title.clone(), ..snapshot.borrow().clone() });
             match api.get_watch_playlist(Some(&video_id), None, true, 25).await {
                 Ok(v) => {
-                    // get_watch_playlist отвечает {"tracks": [...]}, не массивом.
+                    // get_watch_playlist responds with {"tracks": [...]}, not an array.
                     let list: Vec<serde_json::Value> = v
                         .get("tracks")
                         .and_then(|t| t.as_array())

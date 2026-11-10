@@ -1,7 +1,7 @@
-//! IconMetrics (icons.py): оптическое центрирование иконок Material Symbols.
-//! Шрифт урезан до используемых иконок (tools/subset_fonts.py), поэтому иконка рисуется символом по коду
-//! из assets/fonts/icons.json, а не лигатурой — glyph(name). ink(name, size) — замер глифа по пикселям
-//! (C++: icon_measure в cpp/mf_shell.cpp), кэш по (имя, round(size)).
+//! IconMetrics (icons.py): optical centering of Material Symbols icons.
+//! The font is trimmed to the used icons (tools/subset_fonts.py), so an icon is drawn as a character by code
+//! from assets/fonts/icons.json, not as a ligature - glyph(name). ink(name, size) measures the glyph by pixels
+//! (C++: icon_measure in cpp/mf_shell.cpp), cached by (name, round(size)).
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::OnceLock;
@@ -25,8 +25,8 @@ pub mod qobject {
         #[qinvokable]
         fn glyph(self: &IconMetrics, name: &QString) -> QString;
 
-        /// x, y — смещение центра контура глифа от центра его текстового блока (advance × height);
-        /// width, height — размер контура, в пикселях. В QML: glyph.x -= x, glyph.y -= y.
+        /// x, y - the offset of the glyph outline center from the center of its text block (advance x height);
+        /// width, height - the outline size, in pixels. In QML: glyph.x -= x, glyph.y -= y.
         #[qinvokable]
         fn ink(self: Pin<&mut IconMetrics>, name: &QString, size: f64) -> QRectF;
     }
@@ -74,7 +74,7 @@ impl qobject::IconMetrics {
 
     fn ink(mut self: Pin<&mut Self>, name: &QString, size: f64) -> QRectF {
         let name = name.to_string();
-        // round() Python — к чётному
+        // Python round() - to even
         let size = size.round_ties_even() as i64;
         let key = (name, size);
         if let Some(cached) = self.rust().cache.get(&key) {

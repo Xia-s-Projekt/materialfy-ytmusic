@@ -2,14 +2,14 @@ import QtQuick
 import QtQuick.Shapes
 import QtQuick.Templates as T
 
-// Всплывающее меню MD3: карточка со списком пунктов у точки окна. Клик мимо или Esc — закрыть.
-// Меню — отдельное всплывающее окно (Popup.Window): выходит за края окна приложения (в мини-плеере
-// 280×120 иначе не поместится) и прижимается к краям экрана. Подменю — в том же окне, рядом с карточкой:
-// Qt отдаёт мышь последнему открытому popup-окну, и в отдельном окне подменю главная карточка глохла.
-// Кладётся в окно: Menu { anchors.fill: parent }; open(items, point[, size]) — точка в координатах окна.
-// Пункт: { id, text, icon, enabled (true), checked (undefined — без галочки), hint (серый текст справа),
-// separator: true, submenu: [пункты] }.
-// picked(index) — выбран пункт верхнего уровня (индекс в списке); triggered(id, item) — любой выбранный пункт.
+// MD3 popup menu: a card with an item list at a point in the window. A click outside or Esc closes it.
+// The menu is a separate popup window (Popup.Window): it extends past the edges of the app window (in the mini player
+// 280×120 it would not otherwise fit) and is clamped to the screen edges. A submenu lives in the same window, next to the card:
+// Qt gives the mouse to the last open popup window, and in a separate window the main card went dead for submenus.
+// Placed in a window: Menu { anchors.fill: parent }; open(items, point[, size]) — the point is in window coordinates.
+// Item: { id, text, icon, enabled (true), checked (undefined — no checkmark), hint (grey text on the right),
+// separator: true, submenu: [items] }.
+// picked(index) — a top-level item was chosen (its list index); triggered(id, item) — any chosen item.
 Item {
     id: root
 
@@ -19,12 +19,12 @@ Item {
     signal picked(int index)
     signal triggered(string id, var item)
 
-    // поле под тень карточки внутри прозрачного окна
+    // padding for the card shadow inside the transparent window
     readonly property int _pad: 12
 
-    // size — размер кнопки, у которой открыто меню (point — её левый верхний угол): карточка встаёт
-    // под кнопкой, правым краем к её правому краю, а не влезает вниз — над ней. Без size меню открывается
-    // от точки (курсор при ПКМ) вправо-вниз и отражается влево/вверх у края.
+    // size — the size of the button the menu opened from (point — its top-left corner): the card is placed
+    // under the button, right edge to its right edge, and if it does not fit below — above it. Without size the menu opens
+    // from the point (the cursor on right-click) down-right and flips left/up at the edge.
     function open(list, point, size) {
         closeSub()
         items = list
@@ -47,11 +47,11 @@ Item {
     }
     property bool _subOpen: false
 
-    // Экран под якорем (окно может стоять на двух мониторах сразу) в глобальных координатах; панель задач
-    // снизу/справа срезается по доступной области рабочего стола (availableGeometry экрана в QML не видна)
+    // The screen under the anchor (a window can span two monitors) in global coordinates; the taskbar
+    // at the bottom/right is cut off by the available desktop area (the screen's availableGeometry is not visible in QML)
     function _screenArea(g) {
-        // Wayland не сообщает, где на экране окно: mapToGlobal даёт координаты внутри окна, а геометрия
-        // монитора — глобальная (второй монитор начинается не с нуля), и меню уезжало. Там граница — само окно.
+        // Wayland does not report where the window sits on screen: mapToGlobal gives coordinates inside the window, while the geometry
+        // of the monitor is global (the second monitor does not start at zero), and the menu drifted. There the boundary is the window itself.
         if (Qt.platform.pluginName.startsWith("wayland"))
             return _windowArea()
         const w = root.Window.window
@@ -75,7 +75,7 @@ Item {
         return Qt.rect(s.virtualX, s.virtualY, right - s.virtualX, bottom - s.virtualY)
     }
 
-    // Окно приложения в глобальных координатах: меню держится внутри него, если помещается
+    // The app window in global coordinates: the menu stays inside it when it fits
     function _windowArea() {
         const w = root.Window.window
         if (!w || !w.contentItem)
@@ -122,7 +122,7 @@ Item {
         triggered(item.id ?? "", item)
     }
 
-    // Окно приложения ушло в фон — меню закрывается (как у системных меню)
+    // The app window goes to the background — the menu closes (like system menus)
     Connections {
         target: Qt.application
         function onStateChanged() {
@@ -131,7 +131,7 @@ Item {
         }
     }
 
-    // Задержка открытия/закрытия подменю по наведению: диагональный путь мыши к подменю его не схлопывает
+    // Delay before opening/closing a hovered submenu: a diagonal mouse path to the submenu does not collapse it
     Timer {
         id: hoverTimer
         property int index: -1
@@ -145,27 +145,27 @@ Item {
         }
     }
 
-    // Всплывающее окно под одну карточку: прозрачное, с полем под тень; позиция — в глобальных координатах
+    // A popup window for a single card: transparent, with padding for the shadow; position in global coordinates
     component CardPopup: T.Popup {
         id: pop
         property rect area: Qt.rect(0, 0, 0, 0)
         property Item card: null
 
-        // На Wayland — внутри окна: композитор сам двигает отдельные всплывающие окна, и меню оказывалось
-        // не у кнопки. Границы там всё равно по окну (см. _screenArea).
+        // On Wayland — inside the window: the compositor moves separate popup windows itself, and the menu ended up
+        // away from the button. Boundaries there are still per window (see _screenArea).
         popupType: Qt.platform.pluginName.startsWith("wayland") ? T.Popup.Item : T.Popup.Window
         modal: false
         dim: false
         focus: true
         padding: root._pad
         background: null
-        // x/y попапа — относительно root; считаем в глобальных и переводим
+        // the popup's x/y are relative to root; computed in global coordinates and converted
         function toLocal(gx, gy) { return root.mapFromGlobal(gx, gy) }
 
-        // размер окна — по карточке (неявный размер контейнера до Popup.Window не доходит)
+        // the window size follows the card (the container's implicit size does not reach Popup.Window)
         contentWidth: card ? card.implicitWidth : 0
         contentHeight: card ? card.implicitHeight : 0
-        // в Templates (без стиля) размер попапа к содержимому не привязан
+        // in Templates (no style) the popup size is not tied to its content
         implicitWidth: contentWidth + leftPadding + rightPadding
         implicitHeight: contentHeight + topPadding + bottomPadding
 
@@ -186,12 +186,12 @@ Item {
         property var model: []
         property int level: 0
         property int currentIndex: -1
-        property int parentIndex: -1   // для подменю: пункт-родитель
+        property int parentIndex: -1   // for a submenu: the parent item
         readonly property bool hasIcons: (model || []).some(it => (it.icon ?? "") !== "")
         readonly property bool hasTrailing: (model || []).some(it => typeof it.checked === "boolean" || (it.submenu && it.submenu.length > 0))
 
         function rowAt(i) { return rows.itemAt(i) }
-        // Следующий доступный пункт от from в направлении dir (пропуская разделители и выключенные)
+        // The next enabled item from from in direction dir (skipping separators and disabled ones)
         function step(from, dir) {
             const n = (model || []).length
             let i = from < 0 ? (dir > 0 ? -1 : n) : from
@@ -285,7 +285,7 @@ Item {
                         opacity: 0.6
                     }
 
-                    // Подсветка: текущий пункт с клавиатуры и открытый родитель подменю
+                    // Highlight: the current keyboard item and the open submenu parent
                     Rectangle {
                         visible: !row.isSeparator
                         width: list.width
@@ -319,7 +319,7 @@ Item {
                             type: "bodyMedium"
                             color: Theme.fgSurface
                         }
-                        // пояснение справа серым («локально»)
+                        // the hint on the right in grey ("local")
                         Label {
                             id: hintLabel
                             visible: (row.modelData.hint ?? "") !== ""
@@ -338,7 +338,7 @@ Item {
                             size: 20
                             color: Theme.primary
                         }
-                        // Шеврон «›»: в урезанном шрифте иконок chevron_right нет
+                        // The "›" chevron: the reduced icon font has no chevron_right
                         Shape {
                             visible: row.hasSub
                             x: parent.width - 12 - 20
@@ -385,10 +385,10 @@ Item {
         }
     }
 
-    // Позиции — биндингами: размер карточки известен только после раскладки пунктов.
-    // Границы — окно приложения, если карточка в нём помещается (в мини-плеере — нет: тогда экран).
-    // По горизонтали: от кнопки — правым краем к её правому краю, от точки — вправо; не влезает — в другую
-    // сторону. По вертикали: под якорем, не влезает — над ним, не влезает и так — где места больше.
+    // Positions are bindings: the card size is only known after the items are laid out.
+    // Boundaries are the app window if the card fits inside it (in the mini player it does not: then the screen).
+    // Horizontally: from a button — right edge to its right edge, from a point — to the right; if it does not fit, the other
+    // way. Vertically: below the anchor, if it does not fit — above it, and if that does not fit either — wherever there is more room.
     CardPopup {
         id: mainPopup
         property rect anchor: Qt.rect(0, 0, 0, 0)
@@ -408,18 +408,18 @@ Item {
         readonly property bool below: anchor.y + anchor.height + gap + main.height <= bounds.y + bounds.height - 8
                                       || anchor.y - gap - main.height < bounds.y + 8
                                          && bounds.y + bounds.height - anchor.y - anchor.height >= anchor.y - bounds.y
-        // карточка в глобальных координатах
+        // the card in global coordinates
         readonly property real mx: Math.max(bounds.x + 8, Math.min(bounds.x + bounds.width - main.width - 8,
                                        toLeft ? anchor.x + anchor.width - main.width : anchor.x))
         readonly property real my: Math.max(bounds.y + 8, Math.min(bounds.y + bounds.height - main.height - 8,
                                        below ? anchor.y + anchor.height + gap : anchor.y - gap - main.height))
-        // подменю: справа от карточки, не влезает — слева; по вертикали — у строки-родителя (subRowY — от верха карточки)
+        // submenu: to the right of the card, if it does not fit — to the left; vertically at the parent row (subRowY is from the top of the card)
         property real subRowY: 0
         readonly property real sx: mx + main.width - 4 + sub.width > area.x + area.width - 8
                                    ? Math.max(area.x + 8, mx - sub.width + 4)
                                    : mx + main.width - 4
         readonly property real sy: Math.max(area.y + 8, Math.min(my + subRowY - 8, area.y + area.height - sub.height - 8))
-        // окно охватывает обе карточки
+        // the window spans both cards
         readonly property real left: root._subOpen ? Math.min(mx, sx) : mx
         readonly property real top: root._subOpen ? Math.min(my, sy) : my
         readonly property real right: root._subOpen ? Math.max(mx + main.width, sx + sub.width) : mx + main.width
@@ -427,7 +427,7 @@ Item {
         x: toLocal(left - root._pad, top - root._pad).x
         y: toLocal(left - root._pad, top - root._pad).y
         closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
-        // раскрывается из угла у якоря
+        // expands from the corner at the anchor
         transformOrigin: below ? (toLeft ? Item.TopRight : Item.TopLeft) : (toLeft ? Item.BottomRight : Item.BottomLeft)
         onClosed: root.closeSub()
         card: pane

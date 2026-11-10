@@ -4,8 +4,8 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// «Список треков» станции: те же 50 треков, что будут играть (Radio.tracks, контекст radio).
-// «Пересобрать» — новый запрос станции, «Сохранить как плейлист» — плейлист из этих треков.
+// The station "Track list": the same 50 tracks that will play (Radio.tracks, radio context).
+// "Rebuild" — a new station request, "Save as playlist" — a playlist from these tracks.
 TrackListPage {
     id: page
 
@@ -13,7 +13,7 @@ TrackListPage {
 
     Component.onCompleted: if (seed !== "") Radio.open(seed)
 
-    // обложка сида — из групп орбиты, иначе первого трека
+    // the seed cover — from the orbit groups, otherwise the first track
     readonly property string seedCover: {
         for (const g of (Radio.seeds ?? []))
             for (const it of (g.items ?? []))

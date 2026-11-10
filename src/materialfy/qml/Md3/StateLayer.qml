@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Effects
 
-// Интерактивная поверхность MD3: слой hover/press + ripple, обрезанный по скруглению.
-// Кладётся поверх содержимого компонента: StateLayer { anchors.fill: parent; radius: ... }
+// MD3 interactive surface: hover/press layer + ripple, clipped to the corner radius.
+// It is placed over the component's content: StateLayer { anchors.fill: parent; radius: ... }
 MouseArea {
     id: root
 
@@ -35,11 +35,11 @@ MouseArea {
         Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
     }
 
-    // Ripple создаётся при первом нажатии: StateLayer в списках сотни (у строки трека их несколько),
-    // а нажимают единицы — волна, маска и анимации каждого стоили бы при каждом открытии страницы.
-    // Слой включается только на время анимации, чтобы не держать лишних FBO.
+    // The ripple is created on first press: there are hundreds of StateLayers in lists (a track row has several),
+    // but only a few are pressed — the wave, mask and animations of each would cost on every page open.
+    // The layer is enabled only for the duration of the animation, to avoid holding extra FBOs.
     property Item _ripple: null
-    // место волны — под содержимым, вложенным в StateLayer
+    // the wave's place is under the content nested in the StateLayer
     Item { id: rippleSlot; anchors.fill: parent }
 
     Component {
@@ -81,10 +81,10 @@ MouseArea {
 
             Rectangle {
                 id: mask
-                parent: rippleSlot      // рядом с волной, не внутри её слоя
+                parent: rippleSlot      // next to the wave, not inside its layer
                 anchors.fill: parent
                 visible: false
-                // слой-маска — только пока виден ripple
+                // mask layer — only while the ripple is visible
                 layer.enabled: rippleHost.visible
                 topLeftRadius: root.topLeftRadius
                 topRightRadius: root.topRightRadius

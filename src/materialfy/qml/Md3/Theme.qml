@@ -3,7 +3,7 @@ import QtQuick
 import Materialfy.Core
 import "ColorMix.js" as Mix
 
-// Токены MD3 Expressive. Цвета берутся из ThemeEngine и плавно анимируются при смене обложки.
+// MD3 Expressive tokens. Colors come from ThemeEngine and animate smoothly when the cover changes.
 Item {
     id: root
 
@@ -11,45 +11,45 @@ Item {
     readonly property bool dark: ThemeEngine.dark
     property int colorDuration: 800
 
-    // ---- Цветовые роли ---------------------------------------------------
-    // Смена схемы — ОДНА анимация прогресса _p, все роли смешиваются по ней синхронно (в OKLab).
-    // Роли onX из спецификации названы fgX (onPrimary → fgPrimary, inverseOnSurface → fgInverseSurface):
-    // QML считает имена вида onSomething обработчиками сигналов, и Behavior на них роняет движок.
+    // ---- Color roles ---------------------------------------------------
+    // A scheme change is ONE progress animation _p; all roles blend along it in sync (in OKLab).
+    // The spec's onX roles are named fgX (onPrimary → fgPrimary, inverseOnSurface → fgInverseSurface):
+    // QML treats names of the form onSomething as signal handlers, and a Behavior on them crashes the engine.
 
-    // true, пока идёт смена схемы: компоненты отключают свои Behavior на цвет, чтобы не было двойной анимации.
+    // true while a scheme change is running: components disable their color Behaviors so there is no double animation.
     readonly property bool transitioning: _anim.running || (wipe !== null && wipe.running)
 
-    // Если задан ThemeWipe — схема меняется «шторкой» в сторону wipeDirection (+1 вправо, -1 влево),
-    // иначе — плавной анимацией всех цветов.
+    // If a ThemeWipe is set — the scheme changes as a "curtain" toward wipeDirection (+1 right, -1 left),
+    // otherwise — by a smooth animation of all colors.
     property Item wipe: null
-    // Шторки окон поверх приложения (островок, плеер в панели задач): идут вместе с основной. Снимки
-    // со старыми цветами снимаются во всех окнах, схема меняется, когда готовы все, и снимки уходят разом
+    // Curtains for windows layered over the app (the island, the taskbar player) run together with the main one. Snapshots
+    // with the old colors are taken in all windows, the scheme changes when all are ready, and the snapshots leave at once
     property var floatingWipes: []
     function addWipe(w) { floatingWipes = floatingWipes.filter(x => x !== w).concat([w]) }
     function removeWipe(w) { floatingWipes = floatingWipes.filter(x => x !== w) }
-    // Окно не в фокусе: декоративные бесконечные анимации стоят. Каждая такая анимация заставляет
-    // перерисовывать всё окно на частоте монитора — это основная нагрузка в фоне.
+    // Window not focused: decorative infinite animations stop. Each such animation forces
+    // a full window repaint at monitor refresh — the main background cost.
     property bool calm: false
-    // Режим для слабых ПК: настройка «вкл» или (по умолчанию, «авто») кадры рисует процессор — программный рендер
-    // (llvmpipe, WARP: нет драйвера видеокарты; Main.qml берёт из softwareRendering окна). Каждый кадр там стоит
-    // десятки миллисекунд ядра: декоративное движение стоит всегда, окно без слоя-скругления.
+    // Low-power PC mode: the setting "on" or (by default, "auto") — frames are drawn by the CPU, software rendering
+    // (llvmpipe, WARP: no GPU driver; Main.qml reads it from the window's softwareRendering). Each frame there costs
+    // tens of milliseconds of core time: decorative motion always stops, and the window gets no rounded-corner layer.
     property bool lowPower: false
-    // Декоративные бесконечные анимации (дрейф фигур и фона, вращение и «дыхание» обложек, бегущая волна) стоят.
-    // Индикаторы загрузки смотрят только на calm: на программном рендере они крутятся — это не украшение.
+    // Decorative infinite animations (shape and background drift, cover rotation and "breathing", the running wave) stop.
+    // Loading indicators only look at calm: under software rendering they spin — that is not decoration.
     readonly property bool quiet: calm || lowPower
-    // Минимум анимаций: настройка «Анимации» или системный флаг. Пространственные длительности
-    // обнуляются, остаются короткие затухания; волны и морфы компоненты выключают сами.
-    // Режим для слабых ПК, включённый вручную, тоже: на совсем слабой машине тормозят и переходы.
+    // Minimal animations: the "Animations" setting or the system flag. Spatial durations
+    // are zeroed, only short fades remain; waves and morphs are disabled by the components themselves.
+    // Manually enabled low-power mode too: on a very weak machine transitions also stutter.
     readonly property bool reducedMotion: Settings.animations === "reduced" || Settings.lowPowerMode === "on"
         || (Settings.animations === "system" && Settings.systemReducedMotion === true)
-    // Цвет схемы, когда ничего не играет
-    readonly property color defaultSeed: "#8C6DFF"   // Ultraviolet, BRAND_SEED в bridges/theme.rs
-    // Новая схема применена: instant — мгновенно под шторкой, иначе — началась плавная анимация.
-    // По нему синхронно с цветами меняется то, что зависит от обложки (атмосферный фон).
+    // The scheme color when nothing is playing
+    readonly property color defaultSeed: "#8C6DFF"   // Ultraviolet, BRAND_SEED in bridges/theme.rs
+    // The new scheme has been applied: instant — immediately under the curtain, otherwise a smooth animation has started.
+    // What depends on the cover (the atmospheric background) changes in sync with the colors.
     signal schemeApplied(bool instant)
     property int wipeDirection: 1
 
-    // публичное имя → ключ в ThemeEngine.colors
+    // public name → key in ThemeEngine.colors
     readonly property var _roles: ({
         background: "background",
         fgBackground: "onBackground",
@@ -119,7 +119,7 @@ Item {
     function _mix(name) {
         const key = _roles[name]
         const b = _toLab[key]
-        if (!b)  // до Component.onCompleted
+        if (!b)  // before Component.onCompleted
             return ThemeEngine.colors[key]
         return Mix.mix(_fromLab[key] ?? b, b, _p)
     }
@@ -127,7 +127,7 @@ Item {
     function _startTransition() {
         const from = {}
         for (const name in _roles)
-            from[_roles[name]] = Mix.toLab(root[name])  // текущий видимый цвет, даже посреди перехода
+            from[_roles[name]] = Mix.toLab(root[name])  // the currently visible color, even mid-transition
         _fromLab = from
         _toLab = Mix.labMap(ThemeEngine.colors)
         _p = 0
@@ -153,7 +153,7 @@ Item {
     Connections {
         target: ThemeEngine
         function onSchemeChanged() {
-            // программный рендер: сразу, без шторки на всё окно (каждый её кадр процессор рисует целиком)
+            // software rendering: immediately, without a curtain over the whole window (the CPU draws each of its frames in full)
             if (root.lowPower)
                 root._applyNow()
             else if (root.wipe !== null && root.wipe.visible)
@@ -174,7 +174,7 @@ Item {
         _wipeTimeout.restart()
     }
     function _wipeReady(w) {
-        if (_wipeLeft <= 0) {       // опоздал: схема уже сменилась
+        if (_wipeLeft <= 0) {       // too late: the scheme has already changed
             w.reveal()
             return
         }
@@ -189,7 +189,7 @@ Item {
             w.reveal()
         _wiping = []
     }
-    // окно, которое не рисуется (спрятано), снимок не даст: долго не ждём
+    // a window that is not drawn (hidden) gives no snapshot: no long wait
     Timer { id: _wipeTimeout; interval: 300; onTriggered: if (root._wipeLeft > 0) root._wipeGo() }
 
     NumberAnimation {
@@ -262,7 +262,7 @@ Item {
     readonly property color neutralVariantPaletteKeyColor: _mix("neutralVariantPaletteKeyColor")
     readonly property color errorPaletteKeyColor: _mix("errorPaletteKeyColor")
 
-    // Прозрачность слоёв состояния
+    // State layer opacity
     readonly property QtObject stateLayer: QtObject {
         readonly property real hover: 0.08
         readonly property real focus: 0.10
@@ -272,13 +272,13 @@ Item {
         readonly property real disabledContainer: 0.12
     }
 
-    // ---- Типографика ---------------------------------------------------------
-    // Google Sans (OFL, вшит в assets/fonts). Google Sans Flex не подходит: в нём нет кириллицы.
+    // ---- Typography ---------------------------------------------------------
+    // Google Sans (OFL, embedded in assets/fonts). Google Sans Flex does not work: it has no Cyrillic.
     readonly property string fontFamily: _pickFamily(["Google Sans", "Roboto Flex", "Roboto", "Noto Sans"])
     readonly property string iconFamily: "Material Symbols Rounded"
     readonly property bool variableFont: fontFamily === "Google Sans"
 
-    // Оси вариативного Google Sans: wght 400..700, opsz 17..18 (17 — текстовый крой для мелкого кегля).
+    // Variable Google Sans axes: wght 400..700, opsz 17..18 (17 is the text cut for small sizes).
     function fontAxes(size, weight) {
         if (!variableFont)
             return {}
@@ -312,7 +312,7 @@ Item {
         labelSmall:     { size: 11, line: 16, weight: 500, tracking: 0.5 }
     })
 
-    // ---- Формы (радиусы скругления) -----------------------------------------
+    // ---- Shapes (corner radii) -----------------------------------------
     readonly property QtObject shape: QtObject {
         readonly property real none: 0
         readonly property real extraSmall: 4
@@ -326,7 +326,7 @@ Item {
         readonly property real full: 9999
     }
 
-    // ---- Отступы -------------------------------------------------------------
+    // ---- Spacing -------------------------------------------------------------
     readonly property QtObject space: QtObject {
         readonly property real xs: 4
         readonly property real s: 8
@@ -337,8 +337,8 @@ Item {
     }
 
     // ---- Motion --------------------------------------------------------------
-    // Пружины MD3 Expressive аппроксимированы кривыми с перелётом (OutBack),
-    // эффекты (цвет, прозрачность) — без перелёта.
+    // MD3 Expressive springs are approximated with overshoot curves (OutBack),
+    // effects (color, opacity) — without overshoot.
     readonly property QtObject motion: QtObject {
         readonly property int spatialFast: root.reducedMotion ? 0 : 350
         readonly property int spatialDefault: root.reducedMotion ? 0 : 500

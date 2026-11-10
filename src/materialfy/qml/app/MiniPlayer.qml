@@ -3,25 +3,25 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Плавающий мини-плеер-пилюля (низ контент-панели).
+// The floating mini-player pill (bottom of the content panel).
 Item {
     id: root
 
     readonly property Item coverItem: coverBox
-    // узкое окно: одна строка — обложка, трек, «играть» + «дальше», лайк и «⋯»;
-    // режимы, громкость и панели — в полноэкранном плеере
+    // narrow window: one line — cover, track, "play" + "next", like and "⋯";
+    // modes, volume and panels — in the fullscreen player
     property bool compact: false
-    signal openNowPlaying(point coverCenter)   // центр обложки в координатах окна — отсюда растёт блоб
+    signal openNowPlaying(point coverCenter)   // cover center in window coordinates — the blob grows from here
 
     implicitHeight: 72
 
-    // В узкой пилюле место нужнее треку: по мере сужения уходят «⋯» (меню остаётся по ПКМ на треке),
-    // громкость (она есть в полноэкранном плеере) и перемешивание с повтором
-    // с запасом ±16 px: у самой границы кнопки не мигают туда-сюда
+    // In the narrow pill the track needs the space more: as it narrows, "⋯" goes away (the menu stays on right click),
+    // volume (it exists in the fullscreen player) and shuffle with repeat
+    // with a ±16 px margin: right at the boundary the buttons do not flicker back and forth
     property bool roomForMenu: width >= 880
     property bool roomForVolume: width >= 760
     property bool roomForModes: width >= 640
-    // имя чужого устройства в кнопке Connect; уже — только значок (имя есть под названием трека)
+    // the name of another device in the Connect button; already — icon only (the name is under the track title)
     property bool roomForDeviceName: width >= 900
     onWidthChanged: {
         const room = (now, edge) => now ? width >= edge - 16 : width >= edge + 16
@@ -31,7 +31,7 @@ Item {
         roomForModes = room(roomForModes, 640)
     }
 
-    // Кнопка, которая уходит при сужении: место схлопывается анимацией, сама она гаснет и уменьшается
+    // A button that leaves as the pill narrows: its space collapses with an animation, and the button itself fades and shrinks
     component Fold: Item {
         id: fold
         property bool shown: true
@@ -54,7 +54,7 @@ Item {
         }
     }
 
-    // Позиция приходит ~5 раз в секунду (у другого устройства — опросом); между обновлениями — плавно.
+    // The position arrives ~5 times a second (from another device — by polling); between updates it moves smoothly.
     readonly property alias progress: playerProgress.value
     PlayerProgress { id: playerProgress; active: seekBar.visible && !seekBar.dragging }
 
@@ -77,8 +77,8 @@ Item {
         anchors.rightMargin: 16
         spacing: 4
 
-        // Управление
-        // У выпуска подкаста вместо перемешивания и повтора — «−10 с» и «+30 с»
+        // Controls
+        // For a podcast episode, instead of shuffle and repeat — "−10 s" and "+30 s"
         Fold { shown: root.roomForModes && !root.compact; IconButton {
             icon: Player.isEpisode ? "replay_10" : "shuffle"
             checkable: !Player.isEpisode
@@ -101,7 +101,7 @@ Item {
                 size: 52
                 playing: Player.playing
                 loading: Player.buffering
-                spin: Player.isLocal === true      // пульт не перерисовывает окно каждый кадр
+                spin: Player.isLocal === true      // the remote does not redraw the window every frame
                 enabled: Player.hasTrack
                 onClicked: Player.togglePlay()
             }
@@ -116,16 +116,16 @@ Item {
             onClicked: Player.isEpisode ? Player.seekRelative(30000) : Player.cycleRepeat()
         } }
 
-        // Трек
+        // Track
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.leftMargin: 12
             Layout.rightMargin: 12
-            // в самой узкой раскладке текст не залезает под лайк
+            // in the narrowest layout the text does not run under the like button
             clip: true
 
-            // Колесо над обложкой и названием — громкость, как в мини-режиме: щелчок ±5 %, тачпад плавно
+            // Wheel over the cover and title — volume, as in mini mode: a notch is ±5 %, trackpad smoothly
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: event => {
@@ -165,7 +165,7 @@ Item {
                         color: Theme.surfaceContainerHigh
                         Icon { anchors.centerIn: parent; name: Player.isEpisode ? "podcasts" : "music_note"; size: 24; color: Theme.fgSurfaceVariant }
                     }
-                    // громкость колесом: проценты поверх обложки, гаснут через секунду
+                    // wheel volume: percentages over the cover, fading after a second
                     Rectangle {
                         id: volumeHint
                         anchors.fill: parent
@@ -182,7 +182,7 @@ Item {
                         }
                         Timer { id: volumeHintHide; interval: 1000; onTriggered: volumeHint.opacity = 0 }
                     }
-                    // играет другое устройство — его значок в углу обложки
+                    // another device is playing — its badge in the cover corner
                     DeviceBadge {
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
@@ -200,19 +200,19 @@ Item {
                         text: Player.hasTrack ? Player.title : I18n.t("Nothing playing")
                         type: "titleSmall"
                     }
-                    // Исполнитель · кодек или «Играет на …» (по правому краю — прямо над временем)
+                    // Artist · codec, or "Playing on …" (at the right edge — right above the time)
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        // Исполнители — по ссылке на каждого (карточка по наведению). Выпуск, ошибка, пустой
-                        // плеер и тесная пилюля с чужим устройством остаются одной подписью
+                        // Artists — each one is a link (card on hover). Episode, error, empty
+                        // player and a tight pill with another device stay a single label
                         readonly property bool artistLinks: Player.errorText === "" && Player.hasTrack
                                                             && Player.isEpisode !== true
                                                             && !(remoteLabel.shown && !root.roomForMenu)
                         ArtistLinks {
                             Layout.fillWidth: true
                             visible: parent.artistLinks
-                            // карточки по наведению тут нет: клик по имени сразу открывает исполнителя
+                            // no hover card here: clicking the name opens the artist right away
                             preview: false
                             refs: Player.track ? (Player.track.artistRefs ?? []) : []
                             text: Player.artist
@@ -222,7 +222,7 @@ Item {
                         LinkLabel {
                             Layout.fillWidth: true
                             visible: !parent.artistLinks && !(remoteLabel.shown && !root.roomForMenu && Player.errorText === "")
-                            // у выпуска подкаста — ссылка на подкаст
+                            // for a podcast episode — a link to the podcast
                             linkEnabled: Player.errorText === "" && Player.hasTrack && Player.isEpisode === true
                                          && (Player.track.showId ?? "") !== ""
                             onClicked: Catalog.openShow(Player.track.showId ?? "")
@@ -280,8 +280,8 @@ Item {
             }
         }
 
-        // Оценка: «не рекомендовать» — только в радио (там она влияет на подбор; сама переключает трек),
-        // лайк — всегда, у выпуска — «сохранить» (закладка)
+        // Rating: "do not recommend" — radio only (there it affects the selection and switches the track itself),
+        // like — always, for an episode — "save" (bookmark)
         Fold { shown: Player.source === "radio" && !Player.isEpisode && !root.compact; IconButton {
             icon: "thumb_down"
             enabled: Player.hasTrack
@@ -311,7 +311,7 @@ Item {
         } }
         Fold { shown: !root.compact; Item { width: 8; height: 8 } }
 
-        // Панели и громкость
+        // Panels and volume
         Fold { shown: !root.compact; IconButton {
             icon: "title"
             checkable: true
@@ -319,7 +319,7 @@ Item {
             checked: Settings.rightPanelOpen && Settings.rightPanelTab === "lyrics"
             onClicked: root._togglePanel("lyrics")
         } }
-        // Очередь — ещё и цель для броска трека из списков: подсвечивается и чуть растёт
+        // The queue is also a drop target for tracks from lists: it highlights and grows slightly
         Fold { shown: !root.compact; IconButton {
             id: queueButton
             icon: "queue_music"
@@ -340,11 +340,11 @@ Item {
                 }
             }
         } }
-        // Устройства Spotify Connect (в узкой пилюле — тоже: перенос нужен и там)
+        // Spotify Connect devices (in the narrow pill too: transfer is needed there as well)
         Fold { DeviceButton { iconOnly: root.compact || !root.roomForDeviceName } }
         Fold { shown: root.roomForVolume && !root.compact; Row {
             id: volumeRow
-            // громкость играющего устройства; у части устройств её меняют только на них самих
+            // volume of the playing device; on some devices it can only be changed on the device itself
             readonly property bool locked: Player.remote === true && Player.canSetVolume === false
             leftPadding: 8
             spacing: 4
@@ -366,7 +366,7 @@ Item {
         } }
     }
 
-    // Бросок на кнопку очереди: трек из списка (Drag.source с trackData() или track) или ссылка Spotify
+    // Drop on the queue button: a track from a list (Drag.source with trackData() or track) or a Spotify link
     function _dropToQueue(drop) {
         const src = drop.source
         if (src) {

@@ -1,6 +1,6 @@
-//! Платформенный слой: каталоги, настройки, системные предпочтения,
-//! MPRIS (Linux) и «единственный экземпляр» (Linux — D-Bus, Windows — именованный канал, macOS — unix-сокет).
-//! Секреты Spotify здесь не хранятся — это sf-auth (keyring-core).
+//! The platform layer: directories, settings, system preferences,
+//! MPRIS (Linux) and "single instance" (Linux — D-Bus, Windows — a named pipe, macOS — a unix socket).
+//! Spotify secrets are not stored here — that is sf-auth (keyring-core).
 pub mod dirs;
 pub mod kwin;
 pub mod mpris;

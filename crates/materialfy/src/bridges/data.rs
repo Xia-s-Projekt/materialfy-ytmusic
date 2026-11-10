@@ -1,5 +1,5 @@
-// AlbumData / ArtistData / ShowData / EpisodeData — данные страниц, которые возвращают Catalog.album/artist/show/episode(id).
-// Создаются из Rust (make_unique) с CppOwnership и живут в кэше моста Catalog до конца процесса.
+// AlbumData / ArtistData / ShowData / EpisodeData - page data returned by Catalog.album/artist/show/episode(id).
+// Created from Rust (make_unique) with CppOwnership and living in the Catalog bridge's cache until the process ends.
 use std::pin::Pin;
 
 use std::collections::HashSet;
@@ -63,7 +63,7 @@ pub mod qobject {
         #[qproperty(bool, loading, READ, NOTIFY = changed)]
         #[qproperty(QString, error_text, cxx_name = "errorText", READ, NOTIFY = changed)]
         #[qproperty(i32, total, READ, NOTIFY = changed)]
-        /// идёт догрузка следующей страницы (loadMore)
+        /// the next page is loading (loadMore)
         #[qproperty(bool, loading_more, cxx_name = "loadingMore", READ, NOTIFY = changed)]
         #[qproperty(*mut QObject, episodes, READ = episodes_ptr, CONSTANT)]
         type ShowData = super::ShowDataRust;
@@ -72,7 +72,7 @@ pub mod qobject {
 
         #[qsignal]
         fn changed(self: Pin<&mut ShowData>);
-        /// Догрузить следующую страницу выпусков (по 50).
+        /// Load the next page of episodes (50 at a time).
         #[qinvokable]
         #[cxx_name = "loadMore"]
         fn load_more(self: Pin<&mut ShowData>);
@@ -114,7 +114,7 @@ pub mod qobject {
     impl cxx_qt::Threading for ShowData {}
 }
 
-/// Страница каталога: объект во владении Rust, который Catalog создаёт, кэширует и заполняет.
+/// A catalog page: an object owned by Rust that Catalog creates, caches and fills.
 pub(crate) trait PageData: cxx::memory::UniquePtrTarget + Sized + 'static {
     type Page: Send + 'static;
     fn new_object() -> UniquePtr<Self>;
@@ -156,7 +156,7 @@ page_data!(qobject::ArtistData, ArtistPage);
 page_data!(qobject::ShowData, ShowPage);
 page_data!(qobject::EpisodeData, EpisodePage);
 
-/// Текст ошибки загрузки страницы — по-русски.
+/// Page load error text - in Russian.
 pub(crate) fn error_text(error: &ServiceError) -> String {
     match error {
         ServiceError::NotSignedIn | ServiceError::Api(YtError::NotSignedIn) => mf_i18n::t("Sign in to your account"),
@@ -176,7 +176,7 @@ fn to_map<T: Serialize>(value: &T) -> QVariantMap {
     }
 }
 
-/// Контекст модели страницы: тип + URI, название и обложка для карточки «Играет из …».
+/// Page model context: type + URI, title and cover for the "Playing from ..." card.
 fn context(kind: &str, uri: &str, title: &str, cover: &str) -> PlayContext {
     if uri.is_empty() {
         PlayContext::new(kind)
@@ -201,7 +201,7 @@ impl Default for AlbumDataRust {
 }
 
 impl qobject::AlbumData {
-    /// Новый объект во владении Rust (QML его не удалит).
+    /// A new object owned by Rust (QML will not delete it).
     pub fn create() -> UniquePtr<Self> {
         let data = qobject::album_data_make_unique();
         if !data.is_null() {
@@ -223,7 +223,7 @@ impl qobject::AlbumData {
         model_ptr(&self.tracks)
     }
 
-    /// Повторная загрузка после ошибки.
+    /// Reload after an error.
     pub fn begin_loading(mut self: Pin<&mut Self>) {
         let mut this = self.as_mut().rust_mut();
         this.loading = true;
@@ -349,9 +349,9 @@ pub struct ShowDataRust {
     total: i32,
     episodes: UniquePtr<DictListModel>,
     loading_more: bool,
-    /// id шоу (для loadMore)
+    /// show id (for loadMore)
     show_id: String,
-    /// номер заполнения страницы: ответ loadMore от прошлого заполнения отбрасывается
+    /// page fill number: a loadMore response from a past fill is discarded
     fills: u64,
 }
 
@@ -398,7 +398,7 @@ impl qobject::ShowData {
         self.episodes.as_ref().map_or(0, |m| m.rows().len())
     }
 
-    /// Следующая страница выпусков; повторный вызов во время догрузки и после последней страницы — ничего.
+    /// The next page of episodes; a repeated call during loading and after the last page does nothing.
     fn load_more(mut self: Pin<&mut Self>) {
         let offset = self.loaded_count();
         if self.loading || self.loading_more || self.show_id.is_empty() || offset >= self.total.max(0) as usize {
@@ -430,7 +430,7 @@ impl qobject::ShowData {
                     .unwrap_or_default();
                 let fresh: Vec<EpisodeItem> = items.into_iter().filter(|e| !known.contains(&e.episode_id)).collect();
                 if fresh.is_empty() {
-                    // Spotify отдал меньше, чем обещал total: больше не просить
+                    // Spotify returned less than total promised: do not ask for more
                     this.total = offset.min(i32::MAX as usize) as i32;
                 } else {
                     with_model(&mut this.episodes, |m| m.append_rows(to_rows(&fresh)));
@@ -467,7 +467,7 @@ impl qobject::ShowData {
         self.changed();
     }
 
-    /// id шоу до загрузки (если в ответе его не окажется).
+    /// show id before loading (if it is not in the response).
     pub fn set_show_id(self: Pin<&mut Self>, id: &str) {
         self.rust_mut().show_id = id.to_owned();
     }

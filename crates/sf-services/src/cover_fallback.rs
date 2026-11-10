@@ -1,11 +1,11 @@
-//! Обложки не со Spotify: когда его картинку не дало ни одно зеркало, обложку ищем по названию и исполнителю —
-//! iTunes, затем Deezer, затем Яндекс Музыка (все без ключа, все открываются в РФ). Берём только совпадение по
-//! исполнителю (и по названию для альбома и трека): чужая обложка хуже пустой.
+//! Covers not from Spotify: when none of its mirrors gave the picture, the cover is looked up by title and artist —
+//! iTunes, then Deezer, then Yandex Music (all without a key, all open in RU). Only a match by
+//! artist is taken (and by title for an album and a track): someone else's cover is worse than an empty one.
 //!
-//! У каждого источника свой бюджет запросов (замерено): iTunes — ~20 в минуту, дальше бан 403 на минуты (берём 15);
-//! Deezer — 50 за 5 с (берём 40); Яндекс — пачка из 10+ разом даёт 429, 3–4 в секунду держит (берём 3). Источник
-//! без бюджета пропускается — обложка идёт к следующему, а не ждёт; ответ 429/403 ставит источник на паузу.
-//! Найденное и «не нашлось» помнятся до конца работы, одинаковые запросы в полёте не дублируются.
+//! Each source has its own request budget (measured): iTunes — ~20 per minute, then a 403 ban for minutes (we take 15);
+//! Deezer — 50 per 5 s (we take 40); Yandex — a batch of 10+ at once gives 429, 3–4 per second holds (we take 3). A source
+//! without budget is skipped — the cover goes to the next one instead of waiting; a 429/403 answer pauses the source.
+//! What was found and "not found" are remembered until the end of the run, identical requests in flight are not duplicated.
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use tokio::sync::watch;
 
-/// Что на обложке.
+/// What is on the cover.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CoverKind {
     Album,
@@ -42,7 +42,7 @@ enum Source {
 const SOURCES: [Source; 3] = [Source::Itunes, Source::Deezer, Source::Yandex];
 
 impl Source {
-    /// (запросов, за сколько)
+    /// (requests, per how long)
     fn budget(self) -> (usize, Duration) {
         match self {
             Self::Itunes => (15, Duration::from_secs(60)),
@@ -51,7 +51,7 @@ impl Source {
         }
     }
 
-    /// Фото исполнителей в поиске iTunes нет
+    /// iTunes search has no artist photos
     fn serves(self, kind: CoverKind) -> bool {
         !(self == Self::Itunes && kind == CoverKind::Artist)
     }
@@ -90,7 +90,7 @@ impl Source {
     }
 }
 
-/// Скользящее окно запросов и пауза после отказа источника.
+/// A sliding window of requests and a pause after a source refusal.
 #[derive(Default)]
 struct Gate {
     sent: VecDeque<Instant>,
@@ -119,7 +119,7 @@ type Key = (CoverKind, String, String);
 enum Outcome {
     Found(String),
     NotFound,
-    /// сеть, квота, пропущен без бюджета — спросить снова в другой раз
+    /// network, quota, skipped without budget — ask again another time
     Unknown,
 }
 
@@ -134,7 +134,7 @@ impl CoverFallback {
         Arc::new(Self::default())
     }
 
-    /// URL обложки или None. `artist` — первый исполнитель; для Artist `title` пустой.
+    /// Cover URL or None. `artist` — the first artist; for Artist `title` is empty.
     pub async fn find(&self, http: &sf_api::Http, kind: CoverKind, artist: &str, title: &str) -> Option<String> {
         let key: Key = (kind, normalize(artist), normalize(title));
         if key.1.is_empty() || (kind != CoverKind::Artist && key.2.is_empty()) {
@@ -167,7 +167,7 @@ impl CoverFallback {
             }
         }
         if found.is_none() && !settled {
-            // кто-то не ответил — в следующий раз спросим снова
+            // someone did not answer — we will ask again next time
             self.known.lock().unwrap_or_else(|lock| lock.into_inner()).remove(&key);
         }
         let _ = tx.send(Some(found.clone()));
@@ -191,7 +191,7 @@ impl CoverFallback {
         };
         let status = reply.status();
         if status.as_u16() == 429 || status.as_u16() == 403 {
-            // лимит: источник отдыхает (iTunes банит на минуты)
+            // limit: the source rests (iTunes bans for minutes)
             let pause = if source == Source::Itunes { Duration::from_secs(300) } else { Duration::from_secs(30) };
             self.gates.lock().unwrap_or_else(|lock| lock.into_inner())[slot].paused_until = Some(Instant::now() + pause);
             tracing::debug!("cover fallback {source:?}: {status}, paused");
@@ -204,7 +204,7 @@ impl CoverFallback {
             return Outcome::Unknown;
         };
         if source == Source::Deezer && json.get("error").is_some() {
-            // квота Deezer приходит ответом 200 с ошибкой
+            // Deezer's quota comes as a 200 answer with an error
             self.gates.lock().unwrap_or_else(|lock| lock.into_inner())[slot].paused_until =
                 Some(Instant::now() + Duration::from_secs(6));
             return Outcome::Unknown;
@@ -216,8 +216,8 @@ impl CoverFallback {
     }
 }
 
-/// Лучшая обложка из ответа поиска: исполнитель совпадает; у альбома и трека — ещё и название (точно, а нет —
-/// название начинается с искомого: «Album (Deluxe)»).
+/// The best cover from a search answer: the artist matches; for an album and a track — the title too (exactly, or if not —
+/// the title starts with the searched one: "Album (Deluxe)").
 fn pick(source: Source, json: &Value, kind: CoverKind, artist: &str, title: &str) -> Option<String> {
     let (artist, title) = (normalize(artist), normalize(title));
     let items: Vec<Item> = match source {
@@ -245,7 +245,7 @@ fn pick(source: Source, json: &Value, kind: CoverKind, artist: &str, title: &str
     best.and_then(|item| item.image.clone())
 }
 
-/// Результат поиска в общем виде: нормализованные название и исполнители, картинка ~500 px.
+/// A search result in a general form: normalized title and artists, a picture ~500 px.
 struct Item {
     title: String,
     artists: Vec<String>,
@@ -262,7 +262,7 @@ fn https(url: &str) -> Option<String> {
 
 fn itunes_item(it: &Value, kind: CoverKind) -> Item {
     let title = if kind == CoverKind::Track { &it["trackName"] } else { &it["collectionName"] };
-    // artworkUrl100 …/100x100bb.jpg — размер задаётся в адресе
+    // artworkUrl100 …/100x100bb.jpg — the size is set in the address
     let image = text(&it["artworkUrl100"]).replace("100x100bb", "600x600bb");
     Item { title: normalize(text(title)), artists: vec![normalize(text(&it["artistName"]))], image: https(&image) }
 }
@@ -273,7 +273,7 @@ fn deezer_item(it: &Value, kind: CoverKind) -> Item {
         CoverKind::Track => (&it["title"], &it["artist"]["name"], &it["album"]["cover_big"]),
         CoverKind::Artist => (&it["name"], &it["name"], &it["picture_big"]),
     };
-    // у исполнителя без фото Deezer отдаёт заглушку с пустым id: …/images/artist//…
+    // for an artist without a photo Deezer returns a placeholder with an empty id: …/images/artist//…
     let image = https(text(image)).filter(|url| !url.contains("//500x500") && !url.contains("/artist//"));
     Item { title: normalize(text(title)), artists: vec![normalize(text(artist))], image }
 }
@@ -287,13 +287,13 @@ fn yandex_item(it: &Value, kind: CoverKind) -> Item {
             (&it["title"], artists.unwrap_or_default(), cover)
         }
     };
-    // coverUri: "avatars.yandex.net/get-music-content/…/%%" — %% заменяется размером
+    // coverUri: "avatars.yandex.net/get-music-content/…/%%" — %% is replaced with the size
     let cover = text(cover);
     let image = (!cover.is_empty()).then(|| format!("https://{}", cover.replace("%%", "600x600")));
     Item { title: normalize(text(title)), artists, image }
 }
 
-/// Для сравнения: строчные буквы и цифры, остальное — один пробел.
+/// For comparison: lowercase letters and digits, everything else — one space.
 fn normalize(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut gap = false;
@@ -340,8 +340,8 @@ mod tests {
 
     #[test]
     fn cyrillic_and_punctuation_compare_loosely() {
-        let reply = json!({ "data": [deezer_album("Платина", "Платина", "https://x/p.jpg")] });
-        assert_eq!(pick(Source::Deezer, &reply, CoverKind::Album, "ПЛАТИНА", "платина!").as_deref(), Some("https://x/p.jpg"));
+        let reply = json!({ "data": [deezer_album("Platinum", "Platinum", "https://x/p.jpg")] });
+        assert_eq!(pick(Source::Deezer, &reply, CoverKind::Album, "PLATINUM", "platinum!").as_deref(), Some("https://x/p.jpg"));
         assert_eq!(normalize("  AC/DC — Back in Black "), "ac dc back in black");
     }
 

@@ -3,11 +3,11 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Левая навигация. compact — рейл из иконок (узкое окно или свёрнуто вручную).
+// Left navigation. compact — a rail of icons (narrow window or collapsed manually).
 //
-// Геометрия одна для обоих режимов: поля 12 px, все иконки (знак, разделы, обложки плейлистов, аватар)
-// центрированы на оси x = 40 — это центр рейла шириной 80. При сворачивании анимируется только ширина
-// (её ведёт Main.qml), подписи гаснут, высоты не меняются — поэтому ничего не прыгает.
+// The geometry is the same for both modes: 12 px margins, all icons (the mark, sections, playlist covers, avatar)
+// are centered on the x = 40 axis — the center of an 80-wide rail. On collapse only the width animates
+// (driven by Main.qml), the labels fade out, heights do not change — so nothing jumps.
 Item {
     id: root
 
@@ -15,17 +15,17 @@ Item {
     property bool compact: false
     readonly property bool signedIn: Auth.state === "signedIn"
     signal newPlaylistRequested()
-    // Шторка (узкое окно): в раскладке ширины не занимает, по openDrawer() выезжает поверх контента
+    // Drawer (narrow window): takes no width in the layout, on openDrawer() slides out over the content
     property bool drawer: false
-    // Открыта поверх контента: шторка (drawer) или раскрытый рейл, когда рейл навязан шириной окна
+    // Open over the content: a drawer or an expanded rail, when the rail is forced by the window width
     property bool drawerOpen: false
-    // Рейл из-за ширины окна (а не свёрнут вручную): кнопка меню раскрывает панель поверх контента
+    // Rail due to the window width (not collapsed manually): the menu button opens the panel over the content
     readonly property bool forcedRail: compact && !drawer && !Settings.sidebarCollapsed
-    // Закрывается анимацией — до её конца карточка шторки ещё видна
+    // It closes with an animation — the drawer card is still visible until it ends
     property bool closing: false
-    // Переход в шторку: место в раскладке сжимается анимацией (Main.qml), а рейл уезжает влево вместе с ним
+    // Switching to the drawer: the layout space shrinks with an animation (Main.qml), and the rail slides left with it
     readonly property bool collapsing: drawer && !drawerOpen && !closing && width > 0.5
-    // Панель поверх контента (карточка шторки, затемнение, своя ширина 264)
+    // Panel over the content (drawer card, dimming, its own width of 264)
     readonly property bool floating: drawer ? !collapsing : (drawerOpen || closing)
     readonly property bool rail: (compact && !drawer && !drawerOpen) || collapsing
 
@@ -38,7 +38,7 @@ Item {
         closeTimer.restart()
     }
     function go(name, props) { closeDrawer(); router.reset(name, props) }
-    // Меню строки (ПКМ): закрепить/открепить в «Библиотеке». Закреплённые — первыми в списках.
+    // Row menu (right-click): pin/unpin in the "Library". Pinned ones come first in the lists.
     property var _menuEntry: null
     function openRowMenu(entry, point) {
         _menuEntry = entry
@@ -61,12 +61,12 @@ Item {
             w.notify(was ? I18n.t("Unpinned") : I18n.t("Pinned — in this app only"))
     }
 
-    // Строка боковой панели: плейлист/папка — страницей приложения, остальное — карточкой каталога
+    // Sidebar row: playlist/folder — as an app page, the rest — as a catalog card
     function openEntry(entry) {
         const kind = entry.kind ?? ""
         closeDrawer()
         if (kind === "dj")
-            // DJ не плейлист: у него нет страницы со списком треков — только запуск
+            // A DJ is not a playlist: it has no page with a track list — only a launch
             Player.playContext(entry.uri ?? "", "")
         else if (kind === "liked")
             router.reset("liked")
@@ -86,7 +86,7 @@ Item {
     readonly property real expandedWidth: 264
     readonly property real railWidth: 80
     readonly property real margin: 12
-    readonly property real iconInset: 14     // квадрат иконки 28 px: 12 + 14 + 14 = 40 — ось рейла
+    readonly property real iconInset: 14     // icon square of 28 px: 12 + 14 + 14 = 40 — the rail axis
     readonly property real labelWidth: expandedWidth - 2 * margin - iconInset - 28 - 8 - 12
 
     readonly property var sections: [
@@ -97,11 +97,11 @@ Item {
         { name: "liked", icon: "favorite", text: I18n.t("Liked Songs") }
     ]
 
-    // Плейлисты и папки верхнего уровня rootlist (порядок Spotify; закреплённые — первыми, их ставит сервис).
-    // Раскрытая папка (стрелка справа) показывает свои плейлисты и вложенные папки прямо в списке, с отступом;
-    // клик по самой папке открывает её страницей (FolderPage). Раскрытые папки помнятся, пока открыто приложение.
-    // Режим «Библиотека»: вместо дерева плейлистов — последние добавленные/обновлённые строки всех
-    // разделов (плейлисты, альбомы, исполнители, подкасты и «Любимые»). Папок в этой сводке нет.
+    // Top-level playlists and folders from rootlist (Spotify order; pinned ones first, placed by the service).
+    // An expanded folder (arrow on the right) shows its playlists and nested folders right in the list, indented;
+    // a click on the folder itself opens it as a page (FolderPage). Expanded folders are remembered while the app is open.
+    // "Library" mode: instead of the playlist tree — the most recently added/updated rows of all
+    // sections (playlists, albums, artists, podcasts and "Liked"). This summary has no folders.
     readonly property bool libraryMode: Settings.sidebarLibrary === true
     readonly property var _recent: signedIn && libraryMode ? Library.recentEntries(40) : null
     readonly property var _source: signedIn && !libraryMode ? Library.items("playlists", "all", "spotify") : null
@@ -127,7 +127,7 @@ Item {
         playlists = out
     }
     on_SourceChanged: _rebuild()
-    // при входе модель появляется раньше, чем Connections на неё переключится
+    // on entry the model appears before Connections switches to it
     on_RecentChanged: _rebuild()
     onRailChanged: _rebuild()
     Connections {
@@ -144,15 +144,15 @@ Item {
         function onModelReset() { root._rebuild() }
         function onDataChanged() { root._rebuild() }
     }
-    // режим переключили в настройках — список меняется целиком
+    // the mode was switched in settings — the list changes entirely
     onLibraryModeChanged: _rebuild()
-    // содержимое папок меняется вместе с деревом (обложки, названия, перенос в Spotify)
+    // folder contents change with the tree (covers, names, reordering in Spotify)
     Connections {
         target: Library
         function onEntriesChanged() {
             root._rebuild()
         }
-        // закрепили/открепили строку — сводка переставляется
+        // a row was pinned/unpinned — the summary is rearranged
         function onPinsChanged() { if (root.libraryMode) root._rebuild() }
     }
 
@@ -166,7 +166,7 @@ Item {
         Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
     }
 
-    // Затемнение под шторкой — на всё окно (координаты пересчитываются при открытии)
+    // The dimming under the drawer covers the whole window (coordinates are recomputed on open)
     Rectangle {
         id: scrim
         property point origin: Qt.point(0, 0)
@@ -190,7 +190,7 @@ Item {
         x: !root.drawer ? 0 : root.drawerOpen ? 0 : root.collapsing ? root.width - root.railWidth : -width - 24
         visible: !root.drawer || root.drawerOpen || root.collapsing || root.closing
         clip: root.floating && !root.drawer
-        // шторка выезжает слева; раскрытый рейл растёт вширь из рейла (MD3: rail → drawer)
+        // the drawer slides out from the left; the expanded rail grows wider from the rail (MD3: rail -> drawer)
         Behavior on x {
             enabled: root.drawer && (root.drawerOpen || root.closing)
             NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate }
@@ -201,8 +201,8 @@ Item {
         }
         Keys.onEscapePressed: root.closeDrawer()
 
-        // Пустые места панели (вокруг логотипа, между пунктами, под плейлистами) тянут окно, как верхняя
-        // панель; двойной клик — развернуть. Пункты, прокрутка и карточка аккаунта забирают нажатие сами.
+        // Empty spots of the panel (around the logo, between items, below the playlists) drag the window, like the top
+        // bar; a double click — expand. The items, scrolling and the account card take the click themselves.
         DragHandler {
             property bool manual: false
             target: null
@@ -221,7 +221,7 @@ Item {
             }
         }
 
-        // Карточка шторки: скруглён правый край (MD3 modal navigation drawer)
+        // Drawer card: rounded right edge (MD3 modal navigation drawer)
         Rectangle {
             id: drawerBg
             visible: root.floating
@@ -241,8 +241,8 @@ Item {
         anchors.rightMargin: root.margin
         spacing: 2
 
-        // Шапка: знак «Волна-M» на оси рейла + надпись. Знак — переключатель свернуть / развернуть
-        // (наведение превращает его в кнопку); в узком окне — раскрыть панель поверх контента.
+        // Header: the "Wave-M" mark on the rail axis + a label. The mark is the collapse / expand toggle
+        // (hovering turns it into a button); in a narrow window — open the panel over the content.
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 48
@@ -275,17 +275,17 @@ Item {
                 labelWidth: root.labelWidth
                 icon: modelData.icon
                 text: modelData.text
-                // до входа разделы неактивны (38 %): смотреть в них нечего; «Главная» — с приглашением войти
+                // before sign-in the sections are inactive (38%): there is nothing to look at in them; "Home" — with an invitation to sign in
                 enabled: root.signedIn || modelData.name === "home"
                 opacity: enabled ? 1 : Theme.stateLayer.disabledContent
-                // «Библиотека» не подсвечена, пока внутри открыта папка — её подсвечивает пункт папки
+                // "Library" is not highlighted while a folder is open inside it — the folder item highlights it
                 selected: root.router.rootName === modelData.name
                           && !(modelData.name === "library" && (root.router.current.props.folderId ?? "") !== "")
                 onClicked: root.go(modelData.name)
             }
         }
 
-        // Заголовок секции: подпись гаснет, волнистый разделитель остаётся и в рейле
+        // Section header: the label fades out, the wavy divider remains in the rail too
         Item {
             id: sectionHeader
             Layout.fillWidth: true
@@ -301,7 +301,7 @@ Item {
                 color: Theme.fgSurfaceVariant
             }
             WavyDivider {
-                // в режиме «Библиотека» и в рейле кнопки «+» нет — линия идёт до самого края
+                // in "Library" mode and in the rail there is no "+" button — the line runs to the very edge
                 x: root.rail ? root.iconInset : sectionLabel.x + sectionLabel.implicitWidth + 10
                 width: parent.width - x - (root.rail || root.libraryMode ? 0 : 44)
                 anchors.verticalCenter: parent.verticalCenter
@@ -315,7 +315,7 @@ Item {
                 iconColor: Theme.primary
                 enabled: root.signedIn
                 onClicked: root.newPlaylistRequested()
-                // в режиме «Библиотека» список не плейлистов: кнопка «новый плейлист» тут не к месту
+                // in "Library" mode the list is not of playlists: the "new playlist" button is out of place here
                 opacity: root.rail || root.libraryMode ? 0 : 1
                 visible: opacity > 0
                 Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
@@ -357,7 +357,7 @@ Item {
             size: 32
         }
         FadeLabel {
-            // сводка «Библиотеки» пуста и уже загружена: пока идёт загрузка, пустота ничего не значит
+            // the "Library" summary is empty and already loaded: while loading, emptiness means nothing
             visible: opacity > 0 && root.signedIn && root.libraryMode && root.recentItems.length === 0
                      && root._recent !== null && root._recent.loading !== true
             Layout.preferredWidth: root.labelWidth + 28 + 8
@@ -372,7 +372,7 @@ Item {
             lineHeight: 1.2
         }
 
-        // Плейлисты пользователя (или сводка «Библиотеки»): своя прокрутка, если строк много
+        // The user playlists (or the "Library" summary): their own scrolling, if there are many rows
         ListView {
             id: playlistList
             visible: root.signedIn && count > 0
@@ -416,14 +416,14 @@ Item {
 
         Item { Layout.fillHeight: true; visible: !playlistList.visible }
 
-        // Доступное обновление и ход загрузки (окно обновления — UpdateSheet в Main.qml)
+        // An available update and the download progress (the update window — UpdateSheet in Main.qml)
         UpdatePill {
             Layout.fillWidth: true
             rail: root.rail
             onClicked: { root.closeDrawer(); Updater.showSheet() }
         }
 
-        // В рейле настройки — отдельным пунктом; в развёрнутом виде — кнопкой в карточке аккаунта
+        // In the rail, settings are a separate item; when expanded — a button in the account card
         NavItem {
             visible: root.rail
             Layout.fillWidth: true
@@ -437,7 +437,7 @@ Item {
             onClicked: root.go("settings")
         }
 
-        // Карточка аккаунта: аватар на оси рейла, одна высота в обоих режимах
+        // Account card: the avatar on the rail axis, the same height in both modes
         Item {
             Layout.fillWidth: true
             Layout.topMargin: 8
@@ -506,7 +506,7 @@ Item {
     }
     }
 
-    // ПКМ по строке: закрепить/открепить
+    // Right-click on a row: pin/unpin
     Menu {
         id: rowMenu
         anchors.fill: parent

@@ -1,4 +1,4 @@
-//! Перенос spotifast/src/limiter.rs (как есть).
+//! A port of spotifast/src/limiter.rs (as is).
 //! Look-ahead soft-knee limiter for final audio output.
 //!
 //! Equalizer and preamp boosts can exceed full scale. Hard clipping would add

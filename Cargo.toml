@@ -25,7 +25,7 @@ rust-version = "1.98"
 license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
-# внутренние
+# internal
 md3-model = { path = "crates/md3-model" }
 yt-auth = { path = "crates/yt-auth" }
 yt-api = { path = "crates/yt-api" }
@@ -40,14 +40,14 @@ mf-lyrics = { path = "crates/mf-lyrics" }
 mf-platform = { path = "crates/mf-platform" }
 mf-i18n = { path = "crates/mf-i18n" }
 
-# асинхронность и сеть
+# async and networking
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net", "io-util", "process"] }
 futures = "0.3.34"
 reqwest = { version = "0.12.24", default-features = false, features = ["rustls-tls-native-roots", "json", "gzip", "http2", "blocking", "socks", "system-proxy"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy", "client-proxy-system"] }
 http = "1"
 
-# данные
+# data
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.152"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
@@ -60,14 +60,14 @@ percent-encoding = "2"
 urlencoding = "2"
 protobuf = "3"
 
-# ошибки и логи
+# errors and logging
 thiserror = "2.0.21"
 anyhow = "1.0.104"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 log = "0.4"
 
-# крипто/хэши (тексты NetEase, ключи кэша, PKCE, zeroconf)
+# crypto/hashes (NetEase lyrics, cache keys, PKCE, zeroconf)
 hmac = "0.12.1"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
@@ -79,31 +79,31 @@ pbkdf2 = "0.12"
 base64 = "0.22.1"
 hex = "0.4.3"
 
-# Spotify: воспроизведение и Connect (версии из crates.io, реально — из форка через [patch.crates-io])
+# Spotify: playback and Connect (versions from crates.io, in reality from the fork via [patch.crates-io])
 librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 librespot-playback = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
 librespot-connect = { version = "0.8", default-features = false }
 librespot-metadata = { version = "0.8", default-features = false }
 librespot-protocol = { version = "0.8", default-features = false }
-# rodio даёт только микшер/очередь; устройство открывает fastframe-audio (cpal 0.18)
+# rodio only provides the mixer/queue; the device is opened by fastframe-audio (cpal 0.18)
 rodio = { version = "0.21", default-features = false }
-# fastframe: только эти два крейта, без egui. rev двигать вместе.
+# fastframe: only these two crates, without egui. Move the rev together.
 fastframe-audio = { git = "https://github.com/dennisgr7/fastframe", rev = "f7dc6fbe938e8a953509d110cdba036f537e5b7e" }
 fastframe-now-playing = { git = "https://github.com/dennisgr7/fastframe", rev = "f7dc6fbe938e8a953509d110cdba036f537e5b7e" }
 mdns-sd = "0.21"
 open = "5"
 
-# хранилище секретов Spotify (keyring-core + store под каждую ОС)
+# Spotify secret storage (keyring-core + a store per OS)
 keyring-core = "1"
 windows-native-keyring-store = { version = "1.1", default-features = false }
 apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
 zbus-secret-service-keyring-store = { version = "1.0.1", features = ["rt-tokio-crypto-rust"] }
 
-# тема
+# theme
 material-colors = "0.5.0"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
 
-# платформа
+# platform
 dirs = "6.0.0"
 zbus = { version = "5.12", default-features = false, features = ["tokio"] }
 winreg = "0.55.0"
@@ -118,11 +118,11 @@ cxx-qt-build = "0.10.0"
 clap = { version = "4.6", features = ["derive"] }
 
 [patch.crates-io]
-# rustls 0.23 для hyper-proxy2 (librespot-core -> hyper-proxy2)
+# rustls 0.23 for hyper-proxy2 (librespot-core -> hyper-proxy2)
 hyper-proxy2 = { git = "https://github.com/crmne/hyper-proxy2", rev = "efca4811371ddae81c06be168de54194938d70b1" }
-# librespot dev (после 0.8.0) + патчи Spotifast (normalisation_report, восстановление сессии, креды в памяти,
-# диапазон плейлиста, таймауты AP, стоп при отказе в ключе): ветка materialfy в github.com/fatyzzz/librespot.
-# Все крейты — из одного rev; librespot-oauth нужен как транзитивная зависимость librespot-core.
+# librespot dev (after 0.8.0) + Spotifast patches (normalisation_report, session restoration, in-memory credentials,
+# playlist range, AP timeouts, stop on a key rejection): the materialfy branch in github.com/fatyzzz/librespot.
+# All crates come from one rev; librespot-oauth is needed as a transitive dependency of librespot-core.
 librespot-audio = { git = "https://github.com/fatyzzz/librespot", rev = "4041835bd314969fbf8a1cb9f83e5eccba4bc36d" }
 librespot-connect = { git = "https://github.com/fatyzzz/librespot", rev = "4041835bd314969fbf8a1cb9f83e5eccba4bc36d" }
 librespot-core = { git = "https://github.com/fatyzzz/librespot", rev = "4041835bd314969fbf8a1cb9f83e5eccba4bc36d" }
@@ -131,7 +131,7 @@ librespot-oauth = { git = "https://github.com/fatyzzz/librespot", rev = "4041835
 librespot-playback = { git = "https://github.com/fatyzzz/librespot", rev = "4041835bd314969fbf8a1cb9f83e5eccba4bc36d" }
 librespot-protocol = { git = "https://github.com/fatyzzz/librespot", rev = "4041835bd314969fbf8a1cb9f83e5eccba4bc36d" }
 
-# Декодирование аудио на opt-level 0 слишком медленное; сам бинарник остаётся инкрементальным.
+# Decoding audio at opt-level 0 is too slow; the binary itself stays incremental.
 [profile.dev.package."*"]
 opt-level = 2
 

@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 
-// Тень уровня MD3 (0..5) под прямоугольной поверхностью target.
+// MD3 level (0..5) shadow under the rectangular target surface.
 RectangularShadow {
     id: root
 
@@ -17,8 +17,8 @@ RectangularShadow {
     blur: _dp * 2.2
     spread: 0
     color: Qt.alpha(Theme.shadow, 0.35)
-    // Тень — отдельный элемент рядом с поверхностью, поэтому сама повторяет её видимость, прозрачность
-    // и масштаб: иначе от скрытой карточки остаётся тёмное пятно (у ни разу не показанной — в точке 0,0).
+    // The shadow is a separate element next to the surface, so it mirrors its visibility, opacity
+    // and scale: otherwise a hidden card leaves a dark spot (one never shown leaves it at 0,0).
     visible: level > 0 && target.visible
     opacity: target.opacity
     scale: target.scale

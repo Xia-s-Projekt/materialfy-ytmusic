@@ -1,10 +1,10 @@
-//! Каталоги приложения (organization "materialfy", application "Materialfy" — как у QCoreApplication в оболочке).
+//! App directories (organization "materialfy", application "Materialfy" — as in the shell's QCoreApplication).
 //!
-//! | что                    | Linux                                   | Windows                                        | macOS                                                   |
+//! | what                   | Linux                                   | Windows                                        | macOS                                                   |
 //! |------------------------|-----------------------------------------|------------------------------------------------|---------------------------------------------------------|
 //! | app_data_dir (AppData) | ~/.local/share/materialfy/Materialfy  | %APPDATA%\materialfy\Materialfy              | ~/Library/Application Support/materialfy/Materialfy   |
 //! | cache_dir (Cache)      | ~/.cache/materialfy/Materialfy        | %LOCALAPPDATA%\materialfy\Materialfy\cache    | ~/Library/Caches/materialfy/Materialfy                |
-//! | settings INI           | ~/.config/materialfy/Materialfy.conf  | (реестр HKCU\Software\materialfy\Materialfy) | ~/Library/Preferences/materialfy/Materialfy.conf      |
+//! | settings INI           | ~/.config/materialfy/Materialfy.conf | (registry HKCU\Software\materialfy\Materialfy)| ~/Library/Preferences/materialfy/Materialfy.conf      |
 use std::path::{Path, PathBuf};
 
 pub const ORGANIZATION: &str = "materialfy";
@@ -18,14 +18,14 @@ fn app_subdir(base: PathBuf) -> PathBuf {
     base.join(ORGANIZATION).join(APPLICATION)
 }
 
-/// Каталог данных приложения (session.json, history.json, state/). Не создаётся автоматически.
+/// The app's data directory (session.json, history.json, state/). Not created automatically.
 pub fn app_data_dir() -> PathBuf {
-    // Linux: $XDG_DATA_HOME или ~/.local/share; Windows: Roaming; macOS: Application Support
+    // Linux: $XDG_DATA_HOME or ~/.local/share; Windows: Roaming; macOS: Application Support
     let base = ::dirs::data_dir().unwrap_or_else(|| home().join(".local").join("share"));
     app_subdir(base)
 }
 
-/// Корень кэша приложения.
+/// The app's cache root.
 pub fn cache_dir() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
@@ -39,7 +39,7 @@ pub fn cache_dir() -> PathBuf {
     }
 }
 
-/// Подкаталог кэша ("images", "covers", "lyrics"), создаётся при первом вызове.
+/// A cache subdirectory ("images", "covers", "lyrics"), created on the first call.
 pub fn cache_subdir(sub: &str) -> PathBuf {
     let dir = cache_dir().join(sub);
     if let Err(err) = std::fs::create_dir_all(&dir) {
@@ -48,7 +48,7 @@ pub fn cache_subdir(sub: &str) -> PathBuf {
     dir
 }
 
-/// Файл сессии плеера: $MATERIALFY_SESSION_FILE или app_data_dir()/session.json.
+/// The player session file: $MATERIALFY_SESSION_FILE or app_data_dir()/session.json.
 pub fn session_file() -> PathBuf {
     match std::env::var_os("MATERIALFY_SESSION_FILE") {
         Some(path) if !path.is_empty() => PathBuf::from(path),
@@ -58,42 +58,42 @@ pub fn session_file() -> PathBuf {
 
 // --- Spotify ---
 
-/// Служебное состояние (маркеры отзыва и профиль хранилища секретов sf-auth): app_data_dir()/state.
+/// Internal state (revocation markers and the sf-auth secret store profile): app_data_dir()/state.
 pub fn state_dir() -> PathBuf {
     app_data_dir().join("state")
 }
 
-/// Локальная история прослушиваний (sf-services HistoryService): app_data_dir()/history.json.
+/// The local listening history (sf-services HistoryService): app_data_dir()/history.json.
 pub fn history_file() -> PathBuf {
     app_data_dir().join("history.json")
 }
 
-/// Файл громкости librespot (Cache volume): app_data_dir()/volume.
+/// The librespot volume file (Cache volume): app_data_dir()/volume.
 pub fn volume_dir() -> PathBuf {
     app_data_dir().join("volume")
 }
 
-/// Аудиокэш librespot: cache_dir()/audio (лимит — настройка AudioCacheMb).
+/// The librespot audio cache: cache_dir()/audio (the limit is the AudioCacheMb setting).
 pub fn audio_cache_dir() -> PathBuf {
     cache_dir().join("audio")
 }
 
-/// Кэш «Любимых треков» аккаунта: cache_dir()/liked/<account>.json.
+/// The account's "Liked tracks" cache: cache_dir()/liked/<account>.json.
 pub fn liked_cache_file(account_id: &str) -> PathBuf {
     cache_subdir("liked").join(format!("{}.json", safe_name(account_id)))
 }
 
-/// Кэш полок главной аккаунта: cache_dir()/home/<account>.json.
+/// The account's home shelves cache: cache_dir()/home/<account>.json.
 pub fn home_cache_file(account_id: &str) -> PathBuf {
     cache_subdir("home").join(format!("{}.json", safe_name(account_id)))
 }
 
-/// Кэш строк плейлистов аккаунта: cache_dir()/playlists/<account>/.
+/// The account's playlist rows cache: cache_dir()/playlists/<account>/.
 pub fn playlist_cache_dir(account_id: &str) -> PathBuf {
     cache_subdir("playlists").join(safe_name(account_id))
 }
 
-/// Id аккаунта как имя файла: base62 и обычные имена — как есть, остальное (слеши, «..», пусто) — hex.
+/// The account id as a file name: base62 and ordinary names as is, everything else (slashes, "..", empty) — hex.
 fn safe_name(id: &str) -> String {
     let plain = !id.is_empty()
         && !id.starts_with('.')
@@ -107,13 +107,13 @@ fn safe_name(id: &str) -> String {
     }
 }
 
-/// Занято на диске, байт (Settings → «Хранилище»).
+/// Occupied on disk, bytes (Settings → "Storage").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CacheUsage {
     pub audio: u64,
-    /// обложки covers + картинки QML images (и прочее в кэше)
+    /// covers + QML images (and everything else in the cache)
     pub covers: u64,
-    /// плейлисты + «Любимые треки»
+    /// playlists + "Liked tracks"
     pub playlists: u64,
     pub lyrics: u64,
 }
@@ -124,14 +124,14 @@ impl CacheUsage {
     }
 }
 
-/// Посчитать размеры каталогов кэша (блокирующе — звать из spawn_blocking).
+/// Compute the cache directory sizes (blocking — call from spawn_blocking).
 pub fn cache_usage() -> CacheUsage {
     cache_usage_in(&cache_dir())
 }
 
-/// Очистить кэш (аудио, обложки, картинки, плейлисты, тексты). Вход, state/ и настройки лежат вне cache_dir()
-/// и не трогаются. Каталоги остаются (их пути держат сервисы) — удаляется содержимое. Занятые файлы
-/// (аудиокэш играющего трека на Windows) пропускаются; ошибка — первая встреченная.
+/// Clear the cache (audio, covers, images, playlists, lyrics). Login data, state/ and settings live outside cache_dir()
+/// and are not touched. The directories stay (services hold their paths) — only their contents are removed. Busy files
+/// (the playing track's audio cache on Windows) are skipped; the error is the first one encountered.
 pub fn clear_cache() -> std::io::Result<()> {
     clear_cache_in(&cache_dir())
 }
@@ -151,7 +151,7 @@ fn cache_usage_in(root: &Path) -> CacheUsage {
     usage
 }
 
-/// Размер файла или дерева; ссылки не разворачиваются.
+/// The size of a file or tree; symlinks are not followed.
 fn tree_size(path: &Path) -> u64 {
     let Ok(meta) = std::fs::symlink_metadata(path) else { return 0 };
     if !meta.is_dir() {
@@ -179,7 +179,7 @@ fn clear_cache_in(root: &Path) -> std::io::Result<()> {
     first_error.map_or(Ok(()), Err)
 }
 
-/// Удалить содержимое каталога, оставив сам каталог.
+/// Remove a directory's contents, keeping the directory itself.
 fn clear_dir(dir: &Path) -> std::io::Result<()> {
     let mut first_error = None;
     for entry in std::fs::read_dir(dir)?.flatten() {
@@ -196,8 +196,8 @@ fn is_real_dir(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir())
 }
 
-/// Файл настроек INI. `config_override` — каталог из --config-dir: тогда <dir>/materialfy/Materialfy.conf на любой ОС
-/// (так QSettings::setPath раскладывает INI). Без него: Linux/macOS — путь из таблицы; на Windows INI не используется.
+/// The settings INI file. `config_override` — the directory from --config-dir: then <dir>/materialfy/Materialfy.conf on any OS
+/// (that is how QSettings::setPath lays out INI). Without it: Linux/macOS — the path from the table; on Windows INI is not used.
 pub fn settings_ini_file(config_override: Option<&Path>) -> PathBuf {
     let base = match config_override {
         Some(dir) => dir.to_path_buf(),
@@ -213,7 +213,7 @@ fn default_config_base() -> PathBuf {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        // Linux: $XDG_CONFIG_HOME или ~/.config; на Windows путь только для полноты (там реестр)
+        // Linux: $XDG_CONFIG_HOME or ~/.config; on Windows the path is only for completeness (the registry is used there)
         ::dirs::config_dir().unwrap_or_else(|| home().join(".config"))
     }
 }
@@ -262,7 +262,7 @@ mod tests {
 
         clear_cache_in(&root).unwrap();
         assert_eq!(cache_usage_in(&root).total(), 0);
-        // каталоги на месте, содержимого нет
+        // the directories are in place, with no contents
         for sub in ["audio", "covers", "images", "playlists", "liked", "lyrics"] {
             let dir = root.join(sub);
             assert!(dir.is_dir(), "{sub}");
@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn cache_is_apart_from_credentials() {
-        // clear_cache чистит только cache_dir(): данные входа, state/ и настройки лежат вне его
+        // clear_cache only cleans cache_dir(): login data, state/ and settings live outside it
         let cache = cache_dir();
         assert!(!app_data_dir().starts_with(&cache));
         assert!(!state_dir().starts_with(&cache));

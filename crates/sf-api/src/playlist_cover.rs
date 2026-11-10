@@ -1,4 +1,4 @@
-//! Обложка плейлиста: JPEG ≤ 256 КБ в base64. Перенос spotifast/src/playlist_cover.rs.
+//! Playlist cover: JPEG ≤ 256 KB as base64. Ported from spotifast/src/playlist_cover.rs.
 //! Bounded preparation of user-selected playlist artwork, off the UI thread.
 
 use std::io::{Cursor, Read};

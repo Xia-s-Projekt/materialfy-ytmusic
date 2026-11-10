@@ -3,10 +3,10 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Строка устройства Spotify Connect: иконка в круге, имя, подпись, действие справа.
-// variant "menu" — меню/лист устройств (действие проявляется при наведении; touch — видно всегда кнопкой),
-// "settings" — список в настройках (действие видно всегда). setup — этот компьютер ещё не настроен
-// (подпись primary «Настроить воспроизведение здесь» → экран 11); busy — идёт перенос; disabled — Free.
+// Spotify Connect device row: icon in a circle, name, sublabel, action on the right.
+// variant "menu" — device menu/list (the action appears on hover; touch — always visible as a button),
+// "settings" — the list in settings (the action is always visible). setup — this computer is not set up yet
+// (primary label "Set up playback here" → screen 11); busy — a transfer is in progress; disabled — Free.
 Item {
     id: root
 
@@ -97,11 +97,11 @@ Item {
                 Layout.fillWidth: true
                 text: root.subtitle
                 type: "bodySmall"
-                // «Телевизор · громкость только на устройстве» — в две строки, без многоточия
+                // "TV · volume on the device only" — in two lines, without an ellipsis
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
                 color: root.setup && !root._setupBusy ? Theme.primary : Theme.fgSurfaceVariant
-                // смена «Перенести» ↔ «Переносим…» — короткое затухание
+                // switching "Transfer" ↔ "Transferring…" — a short fade
                 Behavior on text {
                     enabled: !(Theme.reducedMotion === true)
                     SequentialAnimation {
@@ -121,7 +121,7 @@ Item {
             size: 28
         }
 
-        // Действие: при наведении (меню) или всегда (лист, настройки)
+        // Action: on hover (menu) or always (list, settings)
         Label {
             visible: !root._working && !root._actionAlways && root.actionText !== ""
             text: root.actionText
@@ -151,7 +151,7 @@ Item {
         anchors.fill: parent
         z: -1
         radius: Theme.shape.medium
-        // уже играющее устройство (действия нет) не кликается: перенос «на себя» ничего не даёт
+        // the already playing device (no action) is not clickable: transferring "to itself" achieves nothing
         enabled: !root.disabled && !root._working && (root.actionText !== "" || root.setup)
         onClicked: root.activated()
     }

@@ -1,7 +1,7 @@
 import QtQuick
 import Md3
 
-// Пилюля «только чтение»: папки rootlist и чужие плейлисты (изменить их можно только в Spotify).
+// A "read only" pill: rootlist folders and other people's playlists (they can only be changed in Spotify).
 Rectangle {
     id: root
 

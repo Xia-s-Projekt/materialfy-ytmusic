@@ -1,6 +1,6 @@
-// Library: «Любимые треки», плейлисты (строковые id, редактирование своего), альбомы/исполнители/подкасты,
-// экран «Библиотека» (items/folderChildren), локальные закрепления. Модели повторяют LibraryEvent;
-// Lagged — перечитать всё у сервиса.
+// Library: "Liked tracks", playlists (string ids, editing your own), albums/artists/podcasts,
+// the "Library" screen (items/folderChildren), local pins. Models mirror LibraryEvent;
+// Lagged — re-read everything from the service.
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -68,33 +68,33 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "pagesChanged"]
         fn pages_changed(self: Pin<&mut Library>);
-        /// дерево/сортировка изменились — модели items()/folderChildren() уже обновлены
+        /// the tree/sort changed — the items()/folderChildren() models are already updated
         #[qsignal]
         #[cxx_name = "entriesChanged"]
         fn entries_changed(self: Pin<&mut Library>);
-        /// шапка плейлиста изменилась — перечитать playlistInfo(id)
+        /// the playlist header changed — re-read playlistInfo(id)
         #[qsignal]
         #[cxx_name = "playlistInfoChanged"]
         fn playlist_info_changed(self: Pin<&mut Library>, playlist_id: QString);
-        /// Короткое сообщение (итог действия, ошибка с откатом).
+        /// A short message (the outcome of an action, an error with a rollback).
         #[qsignal]
         fn notice(self: Pin<&mut Library>, text: QString);
 
         #[qinvokable]
         fn refresh(self: &Library);
 
-        // --- плейлисты ---
-        /// Модель треков плейлиста (кэш по id). Открытие экрана: счётчик владельцев растёт, модель
-        /// не пересоздаётся; шапка сверяется со snapshot — изменённый плейлист перечитается.
+    // --- playlists ---
+        /// Playlist track model (cached by id). Opening the screen: the owner count grows, the model
+        /// is not recreated; the header is checked against the snapshot — a changed playlist is re-read.
         #[qinvokable]
         #[cxx_name = "playlistTracks"]
         fn playlist_tracks(self: Pin<&mut Library>, playlist_id: &QString) -> *mut QObject;
-        /// Экран закрылся или скрылся: один владелец уходит. Когда владельцев не осталось — идущее
-        /// чтение треков отменяется (записи и воспроизведение не трогаются).
+        /// The screen closed or was hidden: one owner leaves. When no owners are left, an in-flight
+        /// track read is cancelled (writes and playback are untouched).
         #[qinvokable]
         #[cxx_name = "releasePlaylist"]
         fn release_playlist(self: Pin<&mut Library>, playlist_id: &QString);
-        /// Шапка: ключи PlaylistItem + totalDurationMs, followed; {} — неизвестно.
+        /// Header: PlaylistItem keys + totalDurationMs, followed; {} — unknown.
         #[qinvokable]
         #[cxx_name = "playlistInfo"]
         fn playlist_info(self: &Library, playlist_id: &QString) -> QMap_QString_QVariant;
@@ -107,11 +107,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "addTracks"]
         fn add_tracks(self: &Library, playlist_id: &QString, uris: &QStringList);
-        /// Вставить на позицию («Вернуть» после удаления строк).
+        /// Insert at a position ("Undo" after deleting rows).
         #[qinvokable]
         #[cxx_name = "insertTracks"]
         fn insert_tracks(self: &Library, playlist_id: &QString, uris: &QStringList, position: i32);
-        /// rows: [{uri, pos, setVideoId}] — удалению нужен id вхождения в плейлисте
+        /// rows: [{uri, pos, setVideoId}] — deletion needs the id of the occurrence in the playlist
         #[qinvokable]
         #[cxx_name = "removeTracks"]
         fn remove_tracks(self: &Library, playlist_id: &QString, rows: &QList_QVariant);
@@ -143,17 +143,17 @@ pub mod qobject {
         #[cxx_name = "unfollowPlaylist"]
         fn unfollow_playlist(self: &Library, playlist_id: &QString);
 
-        // --- лайки, сохранённое ---
+    // --- likes, saved ---
         #[qinvokable]
         #[cxx_name = "isLiked"]
         fn is_liked(self: &Library, track_id: &QString) -> bool;
         #[qinvokable]
         #[cxx_name = "toggleLike"]
         fn toggle_like(self: &Library, track: &QMap_QString_QVariant);
-        /// Локальный «не рекомендовать» + пропуск, если играет.
+        /// Local "do not recommend" + skip if it is playing.
         #[qinvokable]
         fn dislike(self: &Library, track: &QMap_QString_QVariant);
-        /// Альбом/шоу/выпуск сохранён, исполнитель — подписка.
+        /// Album/show/episode saved, artist — a subscription.
         #[qinvokable]
         #[cxx_name = "isSaved"]
         fn is_saved(self: &Library, uri: &QString) -> bool;
@@ -161,11 +161,11 @@ pub mod qobject {
         #[cxx_name = "toggleSaved"]
         fn toggle_saved(self: &Library, uri: &QString);
 
-        // --- экран «Библиотека» ---
-        /// kind: playlists|albums|artists|shows; owner: all|mine|followed|collab; sort — как Settings.librarySort.
+    // --- "Library" screen ---
+        /// kind: playlists|albums|artists|shows; owner: all|mine|followed|collab; sort — as in Settings.librarySort.
         #[qinvokable]
         fn items(self: Pin<&mut Library>, kind: &QString, owner: &QString, sort: &QString) -> *mut QObject;
-        /// Последние прослушанные контексты всех разделов (для боковой панели), limit — сколько.
+        /// Recently played contexts of all sections (for the side panel), limit — how many.
         #[qinvokable]
         #[cxx_name = "recentEntries"]
         fn recent_entries(self: Pin<&mut Library>, limit: i32) -> *mut QObject;
@@ -187,12 +187,12 @@ pub struct LibraryRust {
     albums: UniquePtr<DictListModel>,
     artists: UniquePtr<DictListModel>,
     shows: UniquePtr<DictListModel>,
-    /// недавно прослушанные треки (HistoryService::recent) — источник «Недавние» в AddTracksPanel
+    /// recently played tracks (HistoryService::recent) — the source for "Recent" in AddTracksPanel
     recent: UniquePtr<DictListModel>,
     playlist_models: HashMap<PlaylistId, UniquePtr<DictListModel>>,
-    /// сколько экранов открыли плейлист: последний release отменяет идущее чтение (сервис решает сам)
+    /// how many screens opened the playlist: the last release cancels an in-flight read (the service decides itself)
     playlist_refs: HashMap<PlaylistId, u32>,
-    /// items(kind, owner, sort) → модель; ключ "kind|owner|sort" или "recent|<limit>"
+    /// items(kind, owner, sort) → a model; the key is "kind|owner|sort" or "recent|<limit>"
     entry_models: HashMap<String, UniquePtr<DictListModel>>,
     error_text: QString,
     likes_revision: i32,
@@ -228,7 +228,7 @@ impl Default for LibraryRust {
     }
 }
 
-/// Контекст модели плейлиста; название и обложка — для карточки «Играет из …», если шапка уже известна.
+/// Playlist model context; the name and cover art are for the "Playing from …" card, if the header is already known.
 fn playlist_context(id: &PlaylistId) -> PlayContext {
     let context = PlayContext::with_uri(contexts::PLAYLIST, id.uri());
     match ctx().services.library.playlist_info(id) {
@@ -237,7 +237,7 @@ fn playlist_context(id: &PlaylistId) -> PlayContext {
     }
 }
 
-/// «Любимые треки» вошедшего аккаунта — контекст spotify:user:<id>:collection.
+/// "Liked tracks" of the signed-in account — the spotify:user:<id>:collection context.
 fn liked_context() -> PlayContext {
     match ctx().services.auth.account_id() {
         Some(id) => PlayContext::with_uri(contexts::LIKED, contexts::liked_uri(id.as_str())).titled(mf_i18n::t("Liked Songs")),
@@ -245,28 +245,28 @@ fn liked_context() -> PlayContext {
     }
 }
 
-/// Строки экрана «Библиотека» сверяются по uri (у папок — spotify:folder:<id>): прокрутка и делегаты сохраняются.
+/// "Library" screen rows are matched by uri (for folders — spotify:folder:<id>): scrolling and delegates are preserved.
 const ENTRY_KEY: &str = "uri";
 
 fn pid(id: &QString) -> PlaylistId {
     PlaylistId::from_uri_or_id(&id.to_string())
 }
 
-/// Событие библиотеки, уже подготовленное для модели: строки плейлистов сериализованы вне GUI-потока.
-/// permit — квитанция обратного давления: вернётся семафору после применения в GUI.
+/// A library event already prepared for the model: playlist rows are serialized outside the GUI thread.
+/// permit — a back-pressure receipt: it returns to the semaphore after being applied in the GUI.
 enum LibraryDelivery {
-    /// пропущены события — мост перечитывает состояние сервиса целиком
+    /// events were missed — the bridge re-reads the entire service state
     Lagged,
     Ready(LibraryEvent),
     Tracks { id: PlaylistId, change: ListChange<Row>, permit: tokio::sync::OwnedSemaphorePermit },
 }
 
-/// Сколько подготовленных задач с треками плейлиста может ждать применения в GUI. Квитанции (permits)
-/// возвращаются после применения: GUI не догоняет — поставщик приостанавливается вместо безграничной очереди.
+/// How many prepared playlist-track tasks may wait to be applied in the GUI. The receipts (permits)
+/// are returned after being applied: if the GUI falls behind, the producer pauses instead of an unbounded queue.
 const TRACK_QUEUE: usize = 16;
 
-/// События библиотеки → GUI. Строки плейлистов (serde) готовятся в tokio-задаче; скалярные события
-/// проходят без ожидания, чтобы остальное не тормозилось. Порядок событий сохраняется.
+/// Library events → GUI. Playlist rows (serde) are prepared in a tokio task; scalar events
+/// pass through without waiting so the rest is not slowed down. Event order is preserved.
 fn forward_library(thread: CxxQtThread<qobject::Library>, mut events: broadcast::Receiver<LibraryEvent>) {
     let gui = Arc::new(Semaphore::new(TRACK_QUEUE));
     ctx().rt.spawn(async move {
@@ -274,8 +274,8 @@ fn forward_library(thread: CxxQtThread<qobject::Library>, mut events: broadcast:
             let delivery = match events.recv().await {
                 Ok(event) => match event {
                     LibraryEvent::PlaylistTracks { id, change } => {
-                        // сериализация строк — до очереди GUI; Semaphore::close не зовётся, так что
-                        // permit есть всегда
+                        // row serialization — before the GUI queue; Semaphore::close is not called, so
+                        // a permit is always available
                         let permit = Arc::clone(&gui).acquire_owned().await.expect("semaphore is open");
                         LibraryDelivery::Tracks { id, change: to_row_change(&change), permit }
                     }
@@ -287,7 +287,7 @@ fn forward_library(thread: CxxQtThread<qobject::Library>, mut events: broadcast:
             if thread
                 .queue(move |object| {
                     object.on_event(delivery);
-                    // permit освободится после применения — это и есть квитанция GUI
+                    // the permit is released after being applied — that is the GUI receipt
                 })
                 .is_err()
             {
@@ -326,22 +326,22 @@ impl qobject::Library {
         ctx().services.library.refresh();
     }
 
-    // --- плейлисты ---
+    // --- playlists ---
 
     fn playlist_tracks(mut self: Pin<&mut Self>, playlist_id: &QString) -> *mut cxx_qt::QObject {
         let id = pid(playlist_id);
         let library = &ctx().services.library;
         let this = self.as_mut().rust_mut().get_mut();
         *this.playlist_refs.entry(id.clone()).or_default() += 1;
-        // стабильный экземпляр модели: не пересоздаём и не чистим — изменения приходят событиями
+        // a stable model instance: we neither recreate nor clear it — changes arrive as events
         let model = this.playlist_models.entry(id.clone()).or_insert_with(|| {
             let mut model = DictListModel::create(ModelKind::Track);
             with_model(&mut model, |m| m.set_context(playlist_context(&id)));
             model
         });
         let ptr = model_ptr(model);
-        // модель пуста, а у сервиса есть готовые строки (мост создан позже чтения или события пропущены):
-        // перезалить кусками вместо ожидания всей перечитки
+        // the model is empty but the service has ready rows (the bridge was created after the read, or events were missed):
+        // re-fill in chunks instead of waiting for a full re-read
         let hydrated = model.as_ref().is_some_and(|m| !m.rows().is_empty());
         if !hydrated {
             library.replay_playlist(&id);
@@ -451,7 +451,7 @@ impl qobject::Library {
         ctx().services.library.unfollow_playlist(pid(playlist_id));
     }
 
-    // --- лайки, сохранённое ---
+    // --- likes, saved ---
 
     fn is_liked(&self, track_id: &QString) -> bool {
         ctx().services.library.is_liked(&track_id.to_string())
@@ -477,7 +477,7 @@ impl qobject::Library {
         ctx().services.library.toggle_saved(uri.to_string());
     }
 
-    // --- экран «Библиотека» ---
+    // --- "Library" screen ---
 
     fn items(mut self: Pin<&mut Self>, kind: &QString, owner: &QString, sort: &QString) -> *mut cxx_qt::QObject {
         let (kind, owner, sort) = (kind.to_string(), owner.to_string(), sort.to_string());
@@ -512,7 +512,7 @@ impl qobject::Library {
         ctx().services.library.toggle_pin(uri.to_string());
     }
 
-    // --- синхронизация с сервисом ---
+    // --- synchronization with the service ---
 
     fn sync_error(mut self: Pin<&mut Self>) {
         let text = QString::from(ctx().services.library.error_text().as_str());
@@ -548,12 +548,12 @@ impl qobject::Library {
         }
     }
 
-    /// Перезаполнить модели items()/folderChildren() по их ключам.
+    /// Re-fill the items()/folderChildren() models according to their keys.
     fn sync_entries(mut self: Pin<&mut Self>) {
         let library = &ctx().services.library;
         let this = self.as_mut().rust_mut().get_mut();
         for (key, model) in this.entry_models.iter_mut() {
-            // "recent|<limit>" — сводка по всем разделам для боковой панели
+            // "recent|<limit>" — a summary across all sections for the side panel
             if let Some(limit) = key.strip_prefix("recent|") {
                 let limit = limit.parse::<usize>().unwrap_or(20);
                 let rows = to_rows(&library.recent_entries(limit));
@@ -572,7 +572,7 @@ impl qobject::Library {
         self.entries_changed();
     }
 
-    /// Всё содержимое заново (старт и пропуск событий).
+    /// All content again (startup and missed events).
     fn resync(mut self: Pin<&mut Self>) {
         let library = &ctx().services.library;
         {
@@ -590,10 +590,10 @@ impl qobject::Library {
             with_model(&mut this.shows, |m| m.reset_rows(to_rows(&library.shows())));
         }
         let ids: Vec<PlaylistId> = self.playlist_models.keys().cloned().collect();
-        // Перезаливка кэша всем моделям, не только пустым: пропуск событий (Lagged) мог оставить
-        // в непустой модели лишнюю или пропавшую строку, а load_playlist для complete-страницы
-        // вернёт Idle и её не перечитает. Первое событие перезаливки — Reset: модель заменяется,
-        // а не дополняется, так что повтор поверх актуальных строк безопасен.
+        // Re-filling the cache for all models, not just empty ones: missed events (Lagged) could have left
+        // an extra or missing row in a non-empty model, and load_playlist for a complete page
+        // will return Idle and it will not be re-read. The first re-fill event is Reset: the model is replaced,
+        // not appended to, so repeating it over the current rows is safe.
         for id in &ids {
             library.replay_playlist(id);
         }
@@ -605,7 +605,7 @@ impl qobject::Library {
         self.sync_revisions();
     }
 
-    /// Недавние треки — из истории (дубли по uri убраны, 50 последних).
+    /// Recent tracks — from history (duplicates by uri removed, the last 50).
     fn sync_recent(mut self: Pin<&mut Self>) {
         let mut seen = std::collections::HashSet::new();
         let tracks: Vec<_> = ctx()
@@ -634,7 +634,7 @@ impl qobject::Library {
         let event = match delivery {
             LibraryDelivery::Lagged => return self.resync(),
             LibraryDelivery::Ready(event) => event,
-            // строки уже сериализованы вне GUI — только применить
+            // the rows are already serialized outside the GUI — just apply them
             LibraryDelivery::Tracks { id, change, permit: _permit } => {
                 let this = self.as_mut().rust_mut().get_mut();
                 if let Some(model) = this.playlist_models.get_mut(&id) {
@@ -662,7 +662,7 @@ impl qobject::Library {
                 self.playlist_info_changed(QString::from(id.as_str()))
             }
             LibraryEvent::EntriesChanged => {
-                // догрузка страниц раздела («3 из 5») меняет и счётчик страниц
+                // loading more section pages ("3 of 5") also changes the page counter
                 self.as_mut().sync_entries();
                 self.sync_revisions()
             }

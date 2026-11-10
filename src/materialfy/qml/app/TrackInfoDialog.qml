@@ -3,14 +3,14 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Окно «О треке» (пункт меню трека): всё, что о нём известно. Сразу — то, что было в строке трека;
-// остальное (прослушивания, дата выпуска, лейбл, номер, ISRC, популярность, правообладатели) —
-// по Catalog.requestTrackDetails → trackDetailsReady.
+// The "About this track" window (track menu item): everything known about it. Immediately — what was in the track row;
+// the rest (play counts, release date, label, number, ISRC, popularity, rights holders) —
+// via Catalog.requestTrackDetails → trackDetailsReady.
 Item {
     id: root
 
-    property var track: ({})            // словарь строки трека (TRACK_KEYS)
-    property var details: ({})          // ответ trackDetailsReady (TrackDetails), пусто — ещё не пришёл
+    property var track: ({})            // track row dictionary (TRACK_KEYS)
+    property var details: ({})          // trackDetailsReady response (TrackDetails), empty — not here yet
     property bool loading: false
     property bool opened: false
 
@@ -26,7 +26,7 @@ Item {
     }
     function close() { opened = false }
 
-    // поле: из ответа, иначе из строки
+    // field: from the response, otherwise from the row
     function _v(key, fallback) {
         const d = details[key]
         if (d !== undefined && d !== null && d !== "" && d !== 0)
@@ -40,7 +40,7 @@ Item {
     readonly property string _albumId: _v("albumId", "")
     readonly property var _refs: (_v("artistRefs", []) ?? []).filter(r => r && r.id)
 
-    // строки «название — значение»; copy — значение можно скопировать
+    // "name — value" rows; copy — the value can be copied
     readonly property var _rows: {
         const rows = []
         const add = (label, value, copy) => { if (value !== "" && value !== undefined && value !== null) rows.push({ label: label, value: String(value), copy: copy === true }) }
@@ -120,7 +120,7 @@ Item {
 
         Elevation { target: card; level: 3 }
 
-        // клики по карточке не закрывают окно
+        // clicks on the card do not close the window
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = false }
 
         Flickable {

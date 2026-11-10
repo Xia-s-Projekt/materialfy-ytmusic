@@ -1,9 +1,9 @@
 import QtQuick
 import Md3
 
-// Live Activity Announcement Curtain ("шторка")
-// Шейдерный wipe из wipe.frag.qsb, плавно открывающий новый трек и исполнителя,
-// синхронизированный со световым лучом от обложки слева направо.
+// Live Activity Announcement Curtain ("curtain")
+// A shader wipe from wipe.frag.qsb, smoothly revealing the new track and artist,
+// synchronized with the light beam from the cover, left to right.
 Item {
     id: root
 
@@ -50,7 +50,7 @@ Item {
         progress = 1.0
     }
 
-    // Снимок предыдущего состояния шторки с прежним названием и исполнителем
+    // A snapshot of the curtain's previous state with the old title and artist
     Item {
         id: oldContent
         anchors.fill: parent
@@ -103,7 +103,7 @@ Item {
         visible: false
     }
 
-    // Реальный wipe шейдер MD3 (wipe.frag.qsb)
+    // The real MD3 wipe shader (wipe.frag.qsb)
     ShaderEffect {
         id: fx
         anchors.fill: parent
@@ -121,7 +121,7 @@ Item {
         fragmentShader: Qt.resolvedUrl("../Md3/shaders/wipe.frag.qsb")
     }
 
-    // Световой луч, синхронизированный с фронтом шейдера
+    // The light beam, synchronized with the shader front
     Rectangle {
         id: beam
         y: 0

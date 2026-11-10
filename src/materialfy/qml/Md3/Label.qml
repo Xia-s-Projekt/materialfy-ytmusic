@@ -1,29 +1,29 @@
 import QtQuick
 
-// Текст по шкале MD3: Label { type: "titleLarge" }. Шрифт — вариативный Google Sans:
-// вес и оптический размер задаются осями, а не только font.weight.
+// Text on the MD3 scale: Label { type: "titleLarge" }. The font is the variable Google Sans:
+// weight and optical size are driven by axes, not only by font.weight.
 Text {
     id: root
 
     property string type: "bodyMedium"
-    // fade: не влезший текст уходит в прозрачность у края вместо «…». Слой с шейдером — только пока
-    // текст длиннее строки (одна строка, без переноса).
+    // fade: overflowing text fades out at the edge instead of showing "…". The shader layer is used only while
+    // the text is longer than the line (single line, no wrapping).
     property bool fade: false
-    // ширина всей строки без «…»: implicitWidth при включённом elide бывает уже обрезанной
+    // width of the whole line without "…": implicitWidth with elide on can already be clipped
     readonly property real naturalWidth: fade ? _metrics.advanceWidth : implicitWidth
     readonly property bool overflowing: fade && wrapMode === Text.NoWrap && width > 0 && naturalWidth > width + 0.5
     property real fadeLength: 28
-    // Затухание — не шире ~15% строки: в узкой плитке фиксированные 28 px съедали
-    // половину слова, и весь заголовок выглядел размытым, а не только концевой край.
+    // The fade is no wider than ~15% of the line: in a narrow tile a fixed 28 px ate
+    // half a word, and the whole heading looked blurred instead of just its trailing edge.
     readonly property real fadeWidth: Math.min(fadeLength, Math.max(0, width) * 0.15)
     readonly property var _t: Theme.type[type] ?? Theme.type.bodyMedium
-    property real weight: _t.weight      // 400..700, ось wght
+    property real weight: _t.weight      // 400..700, wght axis
 
     color: Theme.fgSurface
     font.family: Theme.fontFamily
     font.pixelSize: _t.size
-    // С вариативным шрифтом вес — только осью: font.weight заставляет Qt брать ближайший
-    // статический файл семейства (600 → Medium), и промежуточные веса пропадают.
+    // With a variable font weight is axis-only: font.weight makes Qt pick the nearest
+    // static file of the family (600 → Medium), and intermediate weights disappear.
     font.weight: Theme.variableFont ? Font.Normal : Math.round(weight)
     font.letterSpacing: _t.tracking
     font.variableAxes: Theme.fontAxes(_t.size, weight)

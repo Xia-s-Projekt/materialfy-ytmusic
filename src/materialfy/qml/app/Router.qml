@@ -1,12 +1,12 @@
 import QtQuick
 import Md3
 
-// Стек страниц. Живые экземпляры страниц хранятся в стеке, поэтому «назад» сохраняет прокрутку и состояние.
-// Переходы MD3: между разделами — fade through, вглубь/назад — shared axis X.
+// Page stack. Live page instances are kept in the stack, so "back" preserves scroll and state.
+// MD3 transitions: between sections — fade through, deeper/back — shared axis X.
 Item {
     id: root
 
-    // имя страницы → url компонента
+    // page name → component url
     property var pages: ({})
     property var stack: []                 // [{ name, props, item }]
     readonly property int depth: stack.length
@@ -15,26 +15,26 @@ Item {
     readonly property string rootName: stack.length ? stack[0].name : ""
     readonly property Item currentItem: current ? current.item : null
 
-    // Страницы, которые живут между посещениями. "home" — без параметров (главная тяжёлая — сотни
-    // обложек, терять прокрутку и пересоздавать её на каждый возврат дорого). keepAliveSlots — сколько
-    // страниц С параметрами (плейлисты, артисты) держать живыми по принципу LRU: повторное открытие
-    // того же плейлиста «туда-сюда» мгновенно и сохраняет прокрутку, без перестройки строк.
+    // Pages that live between visits. "home" — without parameters (the home page is heavy — hundreds
+    // of covers, losing the scroll and recreating it on every return is expensive). keepAliveSlots — how many
+    // pages with parameters (playlists, artists) to keep alive on an LRU basis: reopening
+    // the same playlist back and forth is instant and preserves the scroll, without rebuilding rows.
     property var keepAlive: ["home"]
-    // Строятся синхронно при первом входе (стартовый экран); остальные keepAlive — асинхронно.
+    // They are built synchronously on first entry (the start screen); the other keepAlive ones — asynchronously.
     property var keepAliveSync: ["home"]
     property int keepAliveSlots: 6
-    property var _kept: ({})                // имя → живой экземпляр из keepAlive (без параметров)
-    property var _keptKeyed: []             // LRU: [{ key, name, item }], младшие в конце
+    property var _kept: ({})                // name → live instance from keepAlive (no parameters)
+    property var _keptKeyed: []             // LRU: [{ key, name, item }], oldest at the end
 
     property var _components: ({})
-    // Прогрев компиляции страниц: первое открытие каждой страницы компилирует её QML-цепочку
-    // синхронно на GUI-потоке — фриз первого открытия. Компилируем по одному компоненту на тик
-    // после старта, пока юзер на главной; при реальной навигации пауза, догрев после неё.
-    // Один тик = одна страница: скролл главной не дёргается.
+    // Page compilation warm-up: the first open of each page compiles its QML chain
+    // synchronously on the GUI thread — a freeze on the first open. We compile one component per tick
+    // after startup, while the user is on the home page; on real navigation we pause and warm up after it.
+    // One tick = one page: the home scroll does not jitter.
     property bool _prewarmed: false
-    // Порядок: сначала компиляция тяжёлых страниц (плейлист, библиотека), затем тихая сборка
-    // тех, что живут вечно (settings/liked/...): их экземпляры сразу переиспользуются при входе.
-    // Параметрические (плейлист, артист) инкубировать без props нельзя — держим только компиляцию.
+    // Order: first compile the heavy pages (playlist, library), then the quiet build
+    // of the ones that live forever (settings/liked/...): their instances are reused immediately on entry.
+    // Parameterized ones (playlist, artist) cannot be incubated without props — we keep only the compilation.
     function _prewarm() {
         if (_prewarmed)
             return
@@ -69,13 +69,13 @@ Item {
                 console.error("Router prewarm:", comp.errorString())
                 return
             }
-            // Параметрические страницы строить нельзя (нужны props): компиляция и есть прогрев.
+            // Parameterized pages cannot be built (props are needed): the compilation itself is the warm-up.
             if (keepAlive.indexOf(name) < 0)
                 return
             if (_kept[name] !== undefined)
                 return
-            // ФИКС 4: тихая сборка асинхронной инкубацией — синхронный createObject строил
-            // полную страницу в один кадр (фриз сотни мс на Home).
+            // FIX 4: quiet build via async incubation — a synchronous createObject built
+            // a full page in a single frame (a freeze of hundreds of ms on Home).
             const incubator = comp.incubateObject(
                 container,
                 { router: root, width: container.width, height: container.height, opacity: 0 },
@@ -89,7 +89,7 @@ Item {
                     return
                 }
                 if (_kept[name] !== undefined && _kept[name] !== item) {
-                    item.destroy()      // юзер открыл страницу раньше — экземпляр из _make уже живёт
+                    item.destroy()      // the user opened the page sooner — the instance from _make already lives
                     return
                 }
                 item.width = Qt.binding(() => container.width)
@@ -99,15 +99,15 @@ Item {
             }
         }
     }
-    property var _leaving: []               // элементы, которые уничтожить после анимации
+    property var _leaving: []               // items to destroy after the animation
     property Item _out: null
-    property var _pending: null             // незавершённая инкубация: { name, props, comp, incubator, prev, kind }
+    property var _pending: null             // incomplete incubation: { name, props, comp, incubator, prev, kind }
 
     function _same(entry, name, props) {
         return entry && entry.name === name && JSON.stringify(entry.props ?? {}) === JSON.stringify(props ?? {})
     }
 
-    // Повторный запрос той же страницы, пока она ещё строится, — не новый push, а то же самое
+    // A repeated request for the same page while it is still being built is not a new push, but the same thing
     function _pendingSame(name, props) {
         return _pending !== null && _pending.name === name && JSON.stringify(_pending.props) === JSON.stringify(props ?? {})
     }
@@ -117,29 +117,29 @@ Item {
             return
         if (_pending && _pending.name === name && JSON.stringify(_pending.props) === JSON.stringify(props ?? {})) {
             if (_pending.kind !== "prewarm")
-                return                          // тот же запрос уже строится — не новый push
-            // Клик по карточке, которую сейчас тихо прогреваем: прогрев становится переходом
+                return                          // the same request is already being built — not a new push
+            // A click on a card we are quietly warming up: the warm-up becomes a transition
             _pending.kind = "forward"
             _pending.prev = currentItem
             return
         }
         if (_pending)
-            _cancelPending()                // push A → push B: недостроенную A отменяем и строим B
+            _cancelPending()                // push A → push B: cancel the unfinished A and build B
         const prev = currentItem
         const entry = _make(name, props, "forward")
         if (!entry)
-            return                          // инкубация уже запущена (или ошибка — уже в логе), продолжение — в _onIncubated
+            return                          // incubation is already running (or the error is already logged), the continuation is in _onIncubated
         stack = stack.concat([entry])
         _animate(prev, entry.item, "forward")
     }
 
-    // Переход в раздел верхнего уровня: стек сбрасывается.
+    // Navigation to a top-level section: the stack is reset.
     function reset(name, props) {
-        // тихий прогрев той же страницы не считается — его отменяем и делаем обычный reset
+        // a quiet warm-up of the same page does not count — we cancel it and do a normal reset
         if ((_pendingSame(name, props) && _pending.kind !== "prewarm") || (depth === 1 && _same(current, name, props)))
             return
         if (_pending)
-            _cancelPending()                // reset всё равно переписывает стек — инкубация больше не нужна
+            _cancelPending()                // reset rewrites the stack anyway — the incubation is no longer needed
         const prev = currentItem
         const entry = _make(name, props, "fade")
         if (!entry)
@@ -153,8 +153,8 @@ Item {
 
     function back() {
         if (_pending !== null) {
-            // Страница ещё не попала в стек: отмена инкубации и есть «назад», стек не трогаем.
-            // Тихий прогрев пользователь не видел — его отмена «назад» не съедает
+            // The page has not reached the stack yet: canceling the incubation is the "back", the stack is left alone.
+            // The user never saw the quiet warm-up — canceling it does not swallow the "back"
             const silent = _pending.kind === "prewarm"
             _cancelPending()
             if (!silent)
@@ -171,7 +171,7 @@ Item {
         return true
     }
 
-    // null-возврат при живой _pending — не ошибка, а «строится асинхронно»; kind нужен _onIncubated
+    // A null return with a live _pending is not an error, but "building asynchronously"; kind is needed by _onIncubated
     function _make(name, props, kind) {
         const url = pages[name]
         if (!url) {
@@ -193,26 +193,26 @@ Item {
             kept.opacity = 0
             return { name: name, props: {}, item: kept }
         }
-        // keepAlive без живого экземпляра: home — синхронно (старт), остальные асинхронно —
-        // единственная сборка не должна фризить, дальше страница живёт вечно
-        // Страницы с параметрами: ключ = имя + props. Живой экземпляр с тем же ключом переиспользуем
-        // (мгновенный возврат, скролл на месте); иначе строим инкубацией и кладём в LRU.
+        // keepAlive without a live instance: home — synchronously (startup), the others asynchronously —
+        // the single build must not freeze, after that the page lives forever
+        // Pages with parameters: key = name + props. A live instance with the same key is reused
+        // (an instant return, scroll in place); otherwise we build by incubation and put it in the LRU.
         const key = name + "|" + JSON.stringify(props ?? {})
         const keptKeyed = _takeKeptKeyed(key)
         if (keptKeyed && !stack.some(e => e.item === keptKeyed)) {
             keptKeyed.opacity = 0
             return { name: name, props: props ?? {}, item: keptKeyed }
         }
-        // Размер — сразу при создании: страница, созданная нулевой ширины, тут же «дорастала» до настоящей,
-        // и Behavior шапки (обложка, отступы), колонки альбома у строк и раскладки полсекунды анимировались
-        // и перекладывались в каждом кадре перехода. Инкубации это касается так же — начальные width/height
-        // и непрозрачность 0, чтобы недостроенная страница не мигнула, а binding цепляем уже на Ready.
+        // Size — immediately on creation: a page created at zero width at once "grew" to its real size,
+        // and the Behavior of the header (cover, margins), the album column on rows and the layout animated for half a second
+        // and relaid out on every frame of the transition. The same applies to incubation — the initial width/height
+        // and opacity 0, so the unfinished page does not flash, and the binding is attached only at Ready.
         if (keep && keepAliveSync.indexOf(name) >= 0) {
             const item = comp.createObject(container, Object.assign({ router: root, width: container.width, height: container.height },
                                                                     props ?? {}))
             if (!kept)
                 _kept[name] = item
-            // не anchors.fill: анимации переходов двигают x
+            // not anchors.fill: transition animations move x
             item.width = Qt.binding(() => container.width)
             item.height = Qt.binding(() => container.height)
             item.opacity = 0
@@ -234,8 +234,8 @@ Item {
     function _onIncubated(incubator) {
         const p = _pending
         if (p === null || p.incubator !== incubator) {
-            // Устаревший запрос (сменился push/reset/back): недостроенное уничтожаем,
-            // чтобы оно не копилося в container с opacity 0 и не продолжало загрузки.
+            // A stale request (push/reset/back changed): the unfinished item is destroyed,
+            // so it does not pile up in the container at opacity 0 and keep loading.
             if (incubator.status === Component.Ready && incubator.object)
                 incubator.object.destroy()
             return
@@ -248,28 +248,28 @@ Item {
             return
         }
         let item = incubator.object
-        // Кадра с чужим размером нет: до Ready страница прозрачна, binding навешиваем тем же кадром, что и анимацию
+        // There is no frame with a different size: before Ready the page is transparent, and the binding is attached in the same frame as the animation
         item.width = Qt.binding(() => container.width)
         item.height = Qt.binding(() => container.height)
         item.opacity = 0
         if (p.keep && _kept[p.name] !== undefined && _kept[p.name] !== item) {
-            // prewarm успел раньше: его экземпляр уже живой, созданный здесь — в утиль
+            // prewarm got there first: its instance is already live, the one created here goes to waste
             item.destroy()
             item = _kept[p.name]
         } else if (p.keep && _kept[p.name] === undefined) {
             _kept[p.name] = item
         }
         if (p.kind === "forward" && stack.some(e => e.item === item)) {
-            // Страница уже открыта в глубине стека (свежая копия сожжена выше): дубль в стек не добавляем
+            // The page is already open deeper in the stack (the fresh copy was burned above): the duplicate is not added to the stack
             return
         }
-        // LRU — только страницам с параметрами (плейлисты, артисты): search/account/playback
-        // не должны переживать навигацию (сброс состояния при входе), без props их не кэшируем
+        // LRU — only for pages with parameters (playlists, artists): search/account/playback
+        // must not survive navigation (state resets on entry), without props they are not cached
         if (keepAlive.indexOf(p.name) < 0 && Object.keys(p.props).length > 0)
             _rememberKeyed(p, item)
         const entry = { name: p.name, props: p.props, item: item }
         if (p.kind === "prewarm") {
-            // Тихий прогрев: страница скрыта в LRU, никакого стека и анимации.
+            // Quiet warm-up: the page is hidden in the LRU, with no stack and no animation.
             item.visible = false
             item.z = 0
             return
@@ -286,16 +286,16 @@ Item {
         }
     }
 
-    // Наведение на карточку: строим страницу после паузы (dwell) — курсор на пути к цели
-    // задевает десяток плиток, каждая со своим props, и без паузы инкубации переполняют
-    // очередь. hover-out отменяет запланированный прогрев.
+    // Hovering a card: the page is built after a pause (dwell) — the cursor on its way to the target
+    // touches a dozen tiles, each with its own props, and without the pause the incubations overflow
+    // the queue. hover-out cancels the scheduled warm-up.
     function prewarmHover(name, props) {
         hoverPrewarm.name = name
         hoverPrewarm.props = props
         hoverPrewarm.restart()
     }
     function prewarmHoverCancel(name, props) {
-        // общий таймер: отменять только свой прогрев, иначе переход A→B убьёт прогрев B
+        // a shared timer: cancel only your own warm-up, otherwise the A→B transition would kill B's warm-up
         if (hoverPrewarm.name === name && JSON.stringify(hoverPrewarm.props) === JSON.stringify(props ?? {}))
             hoverPrewarm.stop()
     }
@@ -307,8 +307,8 @@ Item {
         onTriggered: prewarmKeyed(name, props)
     }
 
-    // Прогрев параметрической страницы (наведение на карточку): строим инкубацией без push,
-    // результат сразу в LRU. Клик по карточке найдёт живой экземпляр — переход мгновенный.
+    // Warming up a parameterized page (hovering a card): we build by incubation without a push,
+    // the result goes straight into the LRU. A click on the card finds the live instance — the transition is instant.
     function prewarmKeyed(name, props) {
         if (_components[name] === undefined)
             return
@@ -318,7 +318,7 @@ Item {
         if (_hasKeptKeyed(key))
             return
         if (_pending !== null)
-            return                          // не перебиваем настоящий переход
+            return                          // we do not interrupt a real transition
         const comp = _components[name] || Qt.createComponent(pages[name])
         if (comp.status === Component.Error || comp.status === Component.Loading)
             return
@@ -335,7 +335,7 @@ Item {
             if (_keptKeyed[i].key === key) {
                 const e = _keptKeyed[i]
                 _keptKeyed.splice(i, 1)
-                _keptKeyed.push(e)          // LRU: недавний — в конец
+                _keptKeyed.push(e)          // LRU: the most recent goes to the end
                 return e.item
             }
         }
@@ -345,7 +345,7 @@ Item {
     function _rememberKeyed(p, item) {
         const key = p.name + "|" + JSON.stringify(p.props)
         if (_takeKeptKeyed(key))
-            return                          // уже в LRU (не должно случиться, но безопасно)
+            return                          // already in the LRU (should not happen, but safe)
         _keptKeyed.push({ key: key, name: p.name, item: item })
         while (_keptKeyed.length > keepAliveSlots) {
             const evicted = _keptKeyed.shift()
@@ -358,8 +358,8 @@ Item {
         const p = _pending
         if (p === null)
             return
-        // У JS-инкубатора нет cancel(): помечаем запрос устаревшим. _onIncubated увидит
-        // p !== _pending и уничтожит недостроенный объект сам, когда статус дойдёт до Ready.
+        // The JS incubator has no cancel(): we mark the request stale. _onIncubated will see
+        // p !== _pending and destroy the unfinished object itself, once the status reaches Ready.
         _pending = null
         if (p.incubator.status === Component.Ready && p.incubator.object)
             p.incubator.object.destroy()
@@ -370,8 +370,8 @@ Item {
             anim.complete()
         _out = from
         from = from ?? dummy
-        // Разделы (fade through): новая страница всплывает снизу и чуть «дорастает» до размера.
-        // Вглубь/назад (shared axis X): страницы едут по горизонтали навстречу друг другу.
+    // Sections (fade through): the new page rises from below and slightly "grows" to size.
+    // Deeper/back (shared axis X): the pages slide horizontally toward each other.
         const axis = kind === "fade" ? "y" : "x"
         const d = kind === "forward" ? 140 : kind === "back" ? -140 : 72
         outFade.target = from
@@ -392,8 +392,8 @@ Item {
         to.z = 1
         from.z = 0
         anim.start()
-        // Программный рендер: страница сменяется сразу. Каждый из ~35 кадров перехода процессор рисует
-        // целиком, вместе с только что созданной страницей, — это и есть «подвисание» при открытии
+        // Software rendering: the page changes at once. Each of the ~35 transition frames is drawn by the CPU
+        // in full, together with the just-created page — that is the "hang" on opening
         if (Theme.lowPower)
             anim.complete()
     }
@@ -405,9 +405,9 @@ Item {
 
     Item { id: dummy; visible: false }
 
-    // Ушедшая страница оставляет в куче JS десятки МБ мусора (её модели, привязки): сборщик сам доходит до
-    // него не скоро, а память процесса всё это время занята. Полная сборка — через секунду после перехода,
-    // когда анимация закончилась (5–25 мс), и только если страницы правда уничтожены.
+    // A departed page leaves tens of MB of garbage in the JS heap (its models, bindings): the collector reaches it
+    // not soon, and the process memory stays occupied all that time. A full collection — one second after the transition,
+    // once the animation has finished (5–25 ms), and only if the pages really were destroyed.
     Timer { id: gcTimer; interval: 1000; onTriggered: gc() }
 
     ParallelAnimation {

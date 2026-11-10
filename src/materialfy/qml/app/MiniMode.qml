@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Мини-плеер на всё окно (окно сжато меньше обычной раскладки). Высокое окно — «карточка»
-// (обложка над названием или слева от него, если окно широкое), низкое — «полоска» в одну строку.
-// Фон тянет окно, двойной клик — развернуть обратно.
+// Mini player filling the whole window (the window is squeezed below the normal layout). A tall window — a "card"
+// (cover above the title, or left of it when the window is wide); a short one — a "strip" in a single line.
+// The background drags the window, double click — restore back.
 Item {
     id: root
 
@@ -14,10 +14,10 @@ Item {
 
     readonly property Item coverItem: strip ? stripCover : cardCover
     readonly property bool strip: height < 200
-    // Широкая невысокая карточка: обложка слева, остальное справа
+    // Wide, short card: cover on the left, everything else on the right
     readonly property bool landscape: !strip && width > height * 1.35
 
-    // Позиция приходит ~5 раз в секунду; между обновлениями — плавно (как в мини-плеере)
+    // The position arrives ~5 times a second; between updates it moves smoothly (as in the mini player)
     readonly property alias progress: playerProgress.value
     PlayerProgress {
         id: playerProgress
@@ -29,7 +29,7 @@ Item {
         return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
     }
 
-    // ---- Фон: размытая обложка + вуаль цвета темы (как в полноэкранном плеере) ----
+    // ---- Background: blurred cover + a theme-colored veil (as in the fullscreen player) ----
     Rectangle { anchors.fill: parent; color: Theme.surface }
     TrackBackdrop {
         anchors.fill: parent
@@ -41,15 +41,15 @@ Item {
         followTheme: Settings.accentFromCover
         running: root.visible && Player.playing
     }
-    // вуаль на ударе чуть тоньше — переливающийся фон «вспыхивает» в такт
+    // the veil is a bit thinner on the beat — the shimmering background "flashes" in time
     Rectangle {
         anchors.fill: parent
         color: Theme.surface
         opacity: Player.cover === "" ? 0 : (Theme.dark ? 0.6 : 0.52) - (Settings.coverPulse ? root.beat * 0.16 : 0)
     }
 
-    // «Дыхание» в такт, как у полноэкранного плеера: уровень звука плеера (запрашивает NowPlaying и в режиме mini,
-    // только при локальном воспроизведении); доля над скользящим средним — удар
+    // "Breathing" in time, as in the fullscreen player: the player's volume level (requested by NowPlaying and in mini mode,
+    // only for local playback); the fraction above the sliding mean is the beat
     property real avgLevel: 0
     property real beat: 0
     Behavior on beat { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
@@ -59,8 +59,8 @@ Item {
         function onLevelChanged() {
             root.avgLevel += (Player.level - root.avgLevel) * 0.06
             const b = Math.max(0, Math.min(1, (Player.level - root.avgLevel) * 4))
-            // значимые сдвиги только: каждый старт Behavior перерисовывает всё мини-окно,
-            // а события уровня приходят 30–60 раз в секунду
+            // only meaningful shifts: every Behavior start redraws the whole mini window,
+            // and level events arrive 30–60 times a second
             if (Math.abs(b - root.beat) > 0.04)
                 root.beat = b
         }
@@ -70,7 +70,7 @@ Item {
         function onStateChanged() { if (!Player.playing) root.beat = 0 }
     }
 
-    // Перетаскивание окна за фон (кнопки и полоса перемотки забирают нажатие сами)
+    // Window dragging by the background (buttons and the seek bar take the press themselves)
     DragHandler {
         property bool manual: false
         target: null
@@ -87,7 +87,7 @@ Item {
     }
     TapHandler {
         id: menuTap
-        // без трека меню тоже нужно: в нём перемешивание, повтор, «поверх всех окон», «развернуть»
+        // the menu is needed even without a track: it has shuffle, repeat, "always on top", "restore"
         acceptedButtons: Qt.RightButton
         onTapped: point => {
             const p = root.mapToItem(null, point.position.x, point.position.y)
@@ -95,7 +95,7 @@ Item {
         }
     }
 
-    // ---- Общие куски ----
+    // ---- Shared pieces ----
     component Cover: Item {
         id: cover
         property real size: 120
@@ -105,7 +105,7 @@ Item {
             id: img
             anchors.fill: parent
             visible: Player.cover !== ""
-            // крупная карточка — обложка 640 px, полоска — обычная
+            // large card — a 640 px cover, the strip — a normal one
             source: cover.size > 160 && Player.coverLarge !== "" ? Player.coverLarge : Player.cover
             fallbackKind: Player.album !== "" ? "album" : "track"
             fallbackArtist: Player.artist.split(", ")[0]
@@ -121,7 +121,7 @@ Item {
             color: Theme.secondaryContainer
             Icon { anchors.centerIn: parent; name: Player.isEpisode ? "podcasts" : "music_note"; size: Math.max(20, cover.size * 0.32); color: Theme.fgSecondaryContainer }
         }
-        // играет другое устройство — его значок в углу обложки
+        // another device is playing — its badge in the cover corner
         DeviceBadge {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -141,7 +141,7 @@ Item {
             anchors.fill: parent
             size: pc.size
             spin: Player.isLocal === true
-            // без трека — запустить радио по выбранному сиду
+            // without a track — start radio on the selected seed
             playing: Player.hasTrack ? Player.playing : Radio.active && Player.playing
             enabled: Player.hasTrack || (Auth.state === "signedIn" && !Radio.locked)
             onClicked: Player.hasTrack ? Player.togglePlay() : Radio.play()
@@ -155,9 +155,9 @@ Item {
         }
     }
 
-    // Пилюля в углу: булавка «поверх всех окон» видна всегда (клик закрепляет и открепляет), «свернуть»,
-    // «развернуть» (обратно в обычную раскладку) и «закрыть» — при наведении. «Развернуть» есть и в меню по ПКМ
-    // и по двойному клику, «Поверх всех окон» — и в меню. Где закрепить нельзя (Wayland), пилюля — по наведению.
+    // Corner pill: the "always on top" pin is always visible (click pins and unpins), "minimize",
+    // "restore" (back to the normal layout) and "close" — on hover. "Restore" is also in the right-click menu
+    // and on double click, "Always on top" is in the menu too. Where pinning is not possible (Wayland), the pill shows on hover.
     HoverHandler { id: hover }
     Rectangle {
         id: chrome
@@ -166,7 +166,7 @@ Item {
         readonly property bool shown: hover.hovered || canPin
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.margins: 10               // мимо зоны ресайза у края окна
+        anchors.margins: 10               // clear of the resize zone at the window edge
         z: 10
         width: chromeRow.implicitWidth + 4
         height: chromeRow.implicitHeight + 4
@@ -214,7 +214,7 @@ Item {
     readonly property string subtitleText: Player.errorText !== "" ? Player.errorText
         : Player.hasTrack ? Player.artist : Auth.state === "signedIn" ? I18n.t("Start a radio") : I18n.t("Sign in to listen")
 
-    // ---- Карточка ----
+    // ---- Card ----
     Item {
         id: card
         anchors.fill: parent
@@ -231,8 +231,8 @@ Item {
             Cover {
                 id: cardCover
                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-                // «карточка»: обложка забирает всё, что осталось над названием и кнопками
-                // справа колонке нужно не меньше 230 px: название, время и «назад / слушать / вперёд»
+                // "card": the cover takes everything left above the title and buttons
+                // the right column needs at least 230 px: title, time and "back / play / next"
                 size: root.landscape
                       ? Math.max(64, Math.min(card.height - 32, card.width * 0.42, card.width - 32 - 16 - 230))
                       : Math.max(56, Math.min(card.width - 48, card.height - 40 - 16 - 172, 320))
@@ -241,11 +241,11 @@ Item {
             ColumnLayout {
                 id: cardInfo
                 Layout.fillWidth: true
-                // ровно оставшееся место: длинная подпись или ряд кнопок не распирают колонку за край окна
+                // exactly the remaining space: a long label or a row of buttons does not stretch the column past the window edge
                 Layout.preferredWidth: 0
                 Layout.minimumWidth: 0
                 Layout.fillHeight: root.landscape
-                Layout.topMargin: root.landscape ? 24 : 0     // под кнопками окна
+                Layout.topMargin: root.landscape ? 24 : 0     // under the window buttons
                 spacing: 6
 
                 Item { Layout.fillHeight: true; visible: root.landscape }
@@ -266,7 +266,7 @@ Item {
                     color: Player.errorText !== "" ? Theme.error : Theme.fgSurfaceVariant
                     elide: Text.ElideRight
                 }
-                // пульт: «Играет на …»
+                // remote: "Playing on …"
                 RemoteLabel {
                     visible: shown
                     Layout.alignment: root.landscape ? Qt.AlignLeft : Qt.AlignHCenter
@@ -332,7 +332,7 @@ Item {
         }
     }
 
-    // ---- Полоска ----
+    // ---- Strip ----
     Item {
         id: stripBox
         anchors.fill: parent
@@ -341,7 +341,7 @@ Item {
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 10
-            anchors.rightMargin: 14           // кнопки — мимо зоны ресайза у правого края
+            anchors.rightMargin: 14           // buttons — clear of the resize zone at the right edge
             anchors.topMargin: 6
             anchors.bottomMargin: 14
             spacing: 6
@@ -383,13 +383,13 @@ Item {
             LikeButton { track: Player.track; visible: stripBox.width >= 420 && !Player.isEpisode }
         }
 
-        // Перемотка — тонкой волной по нижнему краю
+        // Seeking — a thin wave along the bottom edge
         WavyProgress {
             id: stripSeek
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 8          // нижние 6 px — зона ресайза окна
+            anchors.bottomMargin: 8          // the bottom 6 px are the window resize zone
             anchors.leftMargin: 10
             anchors.rightMargin: 10
             height: 12
@@ -404,7 +404,7 @@ Item {
         }
     }
 
-    // Колесо над мини-плеером — громкость: щелчок колеса ±5 %, тачпад — плавно; плашка с процентами
+        // Wheel over the mini player — volume: a wheel notch is ±5 %, trackpad — smoothly; a plate with percentages
     WheelHandler {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: event => {
@@ -414,15 +414,15 @@ Item {
         }
     }
     function nudgeVolume(d) {
-        // у части удалённых устройств громкость меняется только на них самих
+        // on some remote devices the volume can only be changed on the device itself
         if (Player.remote === true && Player.canSetVolume === false)
             return
         Player.volume = Math.max(0, Math.min(1, Player.volume + d))
         volumeHint.opacity = 1
         volumeHintHide.restart()
     }
-    // Стрелки в мини-плеере (окно в фокусе): ←/→ — трек, ↑/↓ — громкость. В большом окне стрелки листают списки,
-    // там для этого Ctrl+стрелки
+        // Arrow keys in the mini player (window focused): ←/→ — track, ↑/↓ — volume. In the big window arrows scroll lists,
+        // there Ctrl+arrows does that
     Shortcut { enabled: root.visible; sequence: "Left"; onActivated: Player.previous() }
     Shortcut { enabled: root.visible; sequence: "Right"; onActivated: Player.next() }
     Shortcut { enabled: root.visible; sequence: "Up"; onActivated: root.nudgeVolume(0.05) }

@@ -1,5 +1,5 @@
-//! Spotify Web API без UI: клиент (лимиты 429/Retry-After, квота), маршрутизация общего/личного приложения,
-//! serde-модели, HTTP с прокси, ссылки, обложки плейлистов, маппинг в md3-model.
+//! Spotify Web API without a UI: client (429/Retry-After limits, quota), routing between the shared/personal application,
+//! serde models, HTTP with proxy, links, playlist covers, mapping into md3-model.
 
 use std::fmt;
 

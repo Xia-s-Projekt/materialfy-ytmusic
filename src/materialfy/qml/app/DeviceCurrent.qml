@@ -3,12 +3,12 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Текущее устройство в меню устройств: иконка в «печеньке», имя, «тип · играет / на паузе»,
-// громкость устройства (у запрещённых и без supports_volume — строка с замком).
+// The current device in the device menu: icon in a "cookie", name, "type · playing / paused",
+// device volume (for disallowed ones and those without supports_volume — a row with a lock).
 Rectangle {
     id: root
 
-    property var device: ({})           // DEVICE_KEYS активного устройства
+    property var device: ({})           // DEVICE_KEYS of the active device
     readonly property var _d: device ?? {}
     readonly property bool volumeLocked: _d.isRestricted === true || _d.supportsVolume === false
                                          || (Player.remote === true && Player.canSetVolume === false)
@@ -20,7 +20,7 @@ Rectangle {
     radius: Theme.shape.large
     color: Theme.secondaryContainer
 
-    // Другое устройство — содержимое меняется сквозным затуханием, иконка морфится из круга
+    // A different device — the content changes with a cross-fade, the icon morphs out of a circle
     property string _shownId: _d.id ?? ""
     onDeviceChanged: {
         const id = _d.id ?? ""
@@ -93,7 +93,7 @@ Rectangle {
             }
         }
 
-        // Громкость: у активного устройства она же Player.volume (плеер сам шлёт её устройству)
+        // Volume: on the active device it is also Player.volume (the player sends it to the device itself)
         RowLayout {
             visible: !root.volumeLocked
             Layout.fillWidth: true

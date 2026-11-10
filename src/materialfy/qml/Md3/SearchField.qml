@@ -1,6 +1,6 @@
 import QtQuick
 
-// Поле поиска-пилюля: обводка primary в фокусе, кнопка очистки.
+// Pill search field: primary outline on focus, clear button.
 Item {
     id: root
 
@@ -57,7 +57,7 @@ Item {
         font.letterSpacing: Theme.type.bodyLarge.tracking
         font.variableAxes: Theme.fontAxes(Theme.type.bodyLarge.size, 400)
         clip: true
-        // без фокуса длинный текст виден с начала, а не прокручен к курсору в конце
+        // without focus long text is shown from the start, not scrolled to the cursor at the end
         autoScroll: activeFocus
         onAccepted: root.accepted(text)
 

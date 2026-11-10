@@ -1,5 +1,5 @@
-// ThemeEngine: цветовые роли MD3 из seed-цвета или обложки (PlayerSnapshot.cover_file). Пересчёт — в spawn_blocking с номером
-// запроса: устаревший результат отбрасывается, ещё не разобранная обложка не теряется.
+// ThemeEngine: MD3 color roles from a seed color or cover (PlayerSnapshot.cover_file). Recalculation - in spawn_blocking with a number
+// of the request: a stale result is discarded, a cover that has not been parsed yet is not lost.
 use std::path::PathBuf;
 use std::pin::Pin;
 
@@ -54,14 +54,14 @@ pub mod qobject {
         #[cxx_name = "variantChanged"]
         fn variant_changed(self: Pin<&mut ThemeEngine>);
 
-        /// Обложка текущего трека ('' — ничего не играет); акцент берётся из неё, если так настроено.
+        /// The current track's cover ('' - nothing is playing); the accent is taken from it if so configured.
         #[qinvokable]
         #[cxx_name = "setCover"]
         fn set_cover(self: Pin<&mut ThemeEngine>, source: &QString);
         #[qinvokable]
         #[cxx_name = "setSeed"]
         fn set_seed(self: Pin<&mut ThemeEngine>, color: &QColor);
-        /// Путь или file:// URL.
+        /// A path or file:// URL.
         #[qinvokable]
         #[cxx_name = "setSeedFromImage"]
         fn set_seed_from_image(self: Pin<&mut ThemeEngine>, source: &QString);
@@ -71,13 +71,13 @@ pub mod qobject {
     impl cxx_qt::Initialize for ThemeEngine {}
 }
 
-/// Ultraviolet — фирменный акцент: когда ничего не играет и свой цвет не задан. Светлая и тёмная схемы — от него.
+/// Ultraviolet - the signature accent: when nothing is playing and no custom color is set. The light and dark schemes are derived from it.
 pub(crate) const BRAND_SEED: &str = "#8C6DFF";
 const DEFAULT_SEED: u32 = 0xFF8C6DFF;
-/// Прежний customSeed по умолчанию (зелёный Spotify).
+/// The former customSeed default (Spotify green).
 const LEGACY_SEED: &str = "#1DB954";
 
-/// customSeed с учётом бренда: пока хранилище отдаёт прежний зелёный как умолчание, это значит «не задан».
+/// customSeed with the brand in mind: while the store returns the former green as the default, it means "not set".
 pub(crate) fn custom_seed(store: &SettingsStore) -> String {
     let raw = store.get_str(SettingKey::CustomSeed);
     let legacy_default = matches!(SettingKey::CustomSeed.default_value(), SettingValue::Str(d) if d.eq_ignore_ascii_case(LEGACY_SEED));
@@ -96,11 +96,11 @@ pub struct ThemeEngineRust {
     contrast: f64,
     request: u64,
     pending_image: Option<PathBuf>,
-    /// обложка текущего трека (путь), даже если акцент не из неё
+    /// the current track's cover (path), even if the accent is not from it
     cover: Option<PathBuf>,
 }
 
-// colors заполняет initialize (синхронно, по настройкам)
+// colors is filled in by initialize (synchronously, by settings)
 impl Default for ThemeEngineRust {
     fn default() -> Self {
         Self {
@@ -134,7 +134,7 @@ fn to_qcolors(scheme: &Scheme) -> QVariantMap {
     map
 }
 
-/// (dark, variant, seed) по настройкам themeMode / schemeVariant / customSeed и системной теме.
+/// (dark, variant, seed) from the themeMode / schemeVariant / customSeed settings and the system theme.
 fn settings_state() -> (bool, Variant, u32) {
     let store = &ctx().services.settings;
     let mode = store.get_str(SettingKey::ThemeMode);
@@ -203,7 +203,7 @@ impl qobject::ThemeEngine {
         }
     }
 
-    /// Изменились themeMode/schemeVariant/accentFromCover/customSeed или системная тема.
+    /// themeMode/schemeVariant/accentFromCover/customSeed or the system theme changed.
     fn apply_settings(mut self: Pin<&mut Self>) {
         let (dark, variant, seed) = settings_state();
         if dark != self.dark {
@@ -227,7 +227,7 @@ impl qobject::ThemeEngine {
         }
     }
 
-    /// Пересчёт в пуле потоков; `image` None — взять ещё не разобранную обложку (если есть).
+    /// Recalculation in the thread pool; `image` None - take the not yet parsed cover (if there is one).
     fn rebuild(mut self: Pin<&mut Self>, image: Option<PathBuf>) {
         let thread = self.qt_thread();
         let mut this = self.as_mut().rust_mut();
@@ -287,7 +287,7 @@ impl qobject::ThemeEngine {
 
 impl cxx_qt::Initialize for qobject::ThemeEngine {
     fn initialize(mut self: Pin<&mut Self>) {
-        // стартовая схема синхронно: окно не «перекрашивается» при запуске
+        // the starting scheme synchronously: the window does not "repaint" at startup
         let (dark, variant, seed) = settings_state();
         {
             let mut this = self.as_mut().rust_mut();
@@ -314,12 +314,12 @@ impl cxx_qt::Initialize for qobject::ThemeEngine {
             }
         });
 
-        // обложка восстановленной сессии могла скачаться до подписки
+        // the restored session's cover may have downloaded before the subscription
         let cover_file = context.services.player.snapshot().cover_file;
         if !cover_file.is_empty() {
             self.as_mut().set_cover(&QString::from(cover_file.as_str()));
         }
-        // разовые флаги разработки: в настройки не пишутся
+        // one-off development flags: not written to settings
         if context.flags.light {
             self.as_mut().set_dark(false);
         }

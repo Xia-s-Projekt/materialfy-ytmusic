@@ -1,24 +1,24 @@
-//! Запуск приложения — порт main() из app.py. Порядок (важен):
-//! 1. env: QSG_USE_SIMPLE_ANIMATION_DRIVER убрать; --debug-wheel → QT_LOGGING_RULES; --screenshot →
-//!    QT_QPA_PLATFORM=offscreen, QT_QUICK_BACKEND=rhi, QSG_RHI_BACKEND по умолчанию d3d11 (Windows) / opengl;
-//! 2. имена приложения (Materialfy / materialfy / desktop "materialfy") и QApplication (qt::ffi::app_create);
-//! 3. главный режим и не --new-instance: single_instance::raise_running_instance() → true — выход 0;
-//! 4. иконка окна (assets/materialfy.svg), display::prefer_fastest_screen (до первого окна), шрифты assets/fonts/*.ttf;
-//! 5. tracing-subscriber (materialfy: …, уровень WARN; RUST_LOG переопределяет);
-//! 6. tokio-рантайм; SettingsStore::open(config_dir); Services::start; context::init;
-//! 7. qt::ffi::register_qml_types(); движок: NAM-фабрика с дисковым кэшем (images), import path = каталог qml,
-//!    контекстные свойства materialfyDebugWheel, materialfyDebugFps, materialfyTray (= не снимок и не галерея);
+//! Application startup - a port of main() from app.py. The order (it matters):
+//! 1. env: remove QSG_USE_SIMPLE_ANIMATION_DRIVER; --debug-wheel -> QT_LOGGING_RULES; --screenshot ->
+//!    QT_QPA_PLATFORM=offscreen, QT_QUICK_BACKEND=rhi, QSG_RHI_BACKEND defaults to d3d11 (Windows) / opengl;
+//! 2. application names (Materialfy / materialfy / desktop "materialfy") and QApplication (qt::ffi::app_create);
+//! 3. main mode and not --new-instance: single_instance::raise_running_instance() -> true - exit 0;
+//! 4. window icon (assets/materialfy.svg), display::prefer_fastest_screen (before the first window), fonts assets/fonts/*.ttf;
+//! 5. tracing-subscriber (materialfy: ..., level WARN; RUST_LOG overrides);
+//! 6. tokio runtime; SettingsStore::open(config_dir); Services::start; context::init;
+//! 7. qt::ffi::register_qml_types(); engine: NAM factory with a disk cache (images), import path = the qml directory,
+//!    context properties materialfyDebugWheel, materialfyDebugFps, materialfyTray (= not a screenshot and not the gallery);
 //! 8. initial properties (--size → width/height, --set), load(Main.qml | gallery/Gallery.qml | --qml);
-//!    нет корня → код 1; не --offline → services.auth.start();
-//! 9. у корня есть свойство trayWanted → setQuitOnLastWindowClosed(false); Windows: winframe::install(window);
-//!    install_memory_trim (в трее / свёрнуто — сцена и GPU-ресурсы освобождаются);
-//!    watch_software_rendering (программный рендер — у окна softwareRendering, декоративные эффекты выключены);
+//!    no root -> code 1; not --offline -> services.auth.start();
+//! 9. if the root has the trayWanted property -> setQuitOnLastWindowClosed(false); Windows: winframe::install(window);
+//!    install_memory_trim (in the tray / minimized - the scene and GPU resources are freed);
+//!    watch_software_rendering (software rendering - the window has softwareRendering, decorative effects are off);
 //!    AppRequest::RaiseWindow → show/raise/requestActivate, AppRequest::Quit → app_quit;
-//! 10. --screenshot: через delay мс grabWindow().save(путь) и выход;
-//! 11. exec(); после — services.shutdown().
+//! 10. --screenshot: after delay ms grabWindow().save(path) and exit;
+//! 11. exec(); after that - services.shutdown().
 //!
-//! Каталог QML: $MATERIALFY_QML_DIR, иначе <exe>/qml, иначе <repo>/src/materialfy/qml (поиск вверх от exe и cwd);
-//! assets — соседний с qml каталог assets.
+//! The QML directory: $MATERIALFY_QML_DIR, otherwise <exe>/qml, otherwise <repo>/src/materialfy/qml (searching upward from exe and cwd);
+//! assets - the assets directory next to qml.
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -45,25 +45,25 @@ fn env_set(name: &str) -> bool {
     std::env::var_os(name).is_some_and(|v| !v.is_empty())
 }
 
-/// Переменные окружения до создания QApplication и любых потоков.
+/// Environment variables before creating QApplication and any threads.
 fn setup_env(cli: &Cli) {
-    // SAFETY: вызывается в самом начале main, других потоков ещё нет
+    // SAFETY: called at the very start of main, there are no other threads yet
     unsafe {
-        // Простой драйвер анимаций тикает таймером ~60 Гц вместо vsync: на 144 Гц всё дёргается
+        // The simple animation driver ticks with a ~60 Hz timer instead of vsync: at 144 Hz everything stutters
         std::env::remove_var("QSG_USE_SIMPLE_ANIMATION_DRIVER");
         if cli.debug_wheel {
-            // QT_LOGGING_RULES пользователя глушит console.log
+            // the user's QT_LOGGING_RULES mutes console.log
             let rules = std::env::var("QT_LOGGING_RULES").unwrap_or_default();
             std::env::set_var("QT_LOGGING_RULES", format!("{rules};qml.debug=true"));
         }
         if cli.screenshot.is_some() {
-            // Снимок без окна на экране; RHI нужен для Shape/MultiEffect — software-бэкенд их не рисует
+            // A screenshot without a window on screen; RHI is needed for Shape/MultiEffect - the software backend does not draw them
             // QT_QPA_PLATFORM set by the caller wins (e.g. a bundle without the offscreen plugin)
             if std::env::var_os("QT_QPA_PLATFORM").is_none() {
                 std::env::set_var("QT_QPA_PLATFORM", "offscreen");
             }
             std::env::set_var("QT_QUICK_BACKEND", "rhi");
-            // Windows: D3D11 работает в offscreen; OpenGL может дать белый экран
+            // Windows: D3D11 works offscreen; OpenGL may give a white screen
             if std::env::var_os("QSG_RHI_BACKEND").is_none() {
                 let backend = if cfg!(target_os = "windows") { "d3d11" } else { "opengl" };
                 std::env::set_var("QSG_RHI_BACKEND", backend);
@@ -72,7 +72,7 @@ fn setup_env(cli: &Cli) {
     }
 }
 
-/// Производитель дискретной видеокарты для настройки PRIME offload (только Linux).
+/// The discrete GPU vendor for configuring PRIME offload (Linux only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 enum GpuVendor {
@@ -80,12 +80,12 @@ enum GpuVendor {
     Other,
 }
 
-/// Определяет наличие и производителя дискретной видеокарты через sysfs.
-/// На Linux признаком наличия нескольких GPU (гибридной графики) служит присутствие двух или более
-/// узлов рендеринга DRM (/dev/dri/renderD*). Производитель каждого узла считывается из
-/// /sys/class/drm/<node>/device/vendor (например, 0x10de — NVIDIA, 0x1002 — AMD, 0x8086 — Intel).
-/// При проприетарном драйвере NVIDIA без nvidia-drm.modeset=1 узел renderD* создаётся только для
-/// интегрированной графики; в этом случае о наличии NVIDIA свидетельствует модуль /sys/module/nvidia.
+/// Detects the presence and vendor of a discrete GPU via sysfs.
+/// On Linux, the presence of two or more
+/// DRM render nodes (/dev/dri/renderD*) indicates multiple GPUs (hybrid graphics). Each node's vendor is read from
+/// /sys/class/drm/<node>/device/vendor (for example, 0x10de - NVIDIA, 0x1002 - AMD, 0x8086 - Intel).
+/// With the proprietary NVIDIA driver without nvidia-drm.modeset=1, a renderD* node is created only for
+/// integrated graphics; in that case the presence of NVIDIA is indicated by the /sys/module/nvidia module.
 fn discrete_gpu_vendor() -> Option<GpuVendor> {
     #[cfg(target_os = "linux")]
     {
@@ -130,20 +130,20 @@ fn discrete_gpu_vendor() -> Option<GpuVendor> {
     }
 }
 
-/// Применяет переменные PRIME offload для указанного производителя дискретного GPU.
+/// Applies the PRIME offload variables for the given discrete GPU vendor.
 ///
 /// # Safety
-/// Должно вызываться строго ДО старта сторонних потоков.
+/// Must be called strictly BEFORE other threads start.
 unsafe fn apply_discrete_gpu(vendor: GpuVendor) {
-    // SAFETY: вызывается в самом начале процесса в GUI-потоке до старта сторонних потоков
+    // SAFETY: called at the very start of the process in the GUI thread before other threads start
     unsafe {
         match vendor {
             GpuVendor::Nvidia => {
-                // Перенаправляем рендеринг на дискретный GPU NVIDIA (PRIME offload)
+                // Redirect rendering to the discrete NVIDIA GPU (PRIME offload)
                 std::env::set_var("__NV_PRIME_RENDER_OFFLOAD", "1");
                 std::env::set_var("__GLX_VENDOR_LIBRARY_NAME", "nvidia");
                 std::env::set_var("__VK_LAYER_NV_optimus", "NVIDIA_only");
-                // Wayland: Qt берёт контекст через EGL, а не GLX — вендор EGL тоже NVIDIA
+                // Wayland: Qt takes the context via EGL, not GLX - the EGL vendor is also NVIDIA
                 for json in ["/usr/share/glvnd/egl_vendor.d/10_nvidia.json", "/etc/glvnd/egl_vendor.d/10_nvidia.json"] {
                     if Path::new(json).exists() {
                         std::env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", json);
@@ -153,24 +153,24 @@ unsafe fn apply_discrete_gpu(vendor: GpuVendor) {
                 std::env::set_var("DRI_PRIME", "1");
             }
             GpuVendor::Other => {
-                // Для AMD и других дискретных видеокарт достаточно offload через Mesa
+                // For AMD and other discrete GPUs, offload via Mesa is enough
                 std::env::set_var("DRI_PRIME", "1");
             }
         }
     }
 }
 
-/// Применяет предпочтение графического процессора через переменные окружения.
+/// Applies the GPU preference via environment variables.
 ///
-/// Должно вызываться строго ДО создания QApplication и графического контекста Qt (EGL/GLX/Vulkan),
-/// иначе загрузчики libglvnd / Mesa / драйвер NVIDIA зафиксируют устройство по умолчанию для процесса.
+/// Must be called strictly BEFORE creating QApplication and the Qt graphics context (EGL/GLX/Vulkan),
+/// otherwise the libglvnd / Mesa / NVIDIA driver loaders will fix the default device for the process.
 fn apply_gpu_preference(settings: &SettingsStore) {
     let pref = settings.get_str(SettingKey::GpuPreference);
     match pref.as_str() {
         "integrated" => {
-            // SAFETY: вызывается в самом начале процесса в GUI-потоке до старта сторонних потоков
+            // SAFETY: called at the very start of the process in the GUI thread before other threads start
             unsafe {
-                // Принудительно отключаем PRIME offload и заставляем использовать интегрированную графику
+                // Force PRIME offload off and make it use integrated graphics
                 std::env::remove_var("__NV_PRIME_RENDER_OFFLOAD");
                 std::env::remove_var("__GLX_VENDOR_LIBRARY_NAME");
                 std::env::remove_var("__VK_LAYER_NV_optimus");
@@ -179,47 +179,47 @@ fn apply_gpu_preference(settings: &SettingsStore) {
             }
         }
         "discrete" => {
-            // Если дискретной видеокарты нет или чтение sysfs не удалось — предупреждаем в лог
+            // If there is no discrete GPU or the sysfs read failed - warn in the log
             let Some(vendor) = discrete_gpu_vendor() else {
                 eprintln!("materialfy: gpu preference is 'discrete' but no dedicated GPU was detected");
                 return;
             };
-            // SAFETY: вызывается в самом начале процесса в GUI-потоке до старта сторонних потоков
+            // SAFETY: called at the very start of the process in the GUI thread before other threads start
             unsafe {
                 apply_discrete_gpu(vendor);
             }
         }
         _ => {
-            // "auto" — как решит система: музыкальному плееру незачем будить дискретную видеокарту
-            // (батарея, вентиляторы); кто упирается в драйвер встроенной — выбирает «Дискретная» сам
+            // "auto" - as the system decides: a music player has no need to wake the discrete GPU
+            // (battery, fans); whoever hits the integrated driver's limits picks "Discrete" themselves
         }
     }
 }
 
-/// Масштаб интерфейса из настроек: QT_SCALE_FACTOR читается QGuiApplication при создании, поэтому
-/// переменная выставляется до app_create. Смена настройки применяется после перезапуска приложения.
+/// UI scale from settings: QT_SCALE_FACTOR is read by QGuiApplication at creation, therefore
+/// the variable is set before app_create. A setting change is applied after the application restarts.
 fn apply_ui_scale(settings: &SettingsStore) {
     const MARKER: &str = "MATERIALFY_UI_SCALE";
-    // Перезапуск из самого приложения (обновление, AppImage) наследует переменные прошлого процесса:
-    // в этом случае настройка важнее унаследованного значения, иначе новый масштаб не применится.
+    // A restart from within the application (update, AppImage) inherits the previous process's variables:
+    // in that case the setting takes priority over the inherited value, otherwise the new scale will not apply.
     let relaunched = std::env::var_os(MARKER).is_some();
     if !relaunched && std::env::var_os("QT_SCALE_FACTOR").is_some_and(|value| !value.is_empty()) {
-        return; // явное значение пользователя важнее настройки
+        return; // an explicit user value takes priority over the setting
     }
     let percent = settings.get_int(SettingKey::UiScale);
     let factor = format!("{:.2}", percent as f64 / 100.0);
     let percent = percent.to_string();
-    // Через Qt: на Windows он читает переменные из копии C-рантайма, std::env::set_var её не меняет
-    // (см. qml_cache). std::env нужен, чтобы значение унаследовал перезапущенный процесс.
+    // Via Qt: on Windows it reads variables from a copy of the C runtime, std::env::set_var does not change it
+    // (see qml_cache). std::env is needed so the restarted process inherits the value.
     ffi::set_qt_env(&qstr("QT_SCALE_FACTOR"), &qstr(&factor));
-    // SAFETY: вызывается до создания QApplication и сторонних потоков
+    // SAFETY: called before creating QApplication and other threads
     unsafe {
         std::env::set_var("QT_SCALE_FACTOR", &factor);
         std::env::set_var(MARKER, &percent);
     }
 }
 
-/// Временный каталог настроек для --screenshot.
+/// A temporary settings directory for --screenshot.
 fn make_temp_dir() -> PathBuf {
     let base = std::env::temp_dir();
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
@@ -256,7 +256,7 @@ fn load_fonts() {
     }
 }
 
-/// «materialfy: <модуль>: <сообщение>».
+/// "materialfy: <module>: <message>".
 struct LogFormat;
 
 impl<S, N> tracing_subscriber::fmt::FormatEvent<S, N> for LogFormat
@@ -287,7 +287,7 @@ fn init_tracing() {
 }
 
 fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
-    // librespot (Session/Spirc), актор плеера, опрос Web API и задачи мостов делят этот рантайм
+    // librespot (Session/Spirc), the player actor, Web API polling and bridge tasks share this runtime
     let workers = std::thread::available_parallelism().map_or(3, |n| n.get()).clamp(3, 6);
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(workers)
@@ -320,8 +320,8 @@ fn initial_properties(cli: &Cli) -> QVariantMap {
     map
 }
 
-/// MPRIS Raise/Quit → GUI-поток (C++ сам переносит вызов в него).
-/// Windows/macOS: просьбы «показать окно» от новых процессов (на Linux они приходят через MPRIS Raise).
+/// MPRIS Raise/Quit -> the GUI thread (C++ moves the call into it itself).
+/// Windows/macOS: "show the window" requests from new processes (on Linux they arrive via MPRIS Raise).
 fn spawn_instance_listener(rt: &tokio::runtime::Handle) {
     rt.spawn(async move {
         let mut listener = match mf_platform::single_instance::InstanceListener::start().await {
@@ -351,7 +351,7 @@ fn spawn_app_requests(rt: &tokio::runtime::Handle, services: &Services) {
     });
 }
 
-/// Код выхода процесса.
+/// The process exit code.
 pub fn run(cli: Cli) -> i32 {
     setup_env(&cli);
     let qml_guard = crate::qml_cache::prepare(cli.screenshot.is_none());
@@ -372,8 +372,8 @@ pub fn run(cli: Cli) -> i32 {
         }
     };
 
-    // Плеер уже работает (возможно, спрятан в трей или ещё запускается) — показываем его окно вместо второго
-    // экземпляра. --new-instance — для разработки и снимков
+    // The player is already running (possibly hidden in the tray or still starting) - we show its window instead of a second
+    // instance. --new-instance - for development and screenshots
     if cli.main_mode() && !cli.new_instance && !rt.block_on(mf_platform::single_instance::become_primary()) {
         return 0;
     }
@@ -381,12 +381,12 @@ pub fn run(cli: Cli) -> i32 {
         guard.arm(rt.handle());
     }
 
-    // иконка окна; на Windows ярлыки и панель задач берут ещё и ресурс IDI_ICON1 из exe (build.rs)
+    // window icon; on Windows shortcuts and the taskbar also take the IDI_ICON1 resource from the exe (build.rs)
     let icon = assets_dir().join("materialfy.svg");
     if icon.is_file() {
         ffi::app_set_window_icon(&qpath(&icon));
     }
-    // До создания окон: Qt Quick берёт период кадра у основного экрана (см. display.rs)
+    // Before windows are created: Qt Quick takes the frame period from the primary screen (see display.rs)
     let screen_note = crate::display::prefer_fastest_screen();
     if cli.debug_fps {
         eprintln!("{screen_note}");
@@ -397,7 +397,7 @@ pub fn run(cli: Cli) -> i32 {
     // UI language before any service or QML produces text (default: the OS UI language — Russian or English)
     crate::bridges::translations::apply_language(crate::bridges::translations::effective_language(&settings));
     let options = ServicesOptions {
-        // Снимки — без сессии, кроме явного файла для тестов
+        // Screenshots - without a session, except for an explicit file for tests
         persist_session: cli.screenshot.is_none() || env_set("MATERIALFY_SESSION_FILE"),
         enable_media: cli.screenshot.is_none(),
     };
@@ -420,7 +420,7 @@ pub fn run(cli: Cli) -> i32 {
         system_dark: crate::qt::system_dark_watch(),
     });
     crate::qt::ffi::ffi::start_gui_heartbeat();
-    // Все синглтоны — до создания движка: регистрация после загрузки модуля ломает разрешение типов
+    // All singletons - before the engine is created: registering after the module loads breaks type resolution
     ffi::register_qml_types();
 
     let code = run_engine(&cli, &rt, &services);
@@ -440,7 +440,7 @@ fn run_engine(cli: &Cli, rt: &tokio::runtime::Runtime, services: &Services) -> i
     e.as_mut().add_import_path(&qpath(&qml_dir()));
     ffi::engine_set_context_bool(e.as_mut(), &qstr("materialfyDebugWheel"), cli.debug_wheel);
     ffi::engine_set_context_bool(e.as_mut(), &qstr("materialfyDebugFps"), cli.debug_fps);
-    // Значок в трее: не для снимков и не для галереи
+    // Tray icon: not for screenshots and not for the gallery
     ffi::engine_set_context_bool(e.as_mut(), &qstr("materialfyTray"), cli.screenshot.is_none() && !cli.gallery);
 
     let entry = match &cli.qml {
@@ -466,19 +466,19 @@ fn run_engine(cli: &Cli, rt: &tokio::runtime::Runtime, services: &Services) -> i
         services.auth.start();
     }
 
-    // SAFETY: root — живой корневой объект движка, всё в GUI-потоке
+    // SAFETY: root is a live root object of the engine, everything in the GUI thread
     unsafe {
         if ffi::object_has_property(root, &qstr("trayWanted")) {
-            // Главное окно может прятаться в трей — выход решает оно само (Main.qml, onClosing), а не Qt
+            // The main window may hide into the tray - the exit is decided by it itself (Main.qml, onClosing), not by Qt
             ffi::app_set_quit_on_last_window_closed(false);
         }
         ffi::set_main_window(root);
     }
-    // SAFETY: root — живое окно движка, GUI-поток
+    // SAFETY: root is a live window of the engine, GUI thread
     unsafe { ffi::watch_software_rendering(root) };
     if cli.screenshot.is_none() {
         crate::winframe::install(root);
-        // SAFETY: root — живое окно движка, GUI-поток
+        // SAFETY: root is a live window of the engine, GUI thread
         unsafe { ffi::install_memory_trim(root) };
     }
     spawn_app_requests(rt.handle(), services);
@@ -488,7 +488,7 @@ fn run_engine(cli: &Cli, rt: &tokio::runtime::Runtime, services: &Services) -> i
 
     if let Some(path) = &cli.screenshot {
         let delay = i32::try_from(cli.delay).unwrap_or(i32::MAX);
-        // SAFETY: root жив, пока жив движок; таймер держит QPointer
+        // SAFETY: root is alive while the engine is alive; the timer holds a QPointer
         unsafe { ffi::schedule_screenshot(root, &qpath(path), delay) };
     }
 
@@ -520,13 +520,13 @@ fn find_qml_dir() -> PathBuf {
     absolute(Path::new("src/materialfy/qml"))
 }
 
-/// Каталог src/materialfy/qml (см. шапку).
+/// The src/materialfy/qml directory (see the header).
 pub fn qml_dir() -> PathBuf {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
     DIR.get_or_init(find_qml_dir).clone()
 }
 
-/// Каталог src/materialfy/assets.
+/// The src/materialfy/assets directory.
 pub fn assets_dir() -> PathBuf {
     let qml = qml_dir();
     qml.parent().map_or_else(|| PathBuf::from("assets"), |p| p.join("assets"))

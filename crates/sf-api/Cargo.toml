@@ -1,6 +1,6 @@
 [package]
 name = "sf-api"
-description = "Spotify Web API: клиент с лимитами, общий/личный ключ, модели, HTTP с прокси, маппинг в md3-model"
+description = "Spotify Web API: client with rate limits, shared/personal key, models, HTTP with proxy, mapping into md3-model"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

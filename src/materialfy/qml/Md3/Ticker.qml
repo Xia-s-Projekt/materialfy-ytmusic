@@ -1,10 +1,10 @@
 pragma Singleton
 import QtQuick
 
-// Общие «часы» декоративных бесконечных анимаций (дрейф фона, бегущая волна, вращение обложки, «дыхание»
-// клякс): ~30 Гц вместо частоты монитора, и все они срабатывают в одном кадре. Каждая такая анимация на
-// FrameAnimation заставляла перерисовывать всё окно на 144–280 Гц, пока играет музыка.
-// Подписчики — TickAnimation; таймер идёт, только пока хоть один из них запущен.
+// Shared "clock" for decorative infinite animations (background drift, running wave, cover rotation, "breathing"
+// of the blobs): ~30 Hz instead of the monitor rate, and they all fire in one frame. Each such animation on
+// a FrameAnimation forced the whole window to redraw at 144-280 Hz while music played.
+// Subscribers are TickAnimation; the timer only runs while at least one of them is active.
 QtObject {
     id: root
 
@@ -20,7 +20,7 @@ QtObject {
         onRunningChanged: root._last = Date.now()
         onTriggered: {
             const now = Date.now()
-            // после паузы (свёрнутое окно, сон) — не прыгать на весь пропущенный интервал
+            // after a pause (minimized window, sleep) — do not jump by the whole missed interval
             const dt = Math.min(0.1, Math.max(0, (now - root._last) / 1000))
             root._last = now
             root.tick(dt)

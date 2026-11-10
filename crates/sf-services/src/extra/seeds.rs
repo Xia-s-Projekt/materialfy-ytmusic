@@ -1,5 +1,5 @@
-//! Группы сидов радио на орбите главной (вместо групп «Моей волны» Яндекса): недавние треки, исполнители,
-//! альбомы и плейлисты, «любой трек» (выбранные через поиск). Закрепления (SettingKey::Pins) — первыми в группе.
+//! Radio seed groups on the home orbit (instead of Yandex's "My Wave" groups): recent tracks, artists,
+//! albums and playlists, "any track" (chosen through search). Pins (SettingKey::Pins) — first in the group.
 use std::collections::HashSet;
 
 use md3_model::{AlbumItem, ArtistItem, PlayContext, PlaylistItem, RadioSeed, RadioSeedGroup, TrackItem};
@@ -15,25 +15,25 @@ pub const ARTISTS: &str = "artists";
 pub const COLLECTIONS: &str = "collections";
 pub const ANY: &str = "any";
 
-/// Откуда берутся сиды.
+/// Where the seeds come from.
 #[derive(Default)]
 pub struct SeedSources<'a> {
-    /// история, новые первыми (повторы допустимы)
+    /// history, newest first (repeats allowed)
     pub recent_tracks: &'a [TrackItem],
-    /// Любимые — запас, пока история короткая
+    /// Liked — a fallback while the history is short
     pub liked: &'a [TrackItem],
     pub recent_contexts: &'a [PlayContext],
     pub playlists: &'a [PlaylistItem],
     pub albums: &'a [AlbumItem],
-    /// подписки на исполнителей
+    /// artist subscriptions
     pub artists: &'a [ArtistItem],
-    /// закреплённые URI (сиды или станции)
+    /// pinned URIs (seeds or stations)
     pub pins: &'a [String],
-    /// выбранные через поиск, новые первыми
+    /// chosen through search, newest first
     pub any: &'a [RadioSeed],
 }
 
-/// Сид по URI, если о нём что-то известно (подпись и обложка).
+/// A seed by URI, if anything is known about it (label and cover).
 pub fn known_seed(sources: &SeedSources<'_>, uri: &str) -> Option<RadioSeed> {
     let seed = |label: &str, cover: &str, kind: &str| RadioSeed {
         uri: uri.to_owned(),
@@ -98,7 +98,7 @@ fn context_seed(contexts: &[PlayContext], uri: &str, kind: &str) -> Option<Radio
         .map(|c| RadioSeed { uri: uri.to_owned(), label: c.title.clone(), cover: c.cover.clone(), kind: kind.to_owned() })
 }
 
-/// Закреплённые сиды нужного вида (станция → её сид).
+/// Pinned seeds of the wanted kind (station → its seed).
 fn pinned(sources: &SeedSources<'_>, kinds: &[&str]) -> Vec<RadioSeed> {
     sources
         .pins
@@ -139,8 +139,8 @@ fn track_seed(track: &TrackItem) -> RadioSeed {
     RadioSeed { uri: track.play_uri(), label: track.title.clone(), cover: track.cover.clone(), kind: "track".into() }
 }
 
-/// Четыре группы орбиты (всегда все четыре, пустые тоже: у «любого трека» есть кнопка «+»).
-/// `hidden` — локальный стоп-лист: такие треки не предлагаются.
+/// Four orbit groups (always all four, the empty ones too: "any track" has a "+" button).
+/// `hidden` — a local stop-list: such tracks are not suggested.
 pub fn build(sources: &SeedSources<'_>, hidden: &dyn Fn(&str) -> bool) -> Vec<RadioSeedGroup> {
     let playable = |t: &&TrackItem| !t.is_episode && t.available && !t.track_id.is_empty() && !hidden(&t.play_uri());
 
@@ -216,7 +216,7 @@ pub fn build(sources: &SeedSources<'_>, hidden: &dyn Fn(&str) -> bool) -> Vec<Ra
     ]
 }
 
-/// Сид по умолчанию: первый недавний трек (иначе первый сид любой группы).
+/// Default seed: the first recent track (otherwise the first seed of any group).
 pub fn default_seed(groups: &[RadioSeedGroup]) -> Option<String> {
     groups
         .iter()
@@ -226,12 +226,12 @@ pub fn default_seed(groups: &[RadioSeedGroup]) -> Option<String> {
         .map(|s| s.uri.clone())
 }
 
-/// Сид из групп по URI.
+/// A seed from the groups by URI.
 pub fn find<'a>(groups: &'a [RadioSeedGroup], uri: &str) -> Option<&'a RadioSeed> {
     groups.iter().flat_map(|g| g.items.iter()).find(|s| s.uri == uri)
 }
 
-/// «Радио «…»» (Radio “…”).
+/// "Radio" or Radio "{label}" — the same in every language.
 pub fn station_title(label: &str) -> String {
     if label.is_empty() { mf_i18n::t("Radio") } else { mf_i18n::tf("Radio “{0}”", &[&label]) }
 }
@@ -276,7 +276,7 @@ mod tests {
         let groups = build(&sources, &|uri| uri == "spotify:track:2");
         assert_eq!(uris(&groups[0]), ["spotify:track:1", "spotify:track:3"]);
         assert_eq!(default_seed(&groups).as_deref(), Some("spotify:track:1"));
-        // исполнители — из недавних треков, без повторов
+        // artists — from recent tracks, without repeats
         assert_eq!(uris(&groups[1]), ["spotify:artist:a", "spotify:artist:b"]);
         assert_eq!(groups[1].items[0].label, "Aa");
     }
@@ -307,10 +307,10 @@ mod tests {
         let playlists = [PlaylistItem {
             playlist_id: "p".into(),
             uri: "spotify:playlist:p".into(),
-            title: "Мой".into(),
+            title: "My".into(),
             ..Default::default()
         }];
-        let contexts = [PlayContext::with_uri("album", "spotify:album:x").titled("Альбом X")];
+        let contexts = [PlayContext::with_uri("album", "spotify:album:x").titled("Album X")];
         let pins = ["spotify:station:track:2".to_owned(), "spotify:playlist:p".to_owned(), "spotify:artist:zz".to_owned()];
         let sources = SeedSources {
             recent_tracks: &history,
@@ -322,8 +322,8 @@ mod tests {
         let groups = build(&sources, &|_| false);
         assert_eq!(uris(&groups[0]), ["spotify:track:2", "spotify:track:1"]);
         assert_eq!(uris(&groups[2]), ["spotify:playlist:p", "spotify:album:x"]);
-        assert_eq!(groups[2].items[1].label, "Альбом X");
-        // неизвестный закреплённый исполнитель без подписи не показывается
+        assert_eq!(groups[2].items[1].label, "Album X");
+        // an unknown pinned artist without a label is not shown
         assert_eq!(uris(&groups[1]), ["spotify:artist:a", "spotify:artist:b"]);
     }
 

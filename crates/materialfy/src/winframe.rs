@@ -1,13 +1,13 @@
-//! Окно без рамки на Windows: нативный ресайз, Aero Snap, тень и скруглённые углы Windows 11 через DWM
-//! (cpp/winframe.cpp). См. контракт §7. На других ОС — пусто: ресайз делает QML ResizeEdges через
-//! startSystemResize, углы скругляет QML WindowFrame (окно прозрачное).
-//! Там же — кнопки «Назад / Пауза / Дальше» под эскизом окна на панели задач Windows (cpp/taskbar.cpp)
-//! и QML-синглтон WindowShell (свернуть окно, не теряя «развёрнуто» / «на весь экран»; окна плеера вне главного
-//! окна — островок и виджет в панели задач, cpp/floating.cpp).
+//! Frameless window on Windows: native resize, Aero Snap, shadow and rounded Windows 11 corners via DWM
+//! (cpp/winframe.cpp). See contract §7. On other OSes - nothing: resize is done by QML ResizeEdges via
+//! startSystemResize, corners are rounded by QML WindowFrame (the window is transparent).
+//! There too - the "Back / Pause / Next" buttons under the window thumbnail on the Windows taskbar (cpp/taskbar.cpp)
+//! and the QML singleton WindowShell (minimize the window without losing "maximized" / "fullscreen"; player windows outside the main
+//! window - the island and the taskbar widget, cpp/floating.cpp).
 
 use cxx_qt_lib::QString;
 
-/// Ширина зоны ресайза, логические пиксели (как ResizeEdges.grip).
+/// Resize zone width, logical pixels (like ResizeEdges.grip).
 pub const GRIP: i32 = 6;
 
 #[cxx_qt::bridge]
@@ -20,7 +20,7 @@ pub mod qobject {
     #[namespace = "mf"]
     unsafe extern "C++" {
         include!("winframe.h");
-        /// setWindowStates(windowStates() | Minimized) — см. WindowShell.minimize
+        /// setWindowStates(windowStates() | Minimized) - see WindowShell.minimize
         unsafe fn window_minimize(window: *mut QObject);
         include!("taskbar.h");
         unsafe fn taskbar_install(window: *mut QObject) -> bool;
@@ -40,30 +40,30 @@ pub mod qobject {
     }
 
     unsafe extern "RustQt" {
-        /// Окно для QML: Window.showMinimized() и visibility = Window.Minimized сбрасывают «развёрнуто» и
-        /// «на весь экран» (Qt ставит состояние ровно Minimized), и окно возвращается из панели задач обычным.
-        /// WindowShell.minimize(window) добавляет Minimized к текущему состоянию — ОС помнит, каким его вернуть.
+        /// For the QML window: Window.showMinimized() and visibility = Window.Minimized reset "maximized" and
+        /// "fullscreen" (Qt sets the state to exactly Minimized), and the window comes back from the taskbar as a normal one.
+        /// WindowShell.minimize(window) adds Minimized to the current state - the OS remembers which one to restore.
         #[qobject]
         type WindowShell = super::WindowShellRust;
 
         #[qinvokable]
         unsafe fn minimize(self: &WindowShell, window: *mut QObject);
 
-        /// Показать и поднять главное окно (из трея, свёрнутое — тоже), как второй запуск приложения
+        /// Show and raise the main window (from the tray, minimized too), like a second launch of the application
         #[qinvokable]
         #[cxx_name = "raiseMain"]
         fn raise_main(self: &WindowShell);
-        /// Окно-островок: не в панели задач и Alt+Tab, не забирает фокус (Windows; иначе false)
+        /// Island window: not in the taskbar or Alt+Tab, does not take focus (Windows; otherwise false)
         #[qinvokable]
         #[cxx_name = "makeToolWindow"]
         unsafe fn make_tool_window(self: &WindowShell, window: *mut QObject) -> bool;
-        /// Сеанс KDE Plasma на Wayland: островок можно поставить скриптом KWin (kwinPlace)
+        /// KDE Plasma session on Wayland: the island can be placed by a KWin script (kwinPlace)
         #[qinvokable]
         #[cxx_name = "kwinAvailable"]
         fn kwin_available(self: &WindowShell) -> bool;
-        /// KDE Wayland: скрипт KWin ставит окно с этим заголовком в (x, y, w, h) логических px рабочего стола,
-        /// поверх всех и вне панели задач, и прячет его под полноэкранным / развёрнутым окном на том же мониторе.
-        /// Тащат мышью (startSystemMove) — окно ходит только по осям move_x / move_y, конец — сигнал kwinMoved
+        /// KDE Wayland: the KWin script places the window with this title at (x, y, w, h) logical px of the desktop,
+        /// above everything and outside the taskbar, and hides it under a fullscreen / maximized window on the same monitor.
+        /// Dragged by the mouse (startSystemMove) - the window moves only along the move_x / move_y axes, the end is the kwinMoved signal
         #[qinvokable]
         #[cxx_name = "kwinPlace"]
         fn kwin_place(
@@ -78,56 +78,56 @@ pub mod qobject {
             move_x: bool,
             move_y: bool,
         );
-        /// KDE Wayland: окно с этим заголовком перетащили мышью и отпустили в (x, y) логических px рабочего стола
+        /// KDE Wayland: the window with this title was dragged by the mouse and released at (x, y) logical px of the desktop
         #[qsignal]
         #[cxx_name = "kwinMoved"]
         fn kwin_moved(self: Pin<&mut WindowShell>, title: QString, x: i32, y: i32);
-        /// Выгрузить скрипт KWin этого окна
+        /// Unload this window's KWin script
         #[qinvokable]
         #[cxx_name = "kwinRelease"]
         fn kwin_release(self: &WindowShell, title: &QString);
-        /// Мышь ловит и рисуется только прямоугольник (логические px окна); w <= 0 — всё окно
+        /// The mouse is captured and only a rectangle is drawn (logical px of the window); w <= 0 - the whole window
         #[qinvokable]
         #[cxx_name = "setMask"]
         unsafe fn set_mask(self: &WindowShell, window: *mut QObject, x: i32, y: i32, w: i32, h: i32);
-        /// Мышь ловит и рисуется только скруглённый прямоугольник (логические px окна); w <= 0 — всё окно
+        /// The mouse is captured and only a rounded rectangle is drawn (logical px of the window); w <= 0 - the whole window
         #[qinvokable]
         #[cxx_name = "setMaskRounded"]
         unsafe fn set_mask_rounded(self: &WindowShell, window: *mut QObject, x: i32, y: i32, w: i32, h: i32, radius: i32);
-        /// На мониторе окна полноэкранное приложение (видео, игра, браузер по F11, презентация) — Windows
+        /// A fullscreen application (video, game, browser via F11, presentation) is on the window's monitor - Windows
         #[qinvokable]
         #[cxx_name = "fullscreenOn"]
         unsafe fn fullscreen_on(self: &WindowShell, window: *mut QObject) -> bool;
-        /// На мониторе окна развёрнутое окно — Windows
+        /// A maximized window is on the window's monitor - Windows
         #[qinvokable]
         #[cxx_name = "maximizedOn"]
         unsafe fn maximized_on(self: &WindowShell, window: *mut QObject) -> bool;
-        /// Курсор над прямоугольником окна (логические px), даже если окно прозрачно для мыши:
-        /// 0 — нет, 1 — да, 2 — да, но зажата кнопка мыши
+        /// The cursor is over the window rectangle (logical px), even if the window is transparent to the mouse:
+        /// 0 - no, 1 - yes, 2 - yes, but a mouse button is held
         #[qinvokable]
         #[cxx_name = "cursorIn"]
         unsafe fn cursor_in(self: &WindowShell, window: *mut QObject, x: i32, y: i32, w: i32, h: i32) -> i32;
-        /// Встроить окно в панель задач Windows и поставить на место pos (taskbarWidgetPos): 1 — встроено,
-        /// 2 — поверх панели, 0 — некуда, -1 — окно потеряно (перезапуск Explorer), создать заново. См. cpp/floating.h
+        /// Embed the window in the Windows taskbar and put it at position pos (taskbarWidgetPos): 1 - embedded,
+        /// 2 - above the bar, 0 - nowhere to put it, -1 - the window is lost (Explorer restart), create a new one. See cpp/floating.h
         #[qinvokable]
         #[cxx_name = "taskbarPlace"]
         unsafe fn taskbar_place(self: &WindowShell, window: *mut QObject, width: i32, height: i32, embed: bool, pos: &QString) -> i32;
-        /// Перетаскивание виджета вдоль панели за курсором (phase 0 — начало, 1 — шаг, 2 — конец) → место
+        /// Dragging the widget along the bar following the cursor (phase 0 - start, 1 - step, 2 - end) -> position
         #[qinvokable]
         #[cxx_name = "taskbarDrag"]
         unsafe fn taskbar_drag(self: &WindowShell, window: *mut QObject, width: i32, height: i32, phase: i32) -> QString;
         #[qinvokable]
         #[cxx_name = "taskbarDetach"]
         unsafe fn taskbar_detach(self: &WindowShell, window: *mut QObject);
-        /// Стрелки и пробел без фокуса, пока курсор над окном (Windows): QML-функция окна floatingKey(code)
+        /// Arrows and space without focus while the cursor is over the window (Windows): the window's floatingKey(code) QML function
         #[qinvokable]
         #[cxx_name = "keyHook"]
         unsafe fn key_hook(self: &WindowShell, window: *mut QObject, on: bool) -> bool;
-        /// Пропуск кликов через окно: true — клики идут в окна под ним
+        /// Pass clicks through the window: true - clicks go to the windows under it
         #[qinvokable]
         #[cxx_name = "setClickThrough"]
         unsafe fn set_click_through(self: &WindowShell, window: *mut QObject, enable: bool);
-        /// Запущен Windhawk со стилем панели задач: виджет тогда — окно над панелью, а не в ней
+        /// Windhawk is running with a taskbar style: the widget is then a window above the bar, not inside it
         #[qinvokable]
         #[cxx_name = "windhawkActive"]
         fn windhawk_active(self: &WindowShell) -> bool;
@@ -142,7 +142,7 @@ pub struct WindowShellRust;
 impl qobject::WindowShell {
     unsafe fn minimize(&self, window: *mut cxx_qt::QObject) {
         if !window.is_null() {
-            // SAFETY: окно из QML (живой QObject), вызов из GUI-потока
+            // SAFETY: the window comes from QML (a live QObject), called from the GUI thread
             unsafe { qobject::window_minimize(window) };
         }
     }
@@ -175,38 +175,38 @@ impl qobject::WindowShell {
 
     fn kwin_release(&self, title: &QString) {
         let title = title.to_string();
-        // при выходе фоновая задача не успеет: ждём выгрузки скрипта (недолго), иначе он остаётся в KWin до перезапуска
+        // on exit the background task will not have time: we wait for the script to unload (not long), otherwise it stays in KWin until restart
         crate::context::ctx().rt.block_on(async move {
             let _ = tokio::time::timeout(std::time::Duration::from_millis(500), mf_platform::kwin::release(&title)).await;
         });
     }
 
     unsafe fn make_tool_window(&self, window: *mut cxx_qt::QObject) -> bool {
-        // SAFETY: окно из QML (живой QObject), вызов из GUI-потока
+        // SAFETY: the window comes from QML (a live QObject), called from the GUI thread
         !window.is_null() && unsafe { qobject::floating_tool_window(window) }
     }
 
     unsafe fn set_mask(&self, window: *mut cxx_qt::QObject, x: i32, y: i32, w: i32, h: i32) {
         if !window.is_null() {
-            // SAFETY: то же
+            // SAFETY: same
             unsafe { qobject::floating_set_mask(window, x, y, w, h) };
         }
     }
 
     unsafe fn set_mask_rounded(&self, window: *mut cxx_qt::QObject, x: i32, y: i32, w: i32, h: i32, radius: i32) {
         if !window.is_null() {
-            // SAFETY: то же
+            // SAFETY: same
             unsafe { qobject::floating_set_mask_rounded(window, x, y, w, h, radius) };
         }
     }
 
     unsafe fn maximized_on(&self, window: *mut cxx_qt::QObject) -> bool {
-        // SAFETY: то же
+        // SAFETY: same
         !window.is_null() && unsafe { qobject::floating_maximized_on(window) }
     }
 
     unsafe fn fullscreen_on(&self, window: *mut cxx_qt::QObject) -> bool {
-        // SAFETY: то же
+        // SAFETY: same
         !window.is_null() && unsafe { qobject::floating_fullscreen_on(window) }
     }
 
@@ -214,7 +214,7 @@ impl qobject::WindowShell {
         if window.is_null() {
             return 0;
         }
-        // SAFETY: то же
+        // SAFETY: same
         unsafe { qobject::floating_cursor_in(window, x, y, w, h) }
     }
 
@@ -222,7 +222,7 @@ impl qobject::WindowShell {
         if window.is_null() {
             return 0;
         }
-        // SAFETY: то же
+        // SAFETY: same
         unsafe { qobject::floating_taskbar_place(window, width, height, embed, pos) }
     }
 
@@ -230,25 +230,25 @@ impl qobject::WindowShell {
         if window.is_null() {
             return QString::default();
         }
-        // SAFETY: то же
+        // SAFETY: same
         unsafe { qobject::floating_taskbar_drag(window, width, height, phase) }
     }
 
     unsafe fn key_hook(&self, window: *mut cxx_qt::QObject, on: bool) -> bool {
-        // SAFETY: то же; снятие хука с нулевым окном — снять любой
+        // SAFETY: same; removing a hook with a null window - remove any
         unsafe { qobject::floating_key_hook(window, on) }
     }
 
     unsafe fn taskbar_detach(&self, window: *mut cxx_qt::QObject) {
         if !window.is_null() {
-            // SAFETY: то же
+            // SAFETY: same
             unsafe { qobject::floating_taskbar_detach(window) };
         }
     }
 
     unsafe fn set_click_through(&self, window: *mut cxx_qt::QObject, enable: bool) {
         if !window.is_null() {
-            // SAFETY: то же
+            // SAFETY: same
             unsafe { qobject::floating_set_click_through(window, enable) };
         }
     }
@@ -258,16 +258,16 @@ impl qobject::WindowShell {
     }
 }
 
-/// Поставить фильтр на главное окно (после load, окно уже создано). `window` — QQuickWindow* корня.
+/// Install a filter on the main window (after load, the window already exists). `window` is the root QQuickWindow*.
 pub fn install(window: *mut cxx_qt::QObject) {
     if !cfg!(target_os = "windows") || window.is_null() {
         return;
     }
-    // SAFETY: window — живой корневой объект движка, вызов из GUI-потока
+    // SAFETY: window is a live root object of the engine, called from the GUI thread
     if !unsafe { crate::qt::ffi::ffi::winframe_install(window, GRIP) } {
         tracing::warn!("window frame: root is not a QWindow or has no HWND — resizing via QML");
     }
-    // SAFETY: то же окно; Player и прочие синглтоны уже созданы (register_qml_types до load)
+    // SAFETY: the same window; Player and the other singletons are already created (register_qml_types before load)
     if !unsafe { qobject::taskbar_install(window) } {
         tracing::warn!("taskbar: no thumbnail toolbar (no HWND, QML engine or Player)");
     }

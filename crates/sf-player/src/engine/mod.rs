@@ -1,19 +1,19 @@
-//! Нижний слой sf-player (исполнитель «engine»): librespot Engine, свой sink на fastframe-audio, EQ/лимитер,
-//! tap уровня, чтение через сессию, zeroconf, обложка в файл. Наружу — через PlayerHandle (верхний слой)
-//! и прямые вызовы session_reads/zeroconf/sink::output_devices из sf-services.
+//! Bottom layer of sf-player (provider "engine"): librespot Engine, custom sink on fastframe-audio, EQ/limiter,
+//! level tap, reads through the session, zeroconf, cover to file. Outward — through PlayerHandle (upper layer)
+//! and direct calls to session_reads/zeroconf/sink::output_devices from sf-services.
 pub mod cover;
 pub mod eq;
 pub mod fx;
 pub mod limiter;
-/// «Новинки» через сессию: «Радар новинок», подписки, релизы исполнителей
+/// "New releases" through the session: "Release Radar", subscriptions, artist releases
 pub mod new_releases;
 pub mod player;
 pub mod resample;
-/// коллекция аккаунта через сессию: любимые треки, альбомы, подписки (collection v2)
+/// account collection through the session: liked tracks, albums, subscriptions (collection v2)
 pub mod session_collection;
-/// плейлисты через сессию: список из rootlist, правки (playlist4 changes), создание, подписка, обложка
+/// playlists through the session: list from rootlist, edits (playlist4 changes), creation, subscription, cover
 pub mod session_playlists;
-/// подкасты через сессию: шоу и выпуски (metadata), сохранённые шоу и «Ваши выпуски»
+/// podcasts through the session: shows and episodes (metadata), saved shows and "Your episodes"
 pub mod session_podcasts;
 pub mod session_reads;
 pub mod sink;

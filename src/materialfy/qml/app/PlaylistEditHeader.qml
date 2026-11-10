@@ -4,16 +4,16 @@ import QtQuick.Dialogs
 import Md3
 import Materialfy.Core
 
-// Шапка плейлиста в режиме правки: название и описание правятся прямо в шапке (сохранение по Enter или
-// потере фокуса — сразу в Spotify), «Сменить» на обложке, «Готово», «Добавить треки», «Публичный».
-// Каждое изменение уходит в Web API сразу (транзакций нет); ошибки откатывает сервис (Library.notice).
+// Playlist header in edit mode: the title and description are edited right in the header (saved on Enter or
+// or focus loss — straight to Spotify), "Change" on the cover, "Done", "Add tracks", "Public".
+// Every change goes to the Web API immediately (there are no transactions); the service rolls back errors (Library.notice).
 ColumnLayout {
     id: root
 
     required property string playlistId
     property var info: ({})                // Library.playlistInfo
     property string cover
-    property bool own: false               // свой (не совместный) — можно менять название, описание, видимость
+    property bool own: false               // own (not collaborative) — title, description and visibility can be changed
     property bool panelOpen: false
     property real pageWidth: 1000
 
@@ -23,7 +23,7 @@ ColumnLayout {
 
     spacing: 20
 
-    // Switch сам переключает checked (привязка рвётся) — свежие данные плейлиста возвращают её значение
+    // The Switch flips checked by itself (the binding breaks) — fresh playlist data restores its value
     onInfoChanged: publicSwitch.checked = info.public === true
 
     function _commitTitle() {
@@ -49,7 +49,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: root.pageWidth < 560 ? 18 : 28
 
-        // Обложка: softSquare → softSquare в правке, «Сменить» поверх
+        // Cover: softSquare → softSquare in edit mode, "Change" on top
         Item {
             Layout.preferredWidth: root.pageWidth > 760 ? 184 : root.pageWidth < 560 ? 96 : 128
             Layout.preferredHeight: Layout.preferredWidth
@@ -82,7 +82,7 @@ ColumnLayout {
                 font.letterSpacing: 1.2
             }
 
-            // Название: подчёркивание outlineVariant → primary 2 px в фокусе
+            // Title: underline outlineVariant → primary 2 px on focus
             Item {
                 Layout.fillWidth: true
                 implicitHeight: titleInput.implicitHeight + 8
@@ -115,7 +115,7 @@ ColumnLayout {
                 }
             }
 
-            // Описание: заливка surfaceContainerHigh 60 %, скругление сверху
+            // Description: surfaceContainerHigh fill at 60 %, rounded at the top
             Item {
                 Layout.fillWidth: true
                 Layout.topMargin: 4
@@ -150,7 +150,7 @@ ColumnLayout {
                     font.pixelSize: Theme.type.bodyLarge.size
                     font.variableAxes: Theme.fontAxes(Theme.type.bodyLarge.size, 400)
                     onActiveFocusChanged: if (!activeFocus) root._commitDescription()
-                    // не длиннее 300 символов (ограничение Spotify)
+                    // no longer than 300 characters (Spotify limit)
                     onTextChanged: if (text.length > 300) { text = text.slice(0, 300); cursorPosition = 300 }
                     Keys.onReturnPressed: event => {
                         if (event.modifiers & Qt.ShiftModifier)

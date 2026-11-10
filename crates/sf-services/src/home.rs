@@ -1,11 +1,11 @@
-//! Главная (исполнитель «services-extra»): полки как spotifast/src/ui/home.rs + App::load_home —
-//! «Быстрый доступ» (Любимые + 5 плейлистов), «Недавно прослушанное» (история: сессия/Web API + локальная),
-//! «Сделано для вас» и личные разделы главной Spotify с их заголовками («Рекомендуемые станции»…),
-//! «Новинки» (ReleasesService), «Продолжить подкасты», «Топ-исполнители», «Топ-треки».
-//! Главная, «Для тебя» и топ читаются через сессию librespot (data::home_feed: GraphQL и spclient) — без квоты
-//! Web API. Web API — только запасной путь без сессии, с таймаутом: 429 не держит и не роняет главную. Пустой
-//! топ Spotify (новый аккаунт) заменяют «Любимые исполнители» главной и подсчёт по локальной истории.
-//! Не чаще раза в 10 мин без force; видимость — SettingKey::HomeHidden. Ответы старого обновления отбрасываются.
+//! Home (provider "services-extra"): shelves like spotifast/src/ui/home.rs + App::load_home —
+//! "Quick access" (Liked + 5 playlists), "Recently played" (history: session/Web API + local),
+//! "Made For You" and Spotify home's personal sections with their titles ("Recommended stations"…),
+//! "New releases" (ReleasesService), "Continue podcasts", "Top artists", "Top tracks".
+//! The home, "For You" and the top are read through the librespot session (data::home_feed: GraphQL and spclient) — without the quota
+//! of Web API. Web API — only a fallback path without a session, with a timeout: 429 neither holds up nor drops the home. An empty
+//! Spotify top (a new account) is replaced by the home's "Favorite artists" and a count by local history.
+//! No more often than once in 10 min without force; visibility — SettingKey::HomeHidden. Answers of an old refresh are discarded.
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -28,16 +28,16 @@ use crate::library::{LibraryEvent, LibraryService};
 use crate::releases::ReleasesService;
 use crate::lock;
 
-/// Не чаще раза в 10 минут без force.
+/// No more often than once in 10 minutes without force.
 pub const REFRESH_EVERY: Duration = Duration::from_secs(600);
 const HISTORY_FOR_HOME: usize = 50;
-/// Сколько истории считать для запасного топа.
+/// How much history to count for the fallback top.
 const HISTORY_FOR_TOP: usize = 500;
-/// Сколько ждать сессию, пока движок librespot подключается.
+/// How long to wait for the session while the librespot engine connects.
 const SESSION_WAIT: Duration = Duration::from_secs(20);
-/// Чтение через сессию (главная, «Для тебя», топ).
+/// Reading through the session (home, "For You", top).
 const SESSION_TIMEOUT: Duration = Duration::from_secs(25);
-/// Запасной Web API: общий ключ может часами отвечать 429 — ждать его нельзя.
+/// Fallback Web API: the shared key can answer 429 for hours — it cannot be waited for.
 const WEB_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -47,18 +47,18 @@ pub struct HomeSnapshot {
     pub error_text: String,
 }
 
-/// Ответы последнего обновления (сессия или Web API).
+/// Answers of the last refresh (session or Web API).
 #[derive(Default)]
 struct HomeData {
     loaded_at: Option<Instant>,
-    /// последнее обновление шло через сессию (иначе, когда она появится, обновить ещё раз)
+    /// the last refresh went through the session (otherwise, when it appears, refresh once more)
     via_session: bool,
-    /// сессия встала во время обновления без неё — по его окончании обновить ещё раз
+    /// the session came up during a refresh without it — refresh once more when it finishes
     session_pending: bool,
     made_for_you: Vec<LibraryEntry>,
-    /// личные разделы главной Spotify — полками после «Сделано для вас»
+    /// Spotify home's personal sections — as shelves after "Made For You"
     feed: Vec<HomeShelf>,
-    /// «Любимые исполнители» главной Spotify — запасной топ
+    /// Spotify home's "Favorite artists" — the fallback top
     favorite_artists: Vec<ArtistItem>,
     podcasts: Vec<EpisodeItem>,
     top_artists: Vec<ArtistItem>,
@@ -66,7 +66,7 @@ struct HomeData {
 }
 
 impl HomeData {
-    /// Ничего из сети ещё не приходило: полкам из кэша ещё есть место.
+    /// Nothing from the network has arrived yet: the shelves from the cache still have room.
     fn is_empty(&self) -> bool {
         self.made_for_you.is_empty()
             && self.feed.is_empty()
@@ -118,7 +118,7 @@ impl HomeService {
         service
     }
 
-    /// Обновить полки (force — без 10-минутного ограничения).
+    /// Refresh the shelves (force — without the 10-minute limit).
     pub fn refresh(&self, force: bool) {
         if !self.auth.is_signed_in() {
             self.snapshot.send_replace(HomeSnapshot {
@@ -151,8 +151,8 @@ impl HomeService {
         self.rt.spawn(async move { me.load(generation).await });
     }
 
-    /// Пока сессия поднимается (это может занять десятки секунд), показать прошлые полки с диска.
-    /// Свежие придут следом и заменят их; если что-то уже загружено, кэш не трогаем.
+    /// While the session is coming up (it can take tens of seconds), show the previous shelves from disk.
+    /// Fresh ones will come next and replace them; if something is already loaded, the cache is not touched.
     fn hydrate(&self) {
         let Some(account) = self.auth.account_id() else { return };
         if !lock(&self.data).is_empty() {
@@ -167,11 +167,11 @@ impl HomeService {
         });
     }
 
-    /// Принять кэш: те же поля, что заполняет сеть, — полки строит обычный publish.
+    /// Accept the cache: the same fields the network fills — the shelves are built by the usual publish.
     fn adopt_cached(&self, cached: home_cache::CachedHome) {
         {
             let mut data = lock(&self.data);
-            // свежие ответы успели первыми — кэш не нужен
+            // fresh answers came first — the cache is not needed
             if !data.is_empty() {
                 return;
             }
@@ -185,7 +185,7 @@ impl HomeService {
         self.publish();
     }
 
-    /// Полки — на диск: следующий запуск показывает их, не дожидаясь сессии.
+    /// The shelves — to disk: the next launch shows them without waiting for the session.
     fn save_cache(&self) {
         let Some(account) = self.auth.account_id() else { return };
         let cached = {
@@ -216,13 +216,13 @@ impl HomeService {
         self.snapshot.subscribe()
     }
 
-    // --- внутреннее ----------------------------------------------------------------------------
+    // --- internal ----------------------------------------------------------------------------
 
     fn current(&self, generation: u64) -> bool {
         self.generation.load(Ordering::SeqCst) == generation
     }
 
-    /// Полки по свежим данным: Web API последнего обновления + библиотека + история.
+    /// Shelves by fresh data: Web API of the last refresh + library + history.
     fn publish(&self) {
         if !self.auth.is_signed_in() {
             return;
@@ -233,7 +233,7 @@ impl HomeService {
         let fresh = self.releases.snapshot();
         let built: Vec<HomeShelf> = {
             let data = lock(&self.data);
-            // запасной топ — по локальной истории (считается, только если Spotify топ не дал)
+            // fallback top — by local history (counted only if Spotify did not give a top)
             let history_tracks = || -> Vec<TrackItem> {
                 self.history.recent(HISTORY_FOR_TOP).into_iter().map(|r| r.track).collect()
             };
@@ -247,7 +247,7 @@ impl HomeService {
                         vec![shelves::shelf(key, &shelves::quick_tiles(&liked_uri, liked, &playlists))]
                     }
                     shelves::RECENT => vec![shelves::shelf(key, &shelves::recent_tiles(self.plays(), &playlists))],
-                    // за «Сделано для вас» — личные разделы главной Spotify
+                    // for "Made For You" — Spotify home's personal sections
                     shelves::MADE_FOR_YOU => std::iter::once(shelves::shelf(key, &data.made_for_you))
                         .chain(data.feed.iter().filter(|s| !hidden.contains(&s.key)).cloned())
                         .collect(),
@@ -302,7 +302,7 @@ impl HomeService {
         route::account_session(&self.auth.api(), &self.player)
     }
 
-    /// Сессия, подождав её до SESSION_WAIT: после входа движок librespot поднимается не сразу.
+    /// The session, having waited for it up to SESSION_WAIT: after login the librespot engine does not come up at once.
     async fn wait_session(&self) -> Option<Session> {
         let started = Instant::now();
         loop {
@@ -317,8 +317,8 @@ impl HomeService {
         }
     }
 
-    /// Сессия готова: обновление без неё (Web API) повторить через неё. Идущее обновление не дублируется:
-    /// оно ждёт сессию само, а если так и прошло без неё — повторится по окончании.
+    /// The session is ready: repeat the refresh that went without it (Web API) through it. A refresh in progress is not duplicated:
+    /// it waits for the session itself, and if it still went without it — it will repeat when it finishes.
     fn session_ready(&self) {
         let loading = self.snapshot.borrow().loading;
         let again = {
@@ -344,7 +344,7 @@ impl HomeService {
         lock(&self.data).via_session = session.is_some();
         let me = self.auth.account_id();
 
-        // главная Spotify и «Для тебя» через сессию; без неё — поиск Discover-терминов общим ключом
+        // Spotify's home and "For You" through the session; without it — a search of Discover terms with the shared key
         let made_for_you = async {
             if let Some(session) = &session {
                 let read = async {
@@ -378,7 +378,7 @@ impl HomeService {
                         });
                     };
                     publish(&browse);
-                    // миксы дня приходят из browse одними URI — подписи дочитываются через сессию
+                    // day mixes come from browse as URIs alone — the labels are read in full through the session
                     if browse.iter().any(|s| s.cards.iter().any(|c| c.title.is_empty())) {
                         for section in &mut browse {
                             section.cards.truncate(feed::MADE_FOR_YOU_PER_SECTION * 2);
@@ -417,7 +417,7 @@ impl HomeService {
             self.store(generation, |d| d.made_for_you = tiles);
             Ok::<_, String>(())
         };
-        // топ за 4 недели: GraphQL через сессию (пустой — тоже ответ: заменит история), без сессии — Web API
+        // top for 4 weeks: GraphQL through the session (empty is also an answer: history will replace it), without the session — Web API
         let top = async {
             if let Some(session) = &session {
                 match tokio::time::timeout(SESSION_TIMEOUT, home_feed::top(&http, session, shelves::TOP_LIMIT)).await {
@@ -450,7 +450,7 @@ impl HomeService {
             Ok::<_, String>(())
         };
         let podcasts = async {
-            // шоу и их выпуски — через сессию (без квоты Web API); Web API — только если сессии нет или она не смогла
+            // shows and their episodes — through the session (without the Web API quota); Web API — only if there is no session or it failed
             let read = async {
                 let mut shows: Vec<ShowItem> = self.library.shows();
                 if shows.is_empty() {
@@ -502,7 +502,7 @@ impl HomeService {
                             let episodes = page.items.iter().map(|e| sf_api::map::episode_item(e, None)).collect();
                             podcasts.push((show, episodes));
                         }
-                        // полка необязательная: квота/429 — без этого шоу
+                        // the shelf is optional: quota/429 — without this show
                         Err(e) => tracing::debug!("home: episodes of {}: {e}", show.show_id),
                     }
                 }
@@ -520,15 +520,15 @@ impl HomeService {
             return;
         }
         let empty = self.snapshot.borrow().shelves.is_empty();
-        // полки — дополнение: ошибка видна, только если не вышло ничего
+        // the shelves are a supplement: the error is visible only if nothing worked out
         let error = (errors.len() == 3 && empty).then(|| errors[0].clone());
         self.snapshot.send_modify(|s| {
             s.loading = false;
             s.error_text = error.unwrap_or_default();
         });
-        // полки — на диск: следующий запуск покажет их, не дожидаясь сессии
+        // the shelves — to disk: the next launch will show them without waiting for the session
         self.save_cache();
-        // сессия встала, пока шло обновление без неё, — обновить через неё (без квоты Web API)
+        // the session came up while a refresh without it was going — refresh through it (without the Web API quota)
         let again = {
             let mut data = lock(&self.data);
             std::mem::take(&mut data.session_pending) && !data.via_session
@@ -545,8 +545,8 @@ impl HomeService {
     }
 }
 
-/// Запасной запрос Web API с таймаутом; ошибка — текстом для пользователя. Фоном: уступает страницам и не
-/// идёт в сеть, пока Web API ограничен (полки — дополнение).
+/// A fallback Web API request with a timeout; an error — as text for the user. In the background: it yields to pages and does not
+/// go to the network while Web API is limited (the shelves are a supplement).
 async fn web<T>(read: impl std::future::Future<Output = Result<T, sf_api::ApiError>>) -> Result<T, String> {
     match tokio::time::timeout(WEB_TIMEOUT, sf_api::limits::background(read)).await {
         Ok(Ok(value)) => Ok(value),
@@ -555,7 +555,7 @@ async fn web<T>(read: impl std::future::Future<Output = Result<T, sf_api::ApiErr
     }
 }
 
-/// Вход/выход, готовность сессии, библиотека, история и скрытие полок → полки.
+/// Login/logout, session readiness, library, history and shelf hiding → shelves.
 async fn listen(weak: Weak<HomeService>) {
     let Some(me) = weak.upgrade() else { return };
     let mut auth = me.auth.subscribe();

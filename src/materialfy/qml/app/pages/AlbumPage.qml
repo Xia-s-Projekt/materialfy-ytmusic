@@ -8,7 +8,7 @@ TrackListPage {
     id: page
 
     property string albumId
-    property string trackId                   // «перейти к треку»: прокрутить к нему и подсветить
+    property string trackId                   // "jump to track": scroll to it and highlight it
     highlightTrackId: trackId
     readonly property QtObject album: Catalog.album(albumId)
     readonly property var info: album ? album.info : ({})
@@ -27,7 +27,7 @@ TrackListPage {
             parts.push(info.year)
         const n = album.tracks.count
         parts.push(I18n.n(n, "{0} track", "{0} tracks"))
-        // лейбл — если в шапке есть место (полностью он и в сведениях под списком)
+        // the label — if there is room in the header (in full it is in the details below the list)
         if (info.label && page.width > 640)
             parts.push(info.label)
         return parts.join("  ·  ")
@@ -35,13 +35,13 @@ TrackListPage {
     model: album ? album.tracks : null
     showPlays: true
     showAlbum: false
-    // сведения о выпуске под списком: дата, треки и длительность, лейбл, правообладатели
+    // release details below the list: date, tracks and duration, label, copyright holders
     footerExtra: album && album.tracks.count > 0 ? releaseInfo : null
     emptyIcon: "album"
     emptyTitle: album && album.errorText !== "" ? I18n.t("Album didn't load") : I18n.t("This album has no tracks")
     emptyText: album ? album.errorText : ""
 
-    // сохранить альбом в библиотеку
+    // save the album to the library
     headerExtra: Component {
         IconButton {
             icon: page.saved ? "library_add_check" : "library_add"
@@ -62,7 +62,7 @@ TrackListPage {
             readonly property var copyrights: page.info.copyrights ?? []
             readonly property var tracks: page.album ? page.album.tracks : null
             spacing: 4
-            // отступ сверху и слева — как у текста строк и шапки
+            // top and left inset — the same as the row and header text
             Item { implicitHeight: 20 }
             Rectangle {
                 Layout.fillWidth: true

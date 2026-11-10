@@ -1,23 +1,23 @@
-//! Чистая часть icons.py (IconMetrics._measure): по буферу Alpha8 с нарисованным глифом найти его
-//! видимый контур. Рисование глифа (QPainter) остаётся в shell; здесь только арифметика.
+//! The pure part of icons.py (IconMetrics._measure): from an Alpha8 buffer with a drawn glyph, find its
+//! visible outline. Drawing the glyph (QPainter) stays in the shell; only arithmetic happens here.
 
-/// Отступ вокруг текстового блока в буфере, пиксели.
+/// Padding around the text block in the buffer, in pixels.
 pub const PAD: f64 = 4.0;
-/// Порог «видимого» пикселя: всё, что бледнее, — сглаживание краёв.
+/// The threshold for a "visible" pixel: anything fainter is edge anti-aliasing.
 pub const THRESHOLD: u8 = 96;
 
-/// Размер буфера под глиф: (int(advance) + 8, int(height) + 8).
+/// Buffer size for the glyph: (int(advance) + 8, int(height) + 8).
 pub fn buffer_size(advance: f64, line_height: f64) -> (usize, usize) {
     (advance as usize + 8, line_height as usize + 8)
 }
 
-/// Ось opsz шрифта для кегля: max(20, min(48, size)).
+/// The font's opsz axis for the point size: max(20, min(48, size)).
 pub fn optical_size(size: i32) -> i32 {
     size.clamp(20, 48)
 }
 
-/// Как QRectF в ink(): x, y — смещение центра контура от центра текстового блока (advance × height),
-/// width, height — размер контура.
+/// Like QRectF in ink(): x, y — the offset of the outline's center from the text block's center (advance × height),
+/// width, height — the size of the outline.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct InkRect {
     pub x: f64,
@@ -26,8 +26,8 @@ pub struct InkRect {
     pub height: f64,
 }
 
-/// Буфер `width × height` с шагом строки `stride`, текст нарисован в (PAD, PAD, advance, line_height).
-/// Ничего видимого — None (в Python пустой QRectF).
+/// A `width × height` buffer with row stride `stride`, text drawn at (PAD, PAD, advance, line_height).
+/// Nothing visible — None (an empty QRectF in Python).
 pub fn ink_rect(
     alpha: &[u8],
     stride: usize,
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn centered_square() {
-        // блок 10×10 с отступом 4: буфер 18×18, квадрат 4×4 ровно по центру
+        // a 10×10 block with 4 padding: an 18×18 buffer, a 4×4 square exactly centered
         let (w, h) = buffer_size(10.0, 10.0);
         let mut buf = vec![0u8; w * h];
         for y in 7..11 {
@@ -73,7 +73,7 @@ mod tests {
                 buf[y * w + x] = 255;
             }
         }
-        // бледный пиксель не учитывается
+        // a faint pixel is not counted
         buf[0] = 50;
         let r = ink_rect(&buf, w, w, h, 10.0, 10.0).unwrap();
         assert_eq!(

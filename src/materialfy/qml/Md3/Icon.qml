@@ -1,21 +1,21 @@
 import QtQuick
 import Materialfy.Core
 
-// Иконка Material Symbols Rounded по имени лигатуры: Icon { name: "play_arrow" }.
-// Центрируется по фактическому контуру глифа, а не по его ячейке шрифта: часть глифов
-// (favorite, queue_music…) нарисована выше центра ячейки и в квадратной подложке смотрится смещённой.
-// Поправку меряет IconMetrics (Python) по отрисованным пикселям — FontMetrics для лигатур врёт.
+// Material Symbols Rounded icon by ligature name: Icon { name: "play_arrow" }.
+// Centered on the actual glyph outline, not its font cell: some glyphs
+// (favorite, queue_music…) are drawn above the cell center and look offset on a square backing.
+// The correction is measured by IconMetrics (Python) from rendered pixels — FontMetrics lies for ligatures.
 Item {
     id: root
 
     property string name
     property real size: 24
-    property real fill: 0          // 0..1, анимируемая ось FILL
+    property real fill: 0          // 0..1, animated FILL axis
     property real weight: 400      // 100..700
     property real grade: 0         // -25..200
     property color color: Theme.fgSurfaceVariant
     property bool opticalCenter: true
-    // true — ширина по видимому контуру глифа (для иконок рядом с текстом: ровные отступы)
+    // true — width follows the visible glyph outline (for icons next to text: even spacing)
     property bool tight: false
     readonly property real inkWidth: _ink.width > 0 ? _ink.width : size
     readonly property real inkHeight: _ink.height > 0 ? _ink.height : size
@@ -32,12 +32,12 @@ Item {
         text: IconMetrics.glyph(root.name)
         color: root.color
         textFormat: Text.PlainText
-        renderType: Text.NativeRendering  // distance-field (QtRendering) дырявит заливку вариативного шрифта
+        renderType: Text.NativeRendering  // distance-field (QtRendering) pokes holes in the variable font fill
         font.family: Theme.iconFamily
         font.pixelSize: root.size
         font.variableAxes: ({ "FILL": root.fill, "wght": root.weight, "GRAD": root.grade, "opsz": Math.max(20, Math.min(48, root.size)) })
 
-        // Целые пиксели: нативный растеризатор иначе размывает края.
+        // Whole pixels: the native rasterizer otherwise blurs the edges.
         x: Math.round((root.width - implicitWidth) / 2 - root._ink.x)
         y: Math.round((root.height - implicitHeight) / 2 - root._ink.y)
     }

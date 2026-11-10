@@ -1,9 +1,9 @@
 import QtQuick
 import Md3
 
-// Источник перетаскивания трека в очередь: «ярлык» с обложкой едет за курсором поверх окна.
-// Цели — QueueView и кнопка очереди мини-плеера: DropArea с ключом "materialfy/track",
-// трек берут из drop.source.trackData() (source — строка с trackData()).
+// Source for dragging a track into the queue: the "chip" with the cover follows the cursor above the window.
+// The targets are QueueView and the mini player's queue button: DropArea with the "materialfy/track" key,
+// the track is taken from drop.source.trackData() (source is the row with trackData()).
 Item {
     id: root
 
@@ -32,8 +32,8 @@ Item {
         onCentroidChanged: if (active && ghostLoader.item) ghostLoader.item.place(centroid.scenePosition)
     }
 
-    // Ярлык создаётся только на время перетаскивания: строк в списке много, а тянут одну
-    // (раньше каждая строка держала свой скрытый ярлык с тенью и второй копией обложки)
+    // The chip is created only for the duration of the drag: there are many rows in the list, and only one is dragged
+    // (previously each row kept its own hidden chip with a shadow and a second copy of the cover)
     Loader {
         id: ghostLoader
         active: false

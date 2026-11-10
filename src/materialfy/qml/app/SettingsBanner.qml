@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Плашка внутри карточки настроек: error — errorContainer (нет Premium), info — secondaryContainer.
-// Появляется высотой и прозрачностью (shown), а не мгновенно.
+// A banner inside a settings card: error — errorContainer (no Premium), info — secondaryContainer.
+// It appears by height and opacity (shown), not instantly.
 Item {
     id: root
 

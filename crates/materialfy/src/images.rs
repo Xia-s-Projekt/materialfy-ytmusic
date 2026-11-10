@@ -1,7 +1,7 @@
-//! Дисковый кэш картинок для QML (images.py): QQmlNetworkAccessManagerFactory в C++ (cpp/mf_shell.cpp),
-//! каждый NAM — свой QNetworkDiskCache на общий каталог dirs::cache_subdir("images"), 512 МиБ;
-//! только HTTP/1.1 (Http2AllowedAttribute = false: по HTTP/2 сервер обложек отвечает REFUSED_STREAM).
-//! Прокси — действующий у сервисов (AuthService::proxy / watch_proxy), тот же, что у запросов к Web API.
+//! On-disk image cache for QML (images.py): QQmlNetworkAccessManagerFactory in C++ (cpp/mf_shell.cpp),
+//! each NAM has its own QNetworkDiskCache on the shared directory dirs::cache_subdir("images"), 512 MiB;
+//! HTTP/1.1 only (Http2AllowedAttribute = false: over HTTP/2 the cover server answers REFUSED_STREAM).
+//! Proxy - the one in effect for the services (AuthService::proxy / watch_proxy), the same as for Web API requests.
 use cxx_qt_lib::{QQmlApplicationEngine, QString};
 use mf_platform::SettingKey;
 use yt_services::{ProxyConfig, Services};
@@ -9,7 +9,7 @@ use std::pin::Pin;
 
 pub const CACHE_BYTES: i64 = 512 * 1024 * 1024;
 
-/// Установить фабрику на движок (до load) и следить за прокси.
+/// Install the factory on the engine (before load) and watch the proxy.
 pub fn install_caching_nam(engine: Pin<&mut QQmlApplicationEngine>, rt: &tokio::runtime::Handle, services: &Services) {
     let dir = mf_platform::dirs::cache_subdir("images");
     let dir = QString::from(dir.to_string_lossy().as_ref());
@@ -20,7 +20,7 @@ pub fn install_caching_nam(engine: Pin<&mut QQmlApplicationEngine>, rt: &tokio::
     let bypass = move || settings.get_bool(SettingKey::CoversBypassProxy);
     apply_proxy(&proxy.borrow_and_update(), bypass());
     let mut changes = services.settings.subscribe();
-    // set_image_proxy потокобезопасен — из задачи tokio, без GUI-потока
+    // set_image_proxy is thread-safe - from a tokio task, without the GUI thread
     rt.spawn(async move {
         loop {
             tokio::select! {
@@ -37,12 +37,12 @@ pub fn install_caching_nam(engine: Pin<&mut QQmlApplicationEngine>, rt: &tokio::
     });
 }
 
-/// Режимы cpp/mf_shell.h: 0 — без прокси, 1 — системный, 2 — HTTP, 3 — SOCKS5, 4 — заблокировать.
-/// `bypass` — «Обложки мимо прокси»: картинки напрямую, кроме неверных настроек (тогда блок, как у всего).
+/// Modes from cpp/mf_shell.h: 0 - no proxy, 1 - system, 2 - HTTP, 3 - SOCKS5, 4 - block.
+/// `bypass` is "Covers bypassing the proxy": images go direct, except for invalid settings (then block, like everything).
 fn apply_proxy(config: &ProxyConfig, bypass: bool) {
     let none = QString::default();
     let (mode, manual) = match config {
-        // сервисы при неверных настройках блокируют запросы — картинки тоже не идут напрямую
+        // with invalid settings the services block requests - images do not go direct either
         ProxyConfig::Invalid(_) => (4, None),
         _ if bypass => (0, None),
         ProxyConfig::Off => (0, None),

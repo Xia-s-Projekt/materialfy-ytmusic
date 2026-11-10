@@ -1,4 +1,4 @@
-// Devices — зеркало DevicesService (Spotify Connect): модель устройств, активное, перенос, громкость устройства.
+// Devices - a mirror of DevicesService (Spotify Connect): device model, active device, transfer, device volume.
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -36,24 +36,24 @@ pub mod qobject {
 
         #[qsignal]
         fn changed(self: Pin<&mut Devices>);
-        /// ошибки приёмников и списка («Не удалось подключить …») — Snackbar; «{имя} не ответил» — Player.notice
+        /// receiver and list errors ("Could not connect ...") - Snackbar; "{name} did not respond" - Player.notice
         #[qsignal]
         fn notice(self: Pin<&mut Devices>, text: QString);
 
-        /// Запросить список (при открытии меню и по кнопке обновления; периодического таймера нет).
+        /// Request the list (when the menu opens and via the refresh button; there is no periodic timer).
         #[qinvokable]
         fn refresh(self: &Devices);
-        /// Перенести воспроизведение на устройство (id этого ПК — сюда).
+        /// Transfer playback to a device (this PC's id - here).
         #[qinvokable]
         fn transfer(self: &Devices, device_id: &QString);
         #[qinvokable]
         #[cxx_name = "transferHere"]
         fn transfer_here(self: &Devices);
-        /// Громкость устройства 0..100.
+        /// Device volume 0..100.
         #[qinvokable]
         #[cxx_name = "setVolume"]
         fn set_volume(self: &Devices, device_id: &QString, percent: i32);
-        /// Подключить приёмник из локальной сети (source = "zeroconf") по имени.
+        /// Connect a receiver from the local network (source = "zeroconf") by name.
         #[qinvokable]
         #[cxx_name = "activateReceiver"]
         fn activate_receiver(self: &Devices, name: &QString);

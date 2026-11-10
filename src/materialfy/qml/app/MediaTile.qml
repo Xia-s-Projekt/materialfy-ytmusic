@@ -2,19 +2,19 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Плитка альбома / исполнителя / плейлиста: обложка в фигуре MD3E, название, подпись.
-// При наведении фигура морфится, у исполнителей — круг. showPlay — кнопка «Слушать» на обложке по наведению;
-// badge — плашка в углу («РАДИО»), pinned — булавка (локальное закрепление). ПКМ — menuRequested(точка окна).
+// Album / artist / playlist tile: cover in an MD3E shape, title, sublabel.
+// On hover the shape morphs, for artists it is a circle. showPlay — the "Play" button on the cover on hover;
+// badge — a corner plate ("RADIO"), pinned — a pin (local pinning). Right click — menuRequested(window point).
 Item {
     id: root
 
     property string cover
     property string title
     property string subtitle
-    property bool round: false          // исполнитель
+    property bool round: false          // artist
     property bool explicit: false
     property string placeholderIcon: "album"
-    // что на обложке — для запасной обложки не со Spotify (MorphImage.fallbackKind/Artist/Title)
+    // what is on the cover — for the fallback cover not from Spotify (MorphImage.fallbackKind/Artist/Title)
     property string coverKind
     property string coverArtist
     property string coverTitle
@@ -22,7 +22,7 @@ Item {
     property var shape: round ? "circle" : "softSquare"
     property var hoverShape: "softSquare"
     property bool showPlay: false
-    property bool playing: false        // играет из этой плитки — иконка паузы
+    property bool playing: false        // playing from this tile — a pause icon
     property string badge
     property bool pinned: false
     readonly property bool hovered: area.containsMouse || (playLoader.item !== null && playLoader.item.hovering)
@@ -53,8 +53,8 @@ Item {
                 shape: root.hovered ? root.hoverShape : root.shape
                 duration: 0
             }
-            // Заглушка, плашка, булавка и «Слушать» создаются, только когда нужны: плиток на полках сотни,
-            // а без обложки, с плашкой или под курсором — единицы
+            // Placeholder, plate, pin and "Play" are created only when needed: there are hundreds of tiles on the shelves,
+            // while coverless, plated or hovered ones are a handful
             Loader {
                 anchors.fill: parent
                 active: root.cover === ""
@@ -91,7 +91,7 @@ Item {
                 }
             }
 
-            // «Слушать» по наведению: всплывает снизу и дорастает (OutBack)
+            // "Play" on hover: it pops up from the bottom and grows (OutBack)
             Loader {
                 id: playLoader
                 anchors.right: parent.right
@@ -103,7 +103,7 @@ Item {
                 sourceComponent: Item {
                     id: playHost
                     readonly property bool hovering: playArea.containsMouse
-                    // созданная наведением кнопка всплывает с анимацией, уже играющая — сразу на месте
+                    // a hover-created button pops up animated, an already playing one — in place at once
                     property bool _armed: root.playing
                     Component.onCompleted: Qt.callLater(() => _armed = true)
                     readonly property bool shown: _armed && (root.hovered || root.playing)
@@ -132,7 +132,7 @@ Item {
             spacing: 4
             Label {
                 id: titleLabel
-                // не шире плитки (минус плашка «E»): длинное название не залезает на соседнюю, а затухает
+                // no wider than the tile (minus the "E" plate): a long title does not spill onto the neighbor, it fades
                 Layout.preferredWidth: Math.min(Math.ceil(naturalWidth), root.size - (root.explicit ? 20 : 0))
                 Layout.maximumWidth: Layout.preferredWidth
                 Layout.alignment: root.round ? Qt.AlignHCenter : Qt.AlignLeft

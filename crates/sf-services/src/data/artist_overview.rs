@@ -1,6 +1,6 @@
-//! Исполнитель через GraphQL-шлюз клиентов Spotify (сохранённый запрос queryArtistOverview) с токеном
-//! сессии: то, чего нет в метаданных librespot, — подписчики, ежемесячные слушатели, подписка аккаунта,
-//! похожие исполнители, биография и широкая шапка. Без квоты Web API. Проверено вживую (2026-10):
+//! An artist through the Spotify clients' GraphQL gateway (the saved queryArtistOverview query) with a session
+//! token: what librespot metadata does not have — followers, monthly listeners, the account's subscription,
+//! similar artists, biography and a wide header. No Web API quota. Verified live (2026-10):
 //! data.artistUnion { stats { followers, monthlyListeners }, saved, relatedContent.relatedArtists,
 //! profile.biography.text, headerImage.data.sources[{url, maxWidth}], visuals.avatarImage,
 //! discography.topTracks.items[{ track { uri, playcount ("984913127") } }] }.
@@ -13,9 +13,9 @@ use super::pathfinder::{id_of, images, text};
 use super::persisted;
 use crate::catalog::ArtistPage;
 
-/// Хэши queryArtistOverview (семена; свежий — из бандла веб-плеера).
+/// queryArtistOverview hashes (seeds; a fresh one comes from the web player bundle).
 const HASHES: [&str; 1] = ["9f8134ef565e78621f1e1793555bd6633c5ac144ae0f89604ed3ae3f80b3c8e6"];
-/// Похожих — как /artists/{id}/related-artists.
+/// Similar artists — as /artists/{id}/related-artists.
 const RELATED: usize = 20;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -24,12 +24,12 @@ pub struct ArtistOverview {
     pub avatar: Vec<Image>,
     pub followers: Option<u64>,
     pub monthly_listeners: Option<u64>,
-    /// аккаунт подписан
+    /// the account is subscribed
     pub followed: Option<bool>,
     pub related: Vec<Artist>,
     pub biography: String,
     pub header_image: Option<String>,
-    /// популярные треки: URI → прослушивания (> 0)
+    /// popular tracks: URI → play counts (> 0)
     pub top_plays: Vec<(String, i64)>,
 }
 
@@ -97,7 +97,7 @@ fn related(data: &Value) -> Option<Artist> {
     })
 }
 
-/// Самая широкая шапка.
+/// The widest header.
 fn header(artist: &Value) -> Option<String> {
     let sources = artist.pointer("/headerImage/data/sources")?.as_array()?;
     let width = |source: &Value| source.get("maxWidth").and_then(Value::as_u64).unwrap_or(0);
@@ -110,8 +110,8 @@ fn header(artist: &Value) -> Option<String> {
     best?.get("url")?.as_str().filter(|url| !url.is_empty()).map(str::to_owned)
 }
 
-/// Дополнить страницу исполнителя тем, что знает шлюз: подписчики, слушатели, подписка, похожие (если
-/// метаданные сессии их не дали), биография, шапка; фото и имя — если их нет.
+/// Fill in the artist page with what the gateway knows: followers, listeners, subscription, similar artists (if
+/// the session metadata did not provide them), biography, header; photo and name — if they are missing.
 pub fn apply(page: &mut ArtistPage, overview: &ArtistOverview) {
     let info = &mut page.info;
     let mapped = map::artist_item(&Artist {
@@ -210,7 +210,7 @@ mod tests {
     fn a_missing_artist_is_an_error() {
         assert!(parse(&json!({ "data": { "artistUnion": { "__typename": "NotFound" } } })).is_err());
         assert!(parse(&json!({ "errors": [{ "message": "Unauthorized" }] })).is_err());
-        // пустой профиль — не ошибка: страница возьмёт то, что есть
+        // an empty profile is not an error: the page will take what there is
         let bare = parse(&json!({ "data": { "artistUnion": { "__typename": "Artist" } } })).unwrap();
         assert_eq!((bare.followers, bare.followed, bare.header_image), (None, None, None));
     }

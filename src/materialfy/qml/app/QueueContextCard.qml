@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Карточка «Играет из …»: обложка 40 px, тип и название контекста, chevron_right. Клик — открыть контекст.
+// The "Playing from ..." card: a 40 px cover, the context type and name, chevron_right. Click — open the context.
 Item {
     id: root
 
@@ -14,7 +14,7 @@ Item {
         playlist: I18n.t("Playlist"), album: I18n.t("Album"), artist: I18n.t("Artist"), show: I18n.t("Podcast"), episode: I18n.t("Podcast"),
         liked: I18n.t("Liked Songs"), radio: I18n.t("Radio"), search: I18n.t("Search"), tracks: I18n.t("Tracks")
     })
-    // подпись над названием, как в макете: «Играет из плейлиста»
+    // the label above the name, as in the mockup: "Playing from playlist"
     readonly property var fromNames: ({
         playlist: I18n.t("Playing from playlist"), album: I18n.t("Playing from album"), artist: I18n.t("Playing artist"),
         show: I18n.t("Playing from podcast"), episode: I18n.t("Playing from podcast"), liked: I18n.t("Playing from library"),

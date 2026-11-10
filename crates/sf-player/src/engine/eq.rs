@@ -1,4 +1,4 @@
-//! Перенос spotifast/src/eq.rs (как есть).
+//! Port of spotifast/src/eq.rs (as is).
 //! Ten-band equalizer for local playback.
 //!
 //! Each Winamp band uses a second-order peaking filter. Bands and preamp range
@@ -335,15 +335,15 @@ pub const PRESETS: &[Preset] = &[
     },
 ];
 
-/// Общие настройки: окно EQ и поток плеера.
+/// Shared settings: the EQ window and the player thread.
 ///
-/// Плеер не берёт блокировку на каждый пакет (их ~100–250 в секунду даже при выключенном
-/// эквалайзере): писатель через guard поднимает версию, а поток плеера видит это одной
-/// Relaxed-загрузкой и только тогда перечитывает и пересобирает фильтры.
+/// The player does not take a lock on every packet (there are ~100–250 per second even with the
+/// equalizer off): the writer bumps the version through the guard, and the player thread sees it with a
+/// single Relaxed load and only then re-reads and rebuilds the filters.
 #[derive(Debug)]
 pub struct EqShared {
     settings: Mutex<EqSettings>,
-    /// Растёт при каждой записи через `lock()` с мутацией.
+    /// Grows on every write through `lock()` that mutates.
     version: AtomicU64,
 }
 
@@ -357,8 +357,8 @@ pub fn shared() -> SharedEq {
 }
 
 impl EqShared {
-    /// Доступ к настройкам. Мутация через `DerefMut` помечает guard, и при его сбросе
-    /// версия растёт — даже если записали те же значения (лишний пересчёт дешевле пропуска).
+    /// Access to the settings. Mutation through `DerefMut` marks the guard, and when it is dropped
+    /// the version grows — even if the same values were written (an extra recompute is cheaper than a miss).
     pub fn lock(&self) -> EqGuard<'_> {
         EqGuard {
             settings: self.settings.lock().unwrap_or_else(|p| p.into_inner()),
@@ -375,7 +375,7 @@ impl EqShared {
     }
 }
 
-/// Guard из `EqShared::lock()`: мутация через него поднимает версию настроек.
+/// Guard from `EqShared::lock()`: mutation through it bumps the settings version.
 pub struct EqGuard<'a> {
     settings: MutexGuard<'a, EqSettings>,
     version: &'a AtomicU64,
@@ -472,7 +472,7 @@ impl Biquad {
 pub struct Processor {
     shared: SharedEq,
     applied: EqSettings,
-    /// Версия настроек, при которой `applied` ещё актуален.
+    /// Settings version at which `applied` is still current.
     version: u64,
     /// One chain per channel; a band at flat is left out of the chain.
     chains: Vec<Vec<Biquad>>,
@@ -481,8 +481,8 @@ pub struct Processor {
 
 impl Processor {
     pub fn new(shared: SharedEq) -> Self {
-        // сначала версия, потом настройки: запись между ними оставит версию позади,
-        // и первый же пакет перечитает (обратный порядок пропустил бы изменение)
+        // version first, then settings: a write between them leaves the version behind,
+        // and the very next packet re-reads (the reverse order would miss the change)
         let version = shared.version.load(Ordering::Relaxed);
         let applied = shared.clamped();
         let mut processor = Self {
@@ -512,8 +512,8 @@ impl Processor {
         }
     }
 
-    /// Перечитывает настройки, только если их версия изменилась: в горячем пути —
-    /// одна Relaxed-загрузка на пакет вместо блокировки и копии.
+    /// Re-reads the settings only if their version changed: on the hot path —
+    /// one Relaxed load per packet instead of a lock and a copy.
     fn sync(&mut self) {
         let version = self.shared.version.load(Ordering::Relaxed);
         if version == self.version {

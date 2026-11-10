@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Занятое место: полоса 12 px из сегментов (зазор 2 px) и легенда.
-// usage — Settings.cacheUsage {audio, covers, playlists, lyrics, total} в байтах; limit — предел кэша в байтах.
+// Used space: a 12 px bar of segments (2 px gap) and a legend.
+// usage — Settings.cacheUsage {audio, covers, playlists, lyrics, total} in bytes; limit — the cache limit in bytes.
 ColumnLayout {
     id: root
 

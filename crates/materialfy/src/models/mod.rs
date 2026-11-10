@@ -1,5 +1,5 @@
-//! Модели списков для QML (владелец — «shell»). Мосты создают их через DictListModel::create
-//! и применяют изменения сервисов через [`apply_list_change`].
+//! List models for QML (owned by the "shell"). The bridges create them via DictListModel::create
+//! and apply service changes via [`apply_list_change`].
 pub mod list_model;
 pub mod track_filter;
 
@@ -11,7 +11,7 @@ use md3_model::{ListChange, PlayContext, TrackItem};
 
 pub use list_model::{ModelKind, Row, qobject::DictListModel};
 
-/// Элемент (TrackItem, AlbumItem…) → строка модели.
+/// An item (TrackItem, AlbumItem...) -> a model row.
 pub fn to_row<T: Serialize>(item: &T) -> Row {
     match serde_json::to_value(item) {
         Ok(serde_json::Value::Object(map)) => Arc::new(map),
@@ -23,8 +23,8 @@ pub fn to_rows<T: Serialize>(items: &[T]) -> Vec<Row> {
     items.iter().map(to_row).collect()
 }
 
-/// Изменение списка элементов → то же изменение строками модели (сериализация — вне GUI-потока).
-/// Порядок и повторяющиеся элементы сохраняются как есть.
+/// A change to the item list -> the same change in model rows (serialization - outside the GUI thread).
+/// Order and repeated items are preserved as they are.
 pub fn to_row_change<T: Serialize>(change: &ListChange<T>) -> ListChange<Row> {
     match change {
         ListChange::Reset(items) => ListChange::Reset(to_rows(items)),
@@ -36,7 +36,7 @@ pub fn to_row_change<T: Serialize>(change: &ListChange<T>) -> ListChange<Row> {
     }
 }
 
-/// Применить уже подготовленное изменение (строками модели) — без повторной сериализации.
+/// Apply an already prepared change (in model rows) - without re-serializing.
 pub fn apply_row_change(model: Pin<&mut DictListModel>, change: &ListChange<Row>) {
     match change {
         ListChange::Reset(rows) => model.reset_rows(rows.clone()),
@@ -48,16 +48,16 @@ pub fn apply_row_change(model: Pin<&mut DictListModel>, change: &ListChange<Row>
     }
 }
 
-/// Применить изменение списка из sf-services к модели (в GUI-потоке).
+/// Apply a list change from sf-services to the model (in the GUI thread).
 pub fn apply_list_change<T: Serialize>(model: Pin<&mut DictListModel>, change: &ListChange<T>) {
     apply_row_change(model, &to_row_change(change));
 }
 
-/// Треки и контекст из модели, которую QML передал в Player.playFrom / shuffleFrom:
-/// DictListModel (вида Track) или TrackFilter (найденные строки + контекст источника). Иное → None.
+/// Tracks and context from the model that QML passed to Player.playFrom / shuffleFrom:
+/// DictListModel (of kind Track) or TrackFilter (found rows + source context). Anything else -> None.
 ///
 /// # Safety
-/// `object` — живой QObject из QML (или null); вызывать в GUI-потоке.
+/// `object` is a live QObject from QML (or null); call in the GUI thread.
 pub unsafe fn tracks_from_model(object: *mut cxx_qt::QObject) -> Option<(Vec<TrackItem>, PlayContext)> {
     use cxx_qt::casting::Downcast;
     let object = unsafe { object.as_ref() }?;
@@ -81,8 +81,8 @@ mod tests {
         let track = |uri: &str| TrackItem { uri: uri.into(), ..Default::default() };
         let change =
             ListChange::Append(vec![track("spotify:track:1"), track("spotify:track:1"), track("spotify:track:2")]);
-        let ListChange::Append(rows) = to_row_change(&change) else { panic!("Append остаётся Append") };
-        assert_eq!(rows.len(), 3, "повторяющийся трек не схлопывается");
+        let ListChange::Append(rows) = to_row_change(&change) else { panic!("Append stays Append") };
+        assert_eq!(rows.len(), 3, "a repeated track is not collapsed");
         let uris: Vec<&str> = rows.iter().map(|r| r["uri"].as_str().unwrap_or_default()).collect();
         assert_eq!(uris, ["spotify:track:1", "spotify:track:1", "spotify:track:2"]);
     }

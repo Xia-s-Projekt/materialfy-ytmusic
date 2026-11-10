@@ -4,9 +4,9 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Аккаунт. До входа — «Войти в YouTube Music»: вставляем заголовки браузера (headers-auth JSON)
-// в поле ниже — приложение само проверяет и сохраняет. После входа — сводка аккаунта.
-// Смена состояния — сквозное затухание.
+// Account. Before sign-in — "Sign in to YouTube Music": paste the browser headers (headers-auth JSON)
+// into the field below — the app validates and saves it itself. After sign-in — the account summary.
+// A state change — a cross-fade.
 Page {
     id: page
 
@@ -15,11 +15,11 @@ Page {
     readonly property bool premium: Auth.premium === true
     readonly property string displayName: account.displayName ?? ""
     readonly property bool _instant: Theme.reducedMotion === true
-    // вход через сессию отказал: аккаунт Free — предложить вход без Premium
+    // session sign-in was refused: a Free account — offer sign-in without Premium
     readonly property bool freeRefused: Auth.errorText.indexOf("Free") >= 0
     readonly property bool playbackHere: Auth.playbackState === "ready"
 
-    // «Готово, {имя}» — только если вход прошёл через браузер, пока страница открыта (а не восстановилась сессия)
+    // "Done, {name}" — only if sign-in went through the browser while the page is open (not a restored session)
     property bool _sawBrowser: st === "awaitingBrowser"
     onStChanged: {
         if (st === "awaitingBrowser")
@@ -45,7 +45,7 @@ Page {
         }
     }
     readonly property bool login: shown !== "account"
-    // рейл / низкое окно: меньше арт, короткие тексты, шаги без меток
+    // rail / short window: less art, short texts, steps without labels
     readonly property bool compact: width < 860 || height < 700
 
     title: login ? I18n.t("Sign-in") : I18n.t("Account")
@@ -63,8 +63,8 @@ Page {
         }
     }
 
-    // Пояснения к ошибкам входа (тексты ошибок — из Auth.errorText, уже переведены в Rust;
-    // подсказку выбираем по стабильному коду Auth.errorCode)
+    // Explanations for sign-in errors (the error texts — from Auth.errorText, already translated in Rust;
+    // the hint is chosen by the stable Auth.errorCode code)
     function _errorHint(text) {
         const code = text !== "" ? (Auth.errorCode ?? "") : ""
         if (code === "expired" || text.indexOf("expired") >= 0)
@@ -107,7 +107,7 @@ Page {
             transform: Translate { id: shift }
             spacing: 0
 
-            // ================= Вход =================
+            // ================= Sign-in =================
             ColumnLayout {
                 visible: page.login
                 Layout.fillWidth: true
@@ -116,7 +116,7 @@ Page {
                 Layout.topMargin: page.compact ? 0 : 8
                 spacing: page.compact ? 10 : 12
 
-                // Арт: фигуры (не вошли / ошибка / готово) или индикатор (ждём, подключаемся)
+                // Art: shapes (not signed in / error / done) or an indicator (waiting, connecting)
                 Item {
                     id: art
                     Layout.alignment: Qt.AlignHCenter
@@ -206,7 +206,7 @@ Page {
                     lineHeight: 1.25
                 }
 
-                // Плашка ошибки
+                // Error banner
                 Rectangle {
                     visible: page.shown === "error"
                     Layout.fillWidth: true
@@ -250,14 +250,14 @@ Page {
                     Layout.fillWidth: true
                     Layout.topMargin: page.compact ? 6 : 12
                     compact: page.compact
-                    // выделен шаг, который выполняется сейчас; до нажатия «Войти» — ни один
+                    // the step being performed right now is highlighted; before pressing "Sign in" — none
                     active: page.shown === "welcome" ? 2 : page.shown === "browser" || page.shown === "connecting" ? 1 : 0
                     done1: page.shown === "welcome"
                     done2: page.shown === "welcome" && page.playbackHere
                     waitingText: page.shown === "browser" ? I18n.t("Waiting for confirmation…") : page.shown === "connecting" ? I18n.t("Signing in…") : ""
                 }
 
-                // Действия
+                // Actions
                 RowLayout {
                     visible: page.shown !== "checking" && page.shown !== "connecting"
                     Layout.alignment: Qt.AlignHCenter
@@ -301,8 +301,8 @@ Page {
                     }
                 }
 
-                // Вход без файла: копируем JSON из ytmusicapi (шапка браузера музыка.youtube.com)
-                // и вставляем сюда; приложение проверяет и сохраняет само.
+                // Sign-in without a file: copy the JSON from ytmusicapi (the music.youtube.com browser headers)
+                // and paste it here; the app validates and saves it itself.
                 ColumnLayout {
                     visible: page.shown === "signedOut" || page.shown === "error"
                     Layout.fillWidth: true
@@ -391,8 +391,8 @@ Page {
                 }
             }
 
-            // ================= Аккаунт =================
-            // Шапка профиля во всю ширину, под ней — медиатека счётчиками и состояние этого компьютера
+            // ================= Account =================
+            // A full-width profile header, below it — the media library with counters and this computer state
             ColumnLayout {
                 id: acc
                 visible: !page.login
@@ -465,7 +465,7 @@ Page {
                     }
                 }
 
-                // Медиатека: счётчики, клик открывает раздел
+                // Media library: counters, a click opens the section
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 12
@@ -483,7 +483,7 @@ Page {
                     }
                 }
 
-                // Этот компьютер: звук и где лежат ключи входа
+                // This computer: audio and where the sign-in keys are stored
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 12
@@ -517,7 +517,7 @@ Page {
         }
     }
 
-    // Счётчик медиатеки: число крупно, подпись, значок; вся карточка — кнопка
+    // Media library counter: the number large, a label, an icon; the whole card is a button
     component StatCard: Rectangle {
         id: stat
         property string icon
@@ -546,7 +546,7 @@ Page {
         StateLayer { anchors.fill: parent; radius: stat.radius; onClicked: stat.clicked() }
     }
 
-    // Карточка состояния: значок, заголовок, пояснение, кнопка
+    // Status card: icon, title, explanation, button
     component InfoCard: Rectangle {
         id: info
         property string icon
@@ -587,7 +587,7 @@ Page {
                 }
                 Button {
                     Layout.topMargin: 4
-                    Layout.leftMargin: -12          // текстовая кнопка — вровень с текстом над ней
+                    Layout.leftMargin: -12          // the text button — level with the text above it
                     visible: info.action !== ""
                     text: info.action
                     style: "text"

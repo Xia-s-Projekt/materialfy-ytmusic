@@ -1,7 +1,7 @@
-//! Клиент Web API (https://api.spotify.com/v1): ≤6 запросов в полёте, Retry-After (≤30 с, 3 повтора, не дольше 8 с
-//! ожидания на запрос, кроме очереди), квота Dev Mode.
-//! Перенос spotifast/src/api/client.rs. Все вызовы идут через один `send`: bearer-токен, семафор,
-//! охлаждение после 429, тексты ошибок. Различия общего/личного приложения решает gateway до вызова.
+//! Web API client (https://api.spotify.com/v1): at most 6 requests in flight, Retry-After (at most 30 s, 3 retries, no more than 8 s
+//! of waiting per request, except for queueing), Dev Mode quota.
+//! Port of spotifast/src/api/client.rs. All calls go through a single `send`: bearer token, semaphore,
+//! cooldown after 429, error texts. The shared/personal application split is decided by the gateway before the call.
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -26,19 +26,19 @@ const BASE_URL: &str = "https://api.spotify.com/v1";
 const MAX_IN_FLIGHT: usize = 6;
 const RATE_LIMIT_RETRIES: u32 = 3;
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(30);
-/// Сколько запрос (кроме добавления в очередь) вообще ждёт охлаждения после 429: Retry-After соблюдается,
-/// но если он не укладывается в этот срок, запрос сразу отдаёт RateLimited — страница показывает то, что
-/// загрузилось, или понятную ошибку, а не висит минутами (три повтора по 30 с).
+/// How long a request (except being queued) waits for the cooldown after a 429 at all: Retry-After is honored,
+/// but if it does not fit within that time, the request returns RateLimited right away — the page shows what
+/// did load, or a clear error, instead of hanging for minutes (three retries of 30 s each).
 const RATE_LIMIT_BUDGET: Duration = Duration::from_secs(8);
-/// Добавление в очередь повторяется дольше обычного, но не бесконечно.
+/// Queueing is retried for longer than usual, but not forever.
 const QUEUE_RATE_LIMIT_RETRIES: u32 = 10;
 
-/// Display — короткий текст для интерфейса через mf_i18n (единственное место перевода ошибок Web API);
-/// `{:#}` добавляет подробности Spotify/сети для логов.
+/// Display — short text for the UI via mf_i18n (the only place Web API errors are translated);
+/// `{:#}` adds Spotify/network details for logs.
 #[derive(Clone, Debug, Error)]
 pub enum ApiError {
     NotSignedIn,
-    /// message — текст Spotify (обычно английский) или свой текст интерфейса (ключ словаря mf_i18n)
+    /// message — Spotify's text (usually English) or our own UI text (an mf_i18n dictionary key)
     Status { status: u16, message: String },
     RateLimited,
     QuotaExhausted,
@@ -55,7 +55,7 @@ impl ApiError {
         }
     }
 
-    /// Короткий текст для пользователя.
+    /// Short text for the user.
     pub fn user_text(&self) -> String {
         match self {
             Self::NotSignedIn => mf_i18n::t("Sign in to your account"),
@@ -90,8 +90,8 @@ impl std::fmt::Display for ApiError {
     }
 }
 
-/// Свой текст для интерфейса в `Status.message` (а не ответ Spotify): уже переведённый русский
-/// или английский ключ словаря. Такие тексты показываются как есть (через перевод), без «HTTP …» в `{:#}`.
+/// Our own UI text in `Status.message` (not a Spotify response): an already-translated string or an
+/// English dictionary key. Such texts are shown as they are (through translation), without "HTTP …" in `{:#}`.
 fn is_own_text(text: &str) -> bool {
     !text.is_empty()
         && (text.chars().any(|c| matches!(c, 'А'..='я' | 'ё' | 'Ё')) || mf_i18n::in_any_dictionary(text))
@@ -116,7 +116,7 @@ fn is_quota_exhausted(body: &str) -> bool {
         .is_some_and(|reason| reason == "QUOTA_EXCEEDED")
 }
 
-/// Текст ошибки, когда Spotify не прислал своего.
+/// Error text for when Spotify did not send its own.
 fn status_text(status: StatusCode) -> String {
     match status.as_u16() {
         400 => mf_i18n::t("Spotify rejected the request"),
@@ -129,8 +129,8 @@ fn status_text(status: StatusCode) -> String {
     }
 }
 
-/// Откуда берутся bearer-токены: PKCE-грант зарегистрированного приложения, обновляется по требованию
-/// и сохраняется в хранилище. `Fixed` — только для тестов.
+/// Where bearer tokens come from: a PKCE grant of a registered application, refreshed on demand
+/// and stored in the keychain. `Fixed` is for tests only.
 #[derive(Clone)]
 pub enum TokenProvider {
     Web(Arc<WebTokens>),
@@ -158,7 +158,7 @@ impl TokenProvider {
     }
 }
 
-/// Грант Web API: обновляется с возрастом и сохраняется после проверки аккаунта.
+/// Web API grant: refreshed with age and stored after the account check.
 pub struct WebTokens {
     http: Http,
     token: tokio::sync::Mutex<StoredToken>,
@@ -186,7 +186,7 @@ impl WebTokens {
         })
     }
 
-    /// Сохранять грант начинаем только после того, как Web API подтвердил аккаунт.
+    /// We only start storing the grant after the Web API has confirmed the account.
     pub async fn remember(&self) -> std::result::Result<(), credentials::Error> {
         let token = self.token.lock().await;
         self.remember.store(true, Ordering::Relaxed);
@@ -195,7 +195,7 @@ impl WebTokens {
         pending.await
     }
 
-    /// Действующий токен: обновляется заранее (за 90 с до истечения) или принудительно после 401.
+    /// Valid token: refreshed ahead of time (90 s before expiry) or forced after a 401.
     async fn access_token(&self, force: bool) -> Result<String> {
         let mut guard = self.token.lock().await;
         if !self.lease.current() {
@@ -242,7 +242,7 @@ impl WebTokens {
     }
 }
 
-/// Что запустить.
+/// What to start.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PlayRequest {
     pub context_uri: Option<String>,
@@ -273,8 +273,8 @@ impl PlayRequest {
 
     fn body(&self) -> Value {
         let mut body = serde_json::Map::new();
-        // Одиночный трек/выпуск Web API играет только как `uris` (как context_uri — 400 «Non supported context
-        // uri»). Если возобновление называет более поздний трек (автовоспроизведение ушло дальше) — играем его.
+        // A single track/episode is only played by the Web API as `uris` (as context_uri it is a 400 "Non supported context
+        // uri"). If resume names a later track (autoplay moved on) — we play that one.
         let single_item = self
             .context_uri
             .as_deref()
@@ -287,7 +287,7 @@ impl PlayRequest {
         } else if !self.uris.is_empty() {
             body.insert("uris".into(), json!(self.uris));
         }
-        // у одиночного элемента смещение ничего не добавляет
+        // for a single item the offset adds nothing
         let offset = single_item.is_none();
         if let Some(uri) = self.offset_uri.as_ref().filter(|_| offset) {
             body.insert("offset".into(), json!({ "uri": uri }));
@@ -301,11 +301,11 @@ impl PlayRequest {
     }
 }
 
-/// Живой признак сетевой активности: интерфейс показывает, что ждём Spotify, а не тормозим сами.
+/// Live sign of network activity: the UI shows we are waiting on Spotify, not stalling ourselves.
 pub struct NetActivity {
     started_at: Instant,
     in_flight: AtomicUsize,
-    /// мс от `started_at`, когда начался текущий непрерывный период запросов
+    /// ms since `started_at` when the current continuous run of requests began
     busy_since_ms: AtomicU64,
 }
 
@@ -330,7 +330,7 @@ impl NetActivity {
         self.in_flight.fetch_sub(1, Ordering::SeqCst);
     }
 
-    /// Запросы непрерывно в полёте не меньше `for_at_least`.
+    /// Requests continuously in flight for at least `for_at_least`.
     pub fn busy(&self, for_at_least: Duration) -> bool {
         self.in_flight.load(Ordering::SeqCst) > 0
             && self.now_ms().saturating_sub(self.busy_since_ms.load(Ordering::SeqCst))
@@ -338,7 +338,7 @@ impl NetActivity {
     }
 }
 
-/// Сбрасывает кэш GET после записи, даже если future запроса бросили.
+/// Clears the GET cache after a write, even if the request future was dropped.
 struct WroteGuard<'a>(&'a Limits);
 
 impl Drop for WroteGuard<'_> {
@@ -347,7 +347,7 @@ impl Drop for WroteGuard<'_> {
     }
 }
 
-/// Снимает счётчик, даже если future запроса бросили.
+/// Decrements the counter, even if the request future was dropped.
 struct ActivityGuard<'a>(&'a NetActivity);
 
 impl Drop for ActivityGuard<'_> {
@@ -368,7 +368,7 @@ pub struct ApiClient {
     artist_albums_limit: u32,
     source: ApiSource,
     activity: Arc<NetActivity>,
-    /// Бюджет, склейка и кэш GET, охлаждение источника — общие для клиентов одного ApiGateway.
+    /// Budget, coalescing and GET cache, source cooldown — shared between clients of Qeypeak RouterGateway.
     limits: Arc<Limits>,
 }
 
@@ -396,7 +396,7 @@ impl ApiClient {
         }
     }
 
-    /// Общие с другими клиентами лимиты (ApiGateway даёт один набор на оба источника).
+    /// Limits shared with other clients (ApiGateway gives one set for both sources).
     pub fn with_limits(mut self, limits: Arc<Limits>) -> Self {
         self.limits = limits;
         self
@@ -406,8 +406,8 @@ impl ApiClient {
         *self.tokens.lock().unwrap_or_else(|p| p.into_inner()) = provider;
     }
 
-    /// Новая авторизация — свой провайдер и своё охлаждение: старый запрос не должен подхватить токены
-    /// сменившегося аккаунта.
+    /// A new authorization gets its own provider and its own cooldown: an old request must not pick up the tokens
+    /// of the account that was switched away from.
     pub fn for_authorization(&self, provider: TokenProvider) -> Self {
         let client =
             Self::new(self.http.clone(), self.activity.clone(), self.search_limit, self.artist_albums_limit, self.source)
@@ -424,7 +424,7 @@ impl ApiClient {
         self.tokens.lock().unwrap_or_else(|p| p.into_inner()).clone().ok_or(ApiError::NotSignedIn)
     }
 
-    /// Ждёт конца охлаждения; false — оно кончится позже `deadline` (тогда не ждём вовсе).
+    /// Waits for the cooldown to end; false — it ends after `deadline` (then we do not wait at all).
     async fn wait_for_cooldown(&self, deadline: Option<Instant>) -> bool {
         loop {
             let until = *self.cooldown_until.lock().await;
@@ -443,11 +443,11 @@ impl ApiClient {
         *until = (*until).max(Instant::now() + wait);
     }
 
-    // ---- транспорт ----
+    // ---- transport ----
 
     async fn send(&self, method: Method, path: &str, query: &[(&str, String)], body: Option<&Value>) -> Result<String> {
         if method == Method::GET && body.is_none() {
-            // одинаковые GET в полёте — один запрос, ответ живёт в кэше limits несколько секунд
+            // identical GETs in flight — one request, the answer lives in the limits cache for a few seconds
             return self.limits.get(self.source, path, query, self.send_body(method, path, query, None, None)).await;
         }
         self.send_body(method, path, query, body, None).await
@@ -471,12 +471,12 @@ impl ApiClient {
             format!("{base}{path}")
         };
         let provider = self.provider()?;
-        // запись сбрасывает кэш GET, чем бы ни кончилась; команды плееру и очередь — нет: их GET не кэшируются
+        // a write clears the GET cache however it ends; player commands and the queue do not: their GETs are not cached
         let _wrote = (method != Method::GET && !path.starts_with("/me/player")).then(|| WroteGuard(&self.limits));
         let priority = limits::priority_of(method == Method::GET, path);
         self.limits.admit(self.source, priority).await?;
         let started = Instant::now();
-        // Один логический запрос, даже если он ждёт семафор или охлаждение: признак активности живёт всё это время.
+        // One logical request, even if it waits on the semaphore or cooldown: the activity flag lives for all that time.
         self.activity.begin();
         let _activity = ActivityGuard(&self.activity);
 
@@ -530,13 +530,13 @@ impl ApiClient {
                 if quota {
                     return Err(ApiError::QuotaExhausted);
                 }
-                // Отклонённое добавление в очередь безопасно повторить: оно держит место в замке записи и повторяется
-                // дольше обычного. Общее охлаждение — не дольше MAX_RETRY_AFTER: долгий Retry-After не должен
-                // останавливать весь источник; такую очередь отдаём UI как RateLimited.
+                // A rejected queue insertion is safe to retry: it holds its place in the write lock and is retried
+                // for longer than usual. The shared cooldown is no longer than MAX_RETRY_AFTER: a long Retry-After must not
+                // stop the whole source; such a queue is handed to the UI as RateLimited.
                 tracing::warn!("Spotify is rate limiting source={} wait={wait:?}", self.source);
                 drop(permit);
                 self.extend_cooldown(limits::jittered(wait).min(MAX_RETRY_AFTER)).await;
-                // фон и опрос после 429 не повторяют: каждый повтор — ещё запрос в и так полное окно
+                // background and polling do not retry after a 429: each retry is another request into an already full window
                 let retries = if queue_write {
                     QUEUE_RATE_LIMIT_RETRIES
                 } else if priority == limits::Priority::Interactive {
@@ -585,7 +585,7 @@ impl ApiClient {
     }
 
     async fn get_optional<T: DeserializeOwned>(&self, path: &str, query: &[(&str, String)]) -> Result<Option<T>> {
-        // 204 без тела — ничего не играет
+        // 204 without a body — nothing is playing
         let text = self.send(Method::GET, path, query, None).await?;
         if text.trim().is_empty() || text.trim() == "null" {
             return Ok(None);
@@ -593,8 +593,8 @@ impl ApiClient {
         serde_json::from_str(&text).map(Some).map_err(|error| ApiError::Decode(error.to_string()))
     }
 
-    /// Изменение. Успех решает статус; тело читаем, только если оно нужно: ответы команд плеера не всегда JSON,
-    /// и считать нечитаемое тело ошибкой значило бы сообщать «не запустилось», когда музыка уже играет.
+    /// A change. Success is decided by the status; we read the body only if it is needed: player command responses are not always JSON,
+    /// and treating an unreadable body as an error would mean reporting "it did not start" when the music is already playing.
     async fn write(
         &self,
         method: Method,
@@ -615,7 +615,7 @@ impl ApiClient {
         }
     }
 
-    // ---- аккаунт и плеер ----
+    // ---- account and player ----
 
     pub async fn me(&self) -> Result<User> {
         self.get("/me", &[]).await
@@ -696,7 +696,7 @@ impl ApiClient {
         Ok(())
     }
 
-    /// `state` — `off`, `context` или `track`.
+    /// `state` is `off`, `context` or `track`.
     pub async fn set_repeat(&self, state: &str, device_id: Option<&str>) -> Result<()> {
         let mut query = Self::device_query(device_id);
         query.push(("state", state.to_string()));
@@ -722,8 +722,8 @@ impl ApiClient {
         Ok(())
     }
 
-    /// Spotify добавляет по одному треку за запрос. Ждём каждый, чтобы сохранить порядок альбома (и повторы),
-    /// и останавливаемся на первой ошибке. Возвращает, сколько добавлено.
+    /// Spotify adds one track per request. We wait for each one to preserve the album order (and repeats),
+    /// and stop at the first error. Returns how many were added.
     pub async fn add_many_to_queue(&self, uris: &[String], device_id: Option<&str>) -> (usize, Result<()>) {
         let _write = self.queue_writes.lock().await;
         for (added, uri) in uris.iter().enumerate() {
@@ -734,7 +734,7 @@ impl ApiClient {
         (uris.len(), Ok(()))
     }
 
-    // ---- плейлисты ----
+    // ---- playlists ----
 
     pub async fn my_playlists(&self, offset: u32, limit: u32) -> Result<Page<Playlist>> {
         self.get("/me/playlists", &[("limit", limit.to_string()), ("offset", offset.to_string())]).await
@@ -757,8 +757,8 @@ impl ApiClient {
         .map(Into::into)
     }
 
-    /// Какие из запрошенных треков уже есть в плейлисте. Отдельного запроса членства у Spotify нет — идём по
-    /// страницам, пока не найдём все или плейлист не кончится.
+    /// Which of the requested tracks are already in the playlist. Spotify has no separate membership request — we walk the
+    /// pages until we find them all or the playlist runs out.
     pub async fn playlist_duplicates(&self, id: &str, uris: &[String]) -> Result<Vec<String>> {
         let wanted: HashSet<&str> = uris.iter().map(String::as_str).collect();
         if wanted.is_empty() {
@@ -790,7 +790,7 @@ impl ApiClient {
         serde_json::from_value(value).map_err(|error| ApiError::Decode(error.to_string()))
     }
 
-    /// `encoded` — JPEG в base64 (playlist_cover::prepare), не больше MAX_PAYLOAD.
+    /// `encoded` — base64 JPEG (playlist_cover::prepare), no larger than MAX_PAYLOAD.
     pub async fn upload_playlist_cover(&self, id: &str, encoded: &str) -> Result<()> {
         if encoded.is_empty() || encoded.len() > crate::playlist_cover::MAX_PAYLOAD {
             return Err(ApiError::Status { status: 413, message: mf_i18n::t("Choose a smaller image.") });
@@ -820,7 +820,7 @@ impl ApiClient {
         Ok(())
     }
 
-    /// Возвращает новый snapshot_id, если Spotify его прислал.
+    /// Returns the new snapshot_id if Spotify sent one.
     pub async fn add_playlist_items(&self, id: &str, uris: &[String], position: Option<u32>) -> Result<Option<String>> {
         let mut body = json!({ "uris": uris });
         if let Some(position) = position {
@@ -880,7 +880,7 @@ impl ApiClient {
         Ok(())
     }
 
-    // ---- библиотека ----
+    // ---- library ----
 
     pub async fn saved_tracks(&self, offset: u32, limit: u32) -> Result<Page<SavedTrack>> {
         self.get("/me/tracks", &[("limit", limit.to_string()), ("offset", offset.to_string())]).await
@@ -929,7 +929,7 @@ impl ApiClient {
         Ok(())
     }
 
-    /// Сохраняет треки, альбомы, исполнителей, шоу, выпуски или плейлисты (по URI).
+    /// Saves tracks, albums, artists, shows, episodes or playlists (by URI).
     pub async fn save(&self, uris: &[String]) -> Result<()> {
         self.library_write(Method::PUT, uris).await
     }
@@ -938,14 +938,14 @@ impl ApiClient {
         self.library_write(Method::DELETE, uris).await
     }
 
-    /// Есть ли каждый URI в библиотеке — в том же порядке, что `uris`.
+    /// Whether each URI is in the library — in the same order as `uris`.
     pub async fn contains(&self, uris: &[String]) -> Result<Vec<bool>> {
         self.get("/me/library/contains", &[("uris", uris.join(","))]).await
     }
 
-    // ---- каталог ----
+    // ---- catalog ----
 
-    /// Лимит — из профиля (общий ключ 20, личный 10).
+    /// The limit comes from the profile (shared key 20, personal 10).
     pub async fn search(&self, query: &str, types: &[&str]) -> Result<SearchResults> {
         self.get(
             "/search",
@@ -954,7 +954,7 @@ impl ApiClient {
         .await
     }
 
-    /// Плейлисты категории browse (личные — для «Made For You»). Приложениям в режиме разработки — 404.
+    /// Browse category playlists (personal ones are for "Made For You"). Applications in development mode get a 404.
     pub async fn category_playlists(&self, category_id: &str, offset: u32, limit: u32) -> Result<Page<Playlist>> {
         let query = [("limit", limit.to_string()), ("offset", offset.to_string())];
         let category: CategoryPlaylists = self.get(&format!("/browse/categories/{category_id}/playlists"), &query).await?;
@@ -1060,7 +1060,7 @@ mod tests {
             ApiSource::Shared,
             Arc::new(|_| {}),
         );
-        // проверка аккаунта пользуется токеном в памяти, ещё не сохраняя его
+        // the account check uses the token in memory, not yet storing it
         assert_eq!(tokens.access_token(false).await.unwrap(), "dummy-access");
         assert!(store.lease(slot).load().await.unwrap().grant.is_none());
         tokens.remember().await.unwrap();
@@ -1152,7 +1152,7 @@ mod tests {
             }
             let paths = server.await.unwrap();
             if rate_limit {
-                // повторяется только отклонённый трек, даже сверх обычного бюджета; одиночный — после альбома
+                // only the rejected track is retried, even beyond the usual budget; a single one — after the album
                 uris.splice(1..1, std::iter::repeat_n("spotify:track:b".into(), 4));
             }
             assert_eq!(paths.len(), if fail { 2 } else { uris.len() });
@@ -1167,7 +1167,7 @@ mod tests {
         }
     }
 
-    /// Простой HTTP-сервер на один запрос: возвращает полученный запрос целиком.
+    /// A simple HTTP server for a single request: returns the received request in full.
     fn serve_once(status: u16, body: &'static str) -> (std::net::SocketAddr, std::thread::JoinHandle<Vec<u8>>) {
         use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1239,8 +1239,8 @@ mod tests {
     fn own_status_texts_are_shown_without_http_details() {
         let own = ApiError::Status { status: 413, message: mf_i18n::t("Choose a smaller image.") };
         assert_eq!(format!("{own:#}"), "Choose a smaller image.");
-        let translated = ApiError::Status { status: 409, message: "Плейлист изменился".into() };
-        assert_eq!(format!("{translated:#}"), "Плейлист изменился");
+        let translated = ApiError::Status { status: 409, message: "The playlist changed — refresh it".into() };
+        assert_eq!(format!("{translated:#}"), "The playlist changed — refresh it");
         let spotify = ApiError::Status { status: 413, message: "Payload too large".into() };
         assert_eq!(format!("{spotify:#}"), "The request is too large (HTTP 413: Payload too large)");
     }
@@ -1293,12 +1293,12 @@ mod tests {
         assert_eq!(context.body(), json!({ "context_uri": "spotify:album:x", "offset": { "uri": "spotify:track:y" } }));
         let tracks = PlayRequest::tracks(vec!["spotify:track:a".into()]).starting_at_index(0);
         assert_eq!(tracks.body(), json!({ "uris": ["spotify:track:a"], "offset": { "position": 0 } }));
-        // одиночный трек/выпуск как контекст уходит единственным uri
+        // a single track/episode as a context goes out as a single uri
         let mut song = PlayRequest::context("spotify:track:t").starting_at_uri("spotify:track:t");
         song.position_ms = 5_000;
         assert_eq!(song.body(), json!({ "uris": ["spotify:track:t"], "position_ms": 5_000 }));
         assert_eq!(PlayRequest::context("spotify:episode:e").body(), json!({ "uris": ["spotify:episode:e"] }));
-        // возобновление, ушедшее дальше одиночного контекста, играет названный трек
+        // resume that moved past a single context plays the named track
         let mut resumed = PlayRequest::context("spotify:track:a").starting_at_uri("spotify:track:b");
         resumed.position_ms = 42_000;
         assert_eq!(resumed.body(), json!({ "uris": ["spotify:track:b"], "position_ms": 42_000 }));
@@ -1310,7 +1310,7 @@ mod tests {
         assert!(!is_quota_exhausted(r#"{"error":{"status":429,"message":"Too many requests"}}"#));
     }
 
-    /// Сервер, отвечающий по очереди заданными ответами; возвращает число принятых запросов.
+    /// A server that answers in order with the given responses; returns the number of requests accepted.
     async fn serve_in_turn(answers: Vec<&'static str>) -> (std::net::SocketAddr, tokio::task::JoinHandle<usize>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1343,20 +1343,20 @@ mod tests {
         const OK: &str = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\n{\"name\":\"M\"}";
         let http = reqwest::Client::builder().no_proxy().build().unwrap();
 
-        // короткий Retry-After — переждать и повторить
+        // a short Retry-After — wait it out and retry
         let (address, server) = serve_in_turn(vec![LIMITED_1S, OK]).await;
         let client = test_client(format!("http://{address}"), http.clone());
         let artist = client.artist("a").await.unwrap();
         assert_eq!(artist.name, "M");
         assert_eq!(server.await.unwrap(), 2);
 
-        // Retry-After за пределами бюджета — сразу RateLimited, без повтора
+        // Retry-After beyond the budget — RateLimited right away, without a retry
         let (address, server) = serve_in_turn(vec![LIMITED_HOUR, OK]).await;
         let client = test_client(format!("http://{address}"), http.clone());
         let started = Instant::now();
         assert!(matches!(client.artist("a").await, Err(ApiError::RateLimited)));
         assert!(started.elapsed() < Duration::from_secs(2), "doesn't wait an hour or hang for 3×30 s");
-        // охлаждение источника (≤30 с) дольше бюджета — следующие чтения тоже отвечают сразу
+        // source cooldown (≤30 s) longer than the budget — the next reads also answer right away
         let started = Instant::now();
         assert!(matches!(client.album("b").await, Err(ApiError::RateLimited)));
         assert!(started.elapsed() < Duration::from_secs(1));

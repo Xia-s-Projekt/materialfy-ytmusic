@@ -1,6 +1,6 @@
 [package]
 name = "materialfy"
-description = "Materialfy — клиент YouTube Music на Qt Quick (Material 3 Expressive) + Rust"
+description = "Materialfy — a YouTube Music client on Qt Quick (Material 3 Expressive) + Rust"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

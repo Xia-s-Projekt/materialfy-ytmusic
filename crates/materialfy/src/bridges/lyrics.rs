@@ -1,4 +1,4 @@
-// Lyrics (lyrics.py) — зеркало LyricsService: одно changed() на каждое изменение снимка.
+// Lyrics (lyrics.py) - a mirror of LyricsService: one changed() per snapshot change.
 use std::pin::Pin;
 use std::sync::Arc;
 

@@ -1,5 +1,5 @@
-//! Актор плеера: mpsc команд → ядро → снимок в watch, затем события в broadcast (по одному на Qt-сигнал).
-//! Сетевые команды управления идут по одной (порядок важен), чтения — параллельно.
+//! The player actor: mpsc of commands → the core → a snapshot in watch, then events in broadcast (one per Qt signal).
+//! Network control commands go one at a time (order matters), reads — in parallel.
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -18,12 +18,12 @@ use crate::engine::{EngineConfig, EngineEvent, LoadSpec};
 use crate::QueueChange;
 use crate::{LocalPlayback, PlayerEvent, PlayerSnapshot, Repeat, Target, codec_label};
 
-/// Пока что-то движется — снимок пересчитывается так часто.
+/// While something is moving, the snapshot is recomputed this often.
 const FRAME: Duration = Duration::from_millis(250);
-/// «Дыхание» обложки — ~30 Гц.
+/// The cover art's "breathing" — ~30 Hz.
 const LEVEL_FRAME: Duration = Duration::from_millis(33);
 const IDLE: Duration = Duration::from_secs(5);
-/// Шаг позиции в снимке во время игры, мс.
+/// The position step in the snapshot during playback, ms.
 const POSITION_STEP_MS: i64 = 200;
 
 pub(crate) enum LocalMsg {
@@ -39,7 +39,7 @@ pub(crate) enum Command {
     ShuffleFrom { items: Vec<TrackItem>, context: PlayContext },
     PlayContext { context: PlayContext, offset: Option<String>, shuffle: Option<bool> },
     PlayUris { uris: Vec<String>, index: usize, context: PlayContext },
-    /// Строка для оптимистичной сверки: списки присылают только URI.
+    /// A row for optimistic matching: lists only send URIs.
     Remember(Box<TrackItem>),
     PlayEpisode { uri: String, position_ms: i64 },
     PlayIndex(usize),
@@ -71,7 +71,7 @@ pub(crate) enum Command {
     SetAppActive(bool),
     ResetAccount,
     ExpectLocal(bool),
-    /// перезапуск движка с новыми настройками, с подхватом контекста и ручной очереди
+    /// engine restart with new settings, carrying over the context and the manual queue
     RestartEngine(Box<EngineConfig>),
 }
 
@@ -85,9 +85,9 @@ pub(crate) enum Msg {
     Shutdown(std::sync::mpsc::Sender<()>),
 }
 
-/// Как пересоздать сессию librespot (громкость — для нового движка).
+/// How to recreate the librespot session (the volume is for the new engine).
 pub(crate) type Reconnect = Arc<dyn Fn(u16) + Send + Sync>;
-/// Перезапуск движка с настройками; LoadSpec — что загрузить в новый (None — подхват движком).
+/// Engine restart with settings; LoadSpec — what to load into the new one (None — the engine picks it up).
 pub(crate) type Restart = Arc<dyn Fn(EngineConfig, u16, Option<LoadSpec>) + Send + Sync>;
 
 pub(crate) struct Actor {
@@ -98,7 +98,7 @@ pub(crate) struct Actor {
     events: broadcast::Sender<PlayerEvent>,
     backend: Arc<dyn WebBackend>,
     control: mpsc::UnboundedSender<ApiCall>,
-    /// записи очереди (альбом — десятки POST) — своя упорядоченная очередь, транспорт за ними не ждёт
+    /// queue writes (an album is dozens of POSTs) — their own ordered queue, the transport does not wait for them
     queue_writes: mpsc::UnboundedSender<ApiCall>,
     engine: Option<Arc<dyn LocalEngine>>,
     reconnect: Reconnect,
@@ -126,7 +126,7 @@ impl Actor {
         session_file: Option<PathBuf>,
     ) -> Self {
         let published = snapshot.borrow().clone();
-        // управление — строго по порядку; записи очереди — по порядку между собой
+        // control — strictly in order; queue writes — in order among themselves
         let control = ordered(backend.clone(), tx.clone());
         let queue_writes = ordered(backend.clone(), tx.clone());
         Self {
@@ -164,7 +164,7 @@ impl Actor {
                 Some(Some(message)) => self.handle(message),
                 None => {}
             }
-            // всё, что уже пришло, — одним снимком
+            // everything that has already arrived — in a single snapshot
             while let Ok(message) = self.rx.try_recv() {
                 if let Msg::Shutdown(done) = message {
                     self.shutdown();
@@ -177,7 +177,7 @@ impl Actor {
         }
     }
 
-    /// Обработать всё, что уже пришло (для тестов).
+    /// Process everything that has already arrived (for tests).
     #[cfg(test)]
     pub fn drain(&mut self) {
         while let Ok(message) = self.rx.try_recv() {
@@ -199,7 +199,7 @@ impl Actor {
         self.core.levels_wanted && self.engine.is_some() && self.core.local.is_active() && self.published.playing
     }
 
-    /// Таймеры ядра, эффекты, снимок, события.
+    /// The core's timers, effects, snapshot, events.
     pub fn step(&mut self) {
         self.core.tick();
         self.run_effects();
@@ -249,7 +249,7 @@ impl Actor {
         match local {
             LocalMsg::Connecting => self.core.handle_playback(LocalPlayback::Connecting),
             LocalMsg::Ready { engine, device_id, name, bitrate, autoplay } => {
-                // движок мог подключиться уже после запроса уровней — синхронизируем гейт tap'а
+                // the engine may have connected after the levels were requested — we sync the tap's gate
                 engine.set_levels_wanted(self.core.levels_wanted);
                 self.engine = Some(engine);
                 self.core.local_device_name = name;
@@ -279,7 +279,7 @@ impl Actor {
             Command::Remember(item) => core.remember(&item),
             Command::PlayEpisode { uri, position_ms } => core.play_episode(uri, position_ms),
             Command::PlayIndex(index) => {
-                // индекс строки Player.queue: 0 — текущая
+                // the Player.queue row index: 0 — the current one
                 let rows = core.queue_rows();
                 if let Some(row) = rows.get(index)
                     && row.section != QueueSection::Current
@@ -332,7 +332,7 @@ impl Actor {
             Command::SetVolume(value) => core.set_volume(crate::volume_to_u16(value)),
             Command::SetLevelsWanted(value) => {
                 core.levels_wanted = value;
-                // движок узнаёт о гейте сразу: буфер tap'а не наполняется, пока уровень не нужен
+                // the engine learns about the gate immediately: the tap's buffer is not filled while the level is not needed
                 if let Some(engine) = &self.engine {
                     engine.set_levels_wanted(value);
                 }
@@ -396,7 +396,7 @@ impl Actor {
 
     pub(crate) fn api(&mut self, call: ApiCall) {
         match call {
-            // чтения — параллельно
+            // reads — in parallel
             ApiCall::Playback { .. } | ApiCall::Queue { .. } | ApiCall::AlbumTracks { .. } | ApiCall::TrackInfo { .. } => {
                 let backend = self.backend.clone();
                 let tx = self.tx.clone();
@@ -464,10 +464,10 @@ impl Actor {
         }
     }
 
-    /// Снимок — в watch, затем события (снимок обновляется до рассылки).
+    /// The snapshot — into watch, then the events (the snapshot is updated before broadcasting).
     pub fn publish(&mut self) {
         let mut next = self.build();
-        // кадры «дыхания» идут ~30 Гц; позиция в QML — не чаще ~5 раз в секунду
+        // the "breathing" frames go at ~30 Hz; the position in QML — no more than ~5 times a second
         let old = &self.published;
         if old.track == next.track
             && old.playing
@@ -555,7 +555,7 @@ impl Actor {
     }
 }
 
-/// Задача, выполняющая вызовы строго по одному в порядке отправки.
+/// A task that performs calls strictly one at a time in the order they were sent.
 fn ordered(backend: Arc<dyn WebBackend>, tx: mpsc::UnboundedSender<Msg>) -> mpsc::UnboundedSender<ApiCall> {
     let (sender, mut calls) = mpsc::unbounded_channel::<ApiCall>();
     tokio::spawn(async move {
@@ -569,13 +569,13 @@ fn ordered(backend: Arc<dyn WebBackend>, tx: mpsc::UnboundedSender<Msg>) -> mpsc
     sender
 }
 
-/// Порядок строк (для тестов).
+/// The order of rows (for tests).
 #[cfg(test)]
 pub(crate) fn uris(rows: &[QueueRow]) -> Vec<(QueueSection, String)> {
     rows.iter().map(|row| (row.section, row.track.uri.clone())).collect()
 }
 
-/// Применить изменения очереди, как это делает мост (для тестов).
+/// Apply the queue changes the way the bridge does (for tests).
 #[cfg(test)]
 pub(crate) fn apply_changes(rows: &mut Vec<QueueRow>, changes: &[QueueChange]) {
     diff::apply(rows, changes);

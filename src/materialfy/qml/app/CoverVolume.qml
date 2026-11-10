@@ -2,10 +2,10 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Громкость прямо на обложке (островок, виджет панели задач): обложка темнеет, снизу до уровня громкости
-// поднимается «жидкость» цвета акцента с бегущей волной по верху; на крупной обложке — ещё и проценты.
-// Показывается на секунду после каждого изменения (show()), потом гаснет. Кладётся поверх обложки
-// (anchors.fill), radius — скругление её фигуры (круг для «печенья» — половина стороны).
+// Volume right on the cover (island, taskbar widget): the cover darkens, from the bottom up to the volume level
+// an accent-colored "liquid" rises with a running wave on top; on a large cover there are percentages too.
+// Shown for a second after each change (show()), then fades out. Placed over the cover
+// (anchors.fill), radius — the rounding of its shape (a circle for the "cookie" is half the side).
 Item {
     id: root
 
@@ -13,7 +13,7 @@ Item {
     property color accent: Theme.primary
     property real radius: width / 2
     property bool motion: !Theme.reducedMotion && !Theme.lowPower
-    // проценты — от 44 px: на меньшей обложке их не прочитать, там значок
+    // percentages from 44 px up: on a smaller cover they are unreadable, an icon goes there
     readonly property bool big: width >= 44
 
     function show() {
@@ -32,7 +32,7 @@ Item {
 
     Timer { id: hold; interval: 1100; onTriggered: root.shown = false }
 
-    // волна бежит, только пока уровень на экране
+    // the wave runs only while the level is on screen
     Timer {
         interval: 33
         repeat: true
@@ -79,7 +79,7 @@ Item {
         }
     }
 
-    // проценты на тёмной плашке: читаются и на светлой «жидкости»
+    // percentages on a dark plate: readable even on a light "liquid"
     Rectangle {
         anchors.centerIn: parent
         visible: root.big

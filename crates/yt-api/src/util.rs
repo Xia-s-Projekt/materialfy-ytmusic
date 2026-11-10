@@ -31,7 +31,7 @@ pub fn duration_ms(value: &str) -> i64 {
     if let Ok(secs) = value.parse::<i64>() {
         return secs.saturating_mul(1000);
     }
-    // Длительность выпуска: «25 min», «1 hr 5 min», «45 sec» (число идёт перед единицей)
+    // Episode duration: "25 min", "1 hr 5 min", "45 sec" (the number comes before the unit)
     let words = value.split_whitespace().collect::<Vec<_>>();
     if words.len() >= 2
         && words

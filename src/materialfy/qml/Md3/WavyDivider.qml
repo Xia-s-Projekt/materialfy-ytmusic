@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Shapes
 
-// Волнистый разделитель (как у заголовков секций в сайдбаре референса).
-// Корень — Item, а не Shape: Shape берёт implicit-размер из пути → петля привязок в Layout.
+// A wavy divider (like the section headings in the reference sidebar).
+// The root is an Item, not a Shape: Shape takes its implicit size from the path → a binding loop in a Layout.
 Item {
     id: root
 

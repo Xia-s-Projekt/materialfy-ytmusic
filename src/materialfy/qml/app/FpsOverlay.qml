@@ -1,8 +1,8 @@
 import QtQuick
 import Md3
 
-// --debug-fps: частота кадров окна (сглаженная) и худший кадр за секунду.
-// Окно перерисовывается только при изменениях, поэтому меряем во время прокрутки/анимаций.
+// --debug-fps: the window's frame rate (smoothed) and the worst frame per second.
+// The window repaints only on changes, so we measure during scrolling/animations.
 Rectangle {
     id: root
 
@@ -19,7 +19,7 @@ Rectangle {
     z: 10000
 
     FrameAnimation {
-        running: true   // сам держит перерисовку — показывает потолок, который даёт композитор
+        running: true   // it keeps the repaint going itself — shows the ceiling the compositor gives
         onTriggered: {
             root._frames++
             root._acc += frameTime

@@ -1,7 +1,8 @@
-// Островок на macOS: окно над строкой меню (её уровень — NSMainMenuWindowLevel, обычное «поверх всех» Qt —
-// ниже), на всех рабочих столах, но не над полноэкранными приложениями (у них свой рабочий стол), не прячется,
-// когда приложение неактивно (Qt::Tool — NSPanel с hidesOnDeactivate). Размер выреза экрана — в свойства окна
-// notchW / notchH (FloatingIsland.qml), без выреза — 0: островок тогда как на Windows, полоской у кромки.
+// The island on macOS: a window above the menu bar (its level is NSMainMenuWindowLevel, Qt's usual
+// "always on top" is lower), on every desktop but not over full-screen apps (they get their own
+// desktop), and it does not hide when the app is inactive (Qt::Tool is an NSPanel with
+// hidesOnDeactivate). The screen notch size lives in the window properties notchW / notchH
+// (FloatingIsland.qml); without a notch it is 0: the island is then as on Windows, a strip at the edge.
 #include "floating.h"
 
 #import <AppKit/AppKit.h>
@@ -34,7 +35,7 @@ floating_tool_window(QObject* object)
   if (@available(macOS 12.0, *)) {
     NSScreen* screen = ns.screen;
     if (screen && screen.safeAreaInsets.top > 0) {
-      // вырез — между двумя видимыми кусками строки меню слева и справа от него
+      // the notch — between the two visible pieces of the menu bar, left and right of it
       const NSRect l = screen.auxiliaryTopLeftArea;
       const NSRect r = screen.auxiliaryTopRightArea;
       notch_h = static_cast<int>(std::lround(screen.safeAreaInsets.top));

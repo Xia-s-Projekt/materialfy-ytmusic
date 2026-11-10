@@ -1,8 +1,8 @@
-//! Подкасты через сессию librespot (sf_player::engine::session_podcasts) с местами остановки из GraphQL-шлюза.
-//! Метаданные сессии места остановки не несут, а Web API его отдаёт — его даёт pathfinder: queryPodcastEpisodes
-//! (страница выпусков шоу) и getEpisodeOrChapter (один выпуск). Проверено вживую (2026-10): у выпуска
+//! Podcasts through a librespot session (sf_player::engine::session_podcasts) with resume points from the GraphQL gateway.
+//! Session metadata does not carry resume points, while the Web API returns them — pathfinder provides them: queryPodcastEpisodes
+//! (a show's episode page) and getEpisodeOrChapter (one episode). Verified live (2026-10): an episode
 //! `playedState { playPositionMilliseconds, state: NOT_STARTED | IN_PROGRESS | COMPLETED }`; decorateContext…
-//! его не отдаёт. Место остановки — украшение: шлюз не ответил за PLAYED_GRACE — выпуски без прогресса.
+//! does not return it. The resume point is decoration: the gateway did not answer within PLAYED_GRACE — episodes without progress.
 use std::collections::HashMap;
 use std::future::Future;
 use std::time::Duration;
@@ -15,15 +15,15 @@ use sf_player::engine::session_reads::Failure;
 
 use super::persisted;
 
-/// Хэши queryPodcastEpisodes и getEpisodeOrChapter из бандла веб-плеера (2026-10); свежие найдёт persisted.
+/// queryPodcastEpisodes and getEpisodeOrChapter hashes from the web player bundle (2026-10); persisted will find fresh ones.
 const PODCAST_EPISODES_HASHES: [&str; 1] = ["3539d746cf882f3909660de40b4ef472b3f5893a0761d617c282541de5d412c5"];
 const EPISODE_HASHES: [&str; 1] = ["5f77db47e5a2ce6680330bb61317aa09e17ddd1d189513cb218e7cd3e43288be"];
-/// Сколько страница ждёт места остановки сверх своих метаданных.
+/// How long a page waits for a resume point on top of its own metadata.
 const PLAYED_GRACE: Duration = Duration::from_secs(4);
-/// Соседних выпусков на странице выпуска.
+/// Neighbouring episodes on an episode page.
 const MORE_EPISODES: usize = 3;
 
-/// Страница шоу: шапка и выпуски с `offset` (не больше `limit`) с местами остановки.
+/// A show page: header and episodes from `offset` (no more than `limit`) with resume points.
 pub async fn show_page(
     http: &Http,
     session: &sf_player::Session,
@@ -41,8 +41,8 @@ pub async fn show_page(
     Ok((show, page))
 }
 
-/// Выпуск (с местом остановки), его шоу и до трёх соседних выпусков. Шоу, которое не прочиталось, — из
-/// ссылки в самом выпуске, без соседей: страница выпуска от этого не падает.
+/// An episode (with a resume point), its show and up to three neighbouring episodes. A show that could not be read — from
+/// the link in the episode itself, without neighbours: the episode page does not crash because of it.
 pub async fn episode_page(
     http: &Http,
     session: &sf_player::Session,
@@ -77,7 +77,7 @@ pub async fn episode_page(
     }
 }
 
-/// Сохранённые шоу: время добавления и шоу; аудиокниги (librespot их не играет) пропущены.
+/// Saved shows: the time added and the show; audiobooks (librespot does not play them) are skipped.
 pub async fn saved_shows(session: &sf_player::Session) -> anyhow::Result<Vec<(String, Show)>> {
     let saved = session_podcasts::saved_shows(session).await.map_err(into_anyhow)?;
     Ok(saved
@@ -87,13 +87,13 @@ pub async fn saved_shows(session: &sf_player::Session) -> anyhow::Result<Vec<(St
         .collect())
 }
 
-/// «Ваши выпуски», новые сверху (без мест остановки: список их не показывает).
+/// "Your episodes", newest first (without resume points: the list does not show them).
 pub async fn saved_episodes(session: &sf_player::Session) -> anyhow::Result<Vec<Episode>> {
     let saved = session_podcasts::saved_episodes(session).await.map_err(into_anyhow)?;
     Ok(saved.into_iter().map(|(_, episode)| episode).collect())
 }
 
-/// Места остановки выпусков на странице шоу, по URI выпуска.
+/// Episode resume points on a show page, by episode URI.
 async fn show_played(
     http: &Http,
     session: &sf_player::Session,
@@ -106,7 +106,7 @@ async fn show_played(
     Ok(played_on_page(&body))
 }
 
-/// Место остановки одного выпуска (по URI; не начат — тоже место, с нулём).
+/// The resume point of one episode (by URI; not started — still a place, with zero).
 async fn episode_played(
     http: &Http,
     session: &sf_player::Session,
@@ -118,7 +118,7 @@ async fn episode_played(
     Ok(played_of(episode).map(|point| (episode_uri.to_owned(), point)).into_iter().collect())
 }
 
-/// Украшение не дольше PLAYED_GRACE; ошибка или опоздание — пусто.
+/// Decoration no longer than PLAYED_GRACE; an error or being late — empty.
 async fn decoration(read: impl Future<Output = anyhow::Result<HashMap<String, ResumePoint>>>) -> HashMap<String, ResumePoint> {
     match tokio::time::timeout(PLAYED_GRACE, read).await {
         Ok(Ok(played)) => played,
@@ -133,7 +133,7 @@ async fn decoration(read: impl Future<Output = anyhow::Result<HashMap<String, Re
     }
 }
 
-/// data.podcastUnionV2.episodesV2.items[].entity.data → места остановки по URI.
+/// data.podcastUnionV2.episodesV2.items[].entity.data → resume points by URI.
 fn played_on_page(body: &Value) -> HashMap<String, ResumePoint> {
     body.pointer("/data/podcastUnionV2/episodesV2/items")
         .and_then(Value::as_array)
@@ -151,7 +151,7 @@ fn played_on_page(body: &Value) -> HashMap<String, ResumePoint> {
         .collect()
 }
 
-/// playedState выпуска как resume_point Web API.
+/// An episode's playedState as the Web API resume_point.
 fn played_of(episode: &Value) -> Option<ResumePoint> {
     if episode.get("__typename").and_then(Value::as_str).is_some_and(|kind| kind != "Episode") {
         return None;
@@ -164,7 +164,7 @@ fn played_of(episode: &Value) -> Option<ResumePoint> {
     })
 }
 
-/// Места остановки — выпускам, у которых они нашлись.
+/// Resume points — for the episodes they were found for.
 fn apply(episodes: &mut [Episode], played: &HashMap<String, ResumePoint>) {
     for episode in episodes {
         if let Some(point) = played.get(&episode.uri) {
@@ -188,7 +188,7 @@ fn into_anyhow(failure: Failure) -> anyhow::Error {
 mod tests {
     use super::*;
 
-    /// Ответ queryPodcastEpisodes (живой, сокращён): начатый, прослушанный и новый выпуски.
+    /// A queryPodcastEpisodes answer (live, shortened): started, listened and new episodes.
     const PAGE: &str = r#"{"data":{"podcastUnionV2":{"__typename":"Podcast","episodesV2":{"__typename":"ContextEpisodePage",
         "items":[
           {"entity":{"_uri":"spotify:episode:a","data":{"__typename":"Episode","uri":"spotify:episode:a",

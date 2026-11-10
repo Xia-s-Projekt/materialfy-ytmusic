@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Карточка прослушивания выпуска: play, «Вы остановились на …» / «Играет · осталось …», −10/+30 с,
-// перемотка, «С начала», «В очередь», «В «Ваших выпусках»», «Поделиться».
+// Episode progress card: play, "You stopped at …" / "Playing · left …", −10/+30 s,
+// seek, "From the start", "To queue", "In your episodes", "Share".
 Rectangle {
     id: root
 

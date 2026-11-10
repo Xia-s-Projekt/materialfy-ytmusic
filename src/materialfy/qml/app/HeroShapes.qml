@@ -1,32 +1,32 @@
 import QtQuick
 import Md3
 
-// Плавающие фигуры за шапкой страницы. Кладётся ВНЕ прокручиваемой области (иначе её clip режет
-// фигуры по краю) и едет вместе с шапкой по scroll; заходит под прозрачную верхнюю панель, сверху
-// и снизу фигуры растворяются — видимой рамки нет. Стоит, когда шапка уехала из виду.
+// Floating shapes behind the page header. It is placed OUTSIDE the scrollable area (otherwise its clip cuts
+// the shapes off at the edge) and travels with the header on scroll; it goes under the transparent top panel, and at the top
+// and bottom the shapes dissolve — there is no visible border. It runs when the header has scrolled out of sight.
 Item {
     id: root
 
-    property real headerHeight: 320        // высота шапки, за которой плавают фигуры
-    property real scroll: 0                // насколько прокручена страница
-    property real contentX: 0              // область шапки по горизонтали
+    property real headerHeight: 320        // height of the header behind which the shapes float
+    property real scroll: 0                // how far the page is scrolled
+    property real contentX: 0              // header area horizontally
     property real contentWidth: width
     property string seed
     property real shapesOpacity: 0.75
     property bool active: true
-    property bool running: true            // false — фигуры на месте, без движения
+    property bool running: true            // false — the shapes stay put, no motion
 
-    readonly property real above: 64       // высота верхней панели над страницей
-    readonly property real below: 140      // запас под шапкой на растворение
+    readonly property real above: 64       // height of the top panel above the page
+    readonly property real below: 140      // space under the header for the dissolve
 
     visible: active && scroll < headerHeight + below
     y: -above - scroll
     height: above + headerHeight + below
     clip: true
 
-    // Растворение краёв считает шейдер каждой фигуры, а не слой поверх них: «живой» слой с меняющимся
-    // содержимым просит у окна лишний кадр после каждого изменения (плывущие фигуры перерисовывали окно
-    // дважды за тик), а на программном рендере ещё и сам стоит целого прохода по шапке.
+    // Edge dissolve is computed by each shape's shader, not by a layer over them: a "live" layer with changing
+    // content asks the window for an extra frame after every change (the floating shapes used to redraw the window
+    // twice per tick), and on software rendering it costs a whole pass over the header by itself.
     FloatingShapes {
         x: root.contentX
         y: root.above

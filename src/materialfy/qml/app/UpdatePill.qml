@@ -4,10 +4,10 @@ import QtQuick.Shapes
 import Md3
 import Materialfy.Core
 
-// Плашка обновления в боковой панели (над карточкой аккаунта): «Доступно обновление · 0.2.0», во время
-// загрузки — кольцо прогресса вокруг иконки и проценты, потом «Перезапустить и обновить». В рейле остаются
-// иконка с кольцом (подписи гаснут, как у остальных пунктов). Клик — окно обновления (UpdateSheet).
-// Пропущенная версия плашку не показывает.
+// Update pill in the sidebar (above the account card): "Update available · 0.2.0"; while
+// downloading — a progress ring around the icon and a percentage, then "Restart and update". In the rail only
+// the icon with the ring remains (labels fade, like the other entries). Click — the update window (UpdateSheet).
+// A skipped version does not show the pill.
 Item {
     id: root
 
@@ -58,7 +58,7 @@ Item {
         color: root.failed ? Theme.errorContainer : Theme.primaryContainer
         Behavior on color { enabled: !Theme.transitioning; ColorAnimation { duration: Theme.motion.effectsDefault } }
 
-        // иконка на оси рейла (x = 40 от края панели) с кольцом прогресса
+        // icon on the rail axis (x = 40 from the panel edge) with a progress ring
         Item {
             id: badge
             width: 40
@@ -96,7 +96,7 @@ Item {
                 fill: 1
                 color: root.failed ? Theme.fgErrorContainer : Theme.fgPrimaryContainer
             }
-            // точка «есть новое» в рейле, пока обновление только предлагается
+            // dot meaning "there is something new" in the rail while the update is only offered
             Rectangle {
                 visible: root.st === "available" && root.rail
                 width: 8

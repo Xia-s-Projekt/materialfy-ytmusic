@@ -3,13 +3,13 @@ import QtQuick.Effects
 import Md3
 import Materialfy.Core
 
-// Плеер в панели задач Windows: пилюля MD3 Expressive (чёрная или в тоне обложки) — обложка, название,
-// исполнитель и тонкая волна прогресса, «пуск» и «дальше» («назад» — при наведении). Окно встраивается
-// в Shell_TrayWnd (WindowShell.taskbarPlace, cpp/floating.cpp) или, если не вышло (Windhawk, второй монитор),
-// стоит над панелью, которой оно принадлежит. Раз в 2 с встаёт на место заново (панель сменила размер,
-// значки сдвинулись); Explorer унёс окно с собой при перезапуске — lost(), Main.qml создаёт его заново.
-// Зажать обложку или название и потянуть — виджет едет вдоль панели и липнет к местам (taskbarWidgetPos).
-// Колесо — громкость (уровень — на обложке), стрелки и пробел при наведении — как у островка.
+// Player in the Windows taskbar: an MD3 Expressive pill (black or in the cover's tone) — cover, title,
+// artist and a thin progress wave, "play" and "next" ("back" — on hover). The window is embedded
+// into Shell_TrayWnd (WindowShell.taskbarPlace, cpp/floating.cpp) or, if that fails (Windhawk, a second monitor),
+// it sits above the panel it belongs to. Every 2 s it takes its place again (the panel changed size,
+// icons shifted); Explorer carried the window away on restart — lost(), Main.qml recreates it.
+// Press and drag the cover or the title — the widget slides along the panel and snaps to places (taskbarWidgetPos).
+// Wheel — volume (the level shows on the cover), arrow keys and space on hover — like the island.
 Window {
     id: root
 
@@ -18,7 +18,7 @@ Window {
     property int screenIndex: 0
     property bool embed: true
     signal lost()
-    // --set floatingShot=<path.png>: снимок окна через 9 с без встраивания; --set taskbarTheme=dark|light — тема панели
+    // --set floatingShot=<path.png>: a window shot after 9 s without embedding; --set taskbarTheme=dark|light — panel theme
     property string shotPath: ""
     property string forcedTheme: ""
     Timer {
@@ -35,27 +35,27 @@ Window {
     color: "transparent"
     title: "Materialfy"
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
-    // Без владельца из Qt: окно, принадлежащее главному, Windows прячет вместе с ним (владелец — панель, см. C++)
+    // Without a Qt owner: a window owned by the main one is hidden by Windows together with it (the owner is the panel, see C++)
     transientParent: null
 
     readonly property bool motion: !Theme.reducedMotion && !Theme.lowPower
-    // уровень звука нужен только «пульсу» обложки
+    // the volume level is needed only for the cover "pulse"
     readonly property bool wantsLevels: visible && motion && Settings.coverPulse && Player.playing && Player.isLocal === true
     readonly property bool colorMode: Settings.floatingPlayerStyle === "color"
     readonly property bool _onCover: colorMode && Player.cover !== ""
-    // На тёмном стекле над обложкой и на чёрном — светлые; цветной без обложки — тональный контейнер
+    // On dark glass over the cover and on black — light ones; colored without a cover — a tonal container
     readonly property color ink: colorMode && !_onCover ? Theme.fgPrimaryContainer : "#ffffff"
     readonly property color inkDim: Qt.alpha(ink, 0.72)
-    // на чёрном — «фиксированный» акцент MD3: одинаково светлый в светлой и тёмной теме
+    // on black — a "fixed" MD3 accent: equally light in light and dark themes
     readonly property color accent: colorMode ? ink : Theme.primaryFixedDim
 
-    // 1 — в панели задач, 2 — над ней, 0 — некуда (вертикальная, узкая или спрятанная панель): окно спрятано
+    // 1 — in the taskbar, 2 — above it, 0 — nowhere (vertical, narrow or hidden panel): the window is hidden
     property int placement: 0
     property bool _ready: false
     property bool _fullscreen: false
     property bool dragActive: false
     visible: _ready && placement > 0 && !(placement === 2 && _fullscreen)
-    // Qt при показе окна сбрасывает его владельца — вернуть панель сразу, а не через 2 с
+    // Qt resets the window's owner when showing it — restore the panel immediately, not after 2 s
     onVisibleChanged: if (visible) Qt.callLater(place)
 
     function currentPos() {
@@ -116,7 +116,7 @@ Window {
         function onTaskbarPositionsChanged() { if (!root.dragActive) root.place() }
     }
 
-    // Клавиши без фокуса: ← → треки, ↑ ↓ громкость, пробел
+    // Keys without focus: ← → tracks, ↑ ↓ volume, space
     function floatingKey(code) {
         switch (Number(code)) {
         case 1: Player.previous(); break
@@ -160,7 +160,7 @@ Window {
             onTapped: point => menu.openAt(Qt.point(point.position.x, point.position.y))
         }
 
-        // ---- Пилюля ----
+        // ---- Pill ----
         Rectangle {
             id: pill
             anchors.fill: parent
@@ -170,8 +170,8 @@ Window {
             border.width: 1
             border.color: Qt.rgba(1, 1, 1, root.colorMode ? 0.14 : 0.10)
 
-            // Цветной: обложка, размытая и «плавающая», как фон плеера в приложении (настройки фона);
-            // по форме пилюли обрезает маска (clip режет по прямоугольнику)
+            // Colored: the cover, blurred and "floating", like the player background in the app (background settings);
+            // a mask crops it to the pill shape (clip cuts a rectangle)
             Item {
                 id: coverFill
                 anchors.fill: parent
@@ -204,7 +204,7 @@ Window {
                 layer.enabled: coverFill.visible
                 radius: height / 2
             }
-            // слой состояния MD3: 8 % при наведении
+            // MD3 state layer: 8 % on hover
             Rectangle {
                 anchors.fill: parent
                 color: root.ink
@@ -212,7 +212,7 @@ Window {
                 Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
             }
         }
-        // при перетаскивании — обводка акцентом
+        // an accent outline while dragging
         Rectangle {
             anchors.fill: parent
             radius: height / 2
@@ -223,7 +223,7 @@ Window {
             Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
         }
 
-        // ---- Обложка и подписи: клик — открыть Materialfy, зажать и тянуть — двигать виджет ----
+        // ---- Cover and labels: click — open Materialfy, press and drag — move the widget ----
         Item {
             id: track
             anchors.left: parent.left
@@ -249,9 +249,9 @@ Window {
                     fallbackKind: Player.album !== "" ? "album" : "track"
                     fallbackArtist: Player.artist.split(", ")[0]
                     fallbackTitle: Player.album !== "" ? Player.album : Player.title
-                    // MD3E: на паузе — мягкий квадрат, играет — «печенье»; при наведении — круг
+                    // MD3E: paused — a soft square, playing — a "cookie"; on hover — a circle
                     shape: hover.hovered ? "circle" : "softSquare"
-                    // как в приложении: «Пульс обложки» и «Вращение рамки» из настроек
+                    // as in the app: "Cover pulse" and "Frame rotation" from settings
                     pulse: root.wantsLevels ? Math.min(0.24, Player.level * 0.35) : 0
                     MaskSpin { target: coverImage; spinning: Settings.coverSpin && Player.playing && Player.isLocal === true && root.motion }
                 }
@@ -296,9 +296,9 @@ Window {
                     elide: Text.ElideRight
                 }
             }
-            // волна прогресса под подписями: не бежит (виджет виден всегда), двигается с позицией трека.
-            // Клик или протяжка — перемотка (поверх области «открыть / перетащить виджет»); пока навели или
-            // тянут, вместо исполнителя — время
+            // the progress wave under the labels: it does not run (the widget is always visible), it moves with the track position.
+            // Click or drag — seek (over the "open / drag the widget" area); while hovered or
+            // dragging, the artist is replaced by the time
             WavyProgress {
                 id: seekBar
                 readonly property bool scrubbing: dragging || seekHover.hovered
@@ -331,7 +331,7 @@ Window {
                 cursorShape: root.dragActive ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                 preventStealing: true
                 property point _start
-                // тянуть начинают, сдвинув мышь на 6 px или подержав 250 мс
+                // dragging starts after moving the mouse 6 px or holding for 250 ms
                 Timer { id: holdTimer; interval: 250; onTriggered: grab._beginDrag() }
                 function _beginDrag() {
                     if (root.dragActive || !pressed || root.shotPath !== "")
@@ -370,7 +370,7 @@ Window {
             }
         }
 
-        // ---- Кнопки: «назад» выезжает при наведении, «пуск» — заполненная фигура MD3E, «дальше» ----
+        // ---- Buttons: "back" slides in on hover, "play" is a filled MD3E shape, "next" ----
         Row {
             id: buttons
             anchors.right: parent.right
@@ -404,7 +404,7 @@ Window {
         }
     }
 
-    // Смена цветов под новую обложку — той же шторкой, что и в окне приложения, и одновременно с ней
+    // Color change for a new cover — with the same curtain as the app window, and at the same time as it
     ThemeWipe {
         id: barWipe
         anchors.fill: parent

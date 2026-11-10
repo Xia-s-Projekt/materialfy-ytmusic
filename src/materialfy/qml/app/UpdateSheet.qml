@@ -3,10 +3,10 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Окно обновления (Updater.showSheet() → sheetRequested): версия, дата, размер, заметки к выпуску
-// (Markdown с GitHub, ссылки открываются в браузере), загрузка с волнистым прогрессом, проверка,
-// «Перезапустить и обновить»; ошибки — с «Повторить» и страницей выпуска. Закрытие не прерывает загрузку:
-// её видно на плашке в боковой панели.
+// The update window (Updater.showSheet() → sheetRequested): version, date, size, release notes
+// (Markdown from GitHub, links open in the browser), download with wavy progress, a check,
+// "Restart and update"; errors come with "Retry" and a release page link. Closing does not interrupt the download:
+// it stays visible on the banner in the sidebar.
 Item {
     id: root
 
@@ -28,7 +28,7 @@ Item {
     readonly property bool progressShown: st === "downloading" || st === "verifying" || st === "readyToInstall" || st === "installing"
     readonly property bool mac: Updater.installKind === "mac"
 
-    // ---- форматирование ----
+    // ---- formatting ----
     readonly property real _mb: 1024 * 1024
     function mb(b) { return I18n.decimal(b / _mb, b >= 100 * _mb ? 0 : 1) }
     function sizeText(b) { return b >= 1024 * _mb ? I18n.bytes(b) : I18n.t("{0} MB", mb(b)) }
@@ -112,7 +112,7 @@ Item {
 
         Elevation { target: card; level: 3 }
 
-        // клики по карточке не закрывают окно
+        // clicks on the card do not close the window
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = false }
 
         Flickable {
@@ -129,7 +129,7 @@ Item {
                 width: flick.width
                 spacing: 16
 
-                // ---- Шапка: фигура с иконкой, заголовок, версия ----
+                // ---- Header: a shape with an icon, the title, the version ----
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 16
@@ -198,7 +198,7 @@ Item {
                     }
                 }
 
-                // ---- Что нового ----
+                // ---- What's new ----
                 ColumnLayout {
                     Layout.fillWidth: true
                     visible: root.hasOffer && root.st !== "error"
@@ -243,7 +243,7 @@ Item {
                     }
                 }
 
-                // ---- Прогресс ----
+                // ---- Progress ----
                 ColumnLayout {
                     Layout.fillWidth: true
                     visible: root.progressShown
@@ -275,7 +275,7 @@ Item {
                     WavyProgress {
                         Layout.fillWidth: true
                         value: root.st === "downloading" ? Updater.progress : 1
-                        // волна бежит, пока что-то происходит; готово — прямая линия
+                        // the wave runs while something is happening; when done — a straight line
                         wavy: root.st === "downloading" || root.st === "verifying" || root.st === "installing"
                         speed: root.st === "verifying" ? 2 : 1
                         Behavior on value { NumberAnimation { duration: 160 } }
@@ -295,7 +295,7 @@ Item {
                     }
                 }
 
-                // ---- Ошибка ----
+                // ---- Error ----
                 Rectangle {
                     Layout.fillWidth: true
                     visible: root.st === "error"
@@ -319,7 +319,7 @@ Item {
                     }
                 }
 
-                // ---- Эта копия не обновляется сама ----
+                // ---- This copy does not update itself ----
                 Label {
                     Layout.fillWidth: true
                     visible: root.st === "available" && !Updater.canInstall
@@ -331,7 +331,7 @@ Item {
                     wrapMode: Text.Wrap
                 }
 
-                // ---- Кнопки ----
+                // ---- Buttons ----
                 Flow {
                     Layout.fillWidth: true
                     Layout.topMargin: 4

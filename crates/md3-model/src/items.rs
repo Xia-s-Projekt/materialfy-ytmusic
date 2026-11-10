@@ -1,5 +1,5 @@
-//! Плоские элементы для QML. serde camelCase; имена полей = роли моделей/ключи словарей QML.
-//! Обложки: `cover` ~300 px (сетки, строки), `cover_large` 640 px (шапки, NowPlaying); пусто — нет.
+//! Flat items for QML. serde camelCase; field names = model roles / QML dictionary keys.
+//! Covers: `cover` ~300 px (grids, rows), `cover_large` 640 px (headers, NowPlaying); empty — none.
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -9,46 +9,46 @@ pub struct ArtistRef {
     pub name: String,
 }
 
-/// Трек или выпуск подкаста. Ключи QML (TRACK_KEYS): trackId, albumId, title, version, artists, artistRefs, album,
+/// A track or a podcast episode. QML keys (TRACK_KEYS): trackId, albumId, title, version, artists, artistRefs, album,
 /// cover, coverLarge, durationMs, explicit, available, uri, isEpisode, showId, addedAt, addedBy, playCount.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TrackItem {
-    /// base62 id трека (у выпуска — id выпуска)
+    /// base62 id of the track (for an episode — the episode's id)
     pub track_id: String,
     pub album_id: String,
     pub title: String,
-    /// у Spotify нет отдельного поля версии — всегда ""
+    /// Spotify has no separate version field — always ""
     pub version: String,
-    /// имена через ", "
+    /// names joined with ", "
     pub artists: String,
     pub artist_refs: Vec<ArtistRef>,
-    /// название альбома (у выпуска — название шоу)
+    /// the album title (for an episode — the show's title)
     pub album: String,
     pub cover: String,
     pub cover_large: String,
     pub duration_ms: i64,
     pub explicit: bool,
-    /// is_playable != false; неизвестно → true
+    /// is_playable != false; unknown → true
     pub available: bool,
     /// spotify:track:ID | spotify:episode:ID
     pub uri: String,
     pub is_episode: bool,
-    /// у выпуска — id шоу, иначе ""
+    /// for an episode — the show's id, otherwise ""
     pub show_id: String,
-    /// строка плейлиста: ISO-время добавления ("" — неизвестно)
+    /// playlist row: ISO time it was added ("" — unknown)
     pub added_at: String,
-    /// строка совместного плейлиста: имя добавившего ("" — неизвестно/не нужно)
+    /// collaborative playlist row: the name of whoever added it ("" — unknown/not needed)
     pub added_by: String,
-    /// прослушивания на Spotify (GraphQL-шлюз: страницы альбома и исполнителя); 0 — неизвестно
+    /// plays on Spotify (GraphQL gateway: album and artist pages); 0 — unknown
     pub play_count: i64,
-    /// строка плейлиста YouTube Music: id вхождения в плейлисте (нужен для
-    /// удаления и перестановки; "" — не из плейлиста или недоступен)
+    /// YouTube Music playlist row: the playlist entry id (needed for
+    /// deletion and reordering; "" — not from a playlist or unavailable)
     pub set_video_id: String,
 }
 
 impl TrackItem {
-    /// URI для очереди/воспроизведения: `uri` или spotify:track:<trackId>.
+    /// URI for the queue/playback: `uri` or spotify:track:<trackId>.
     pub fn play_uri(&self) -> String {
         if !self.uri.is_empty() {
             self.uri.clone()
@@ -60,7 +60,7 @@ impl TrackItem {
     }
 }
 
-/// Подпись типа альбома по-русски: album_type Spotify (+ число треков для EP).
+/// Album kind label in Russian: Spotify's album_type (+ the track count for an EP).
 pub fn album_kind_label(album_type: &str, total_tracks: i64) -> String {
     match album_type {
         "single" if total_tracks > 1 => "EP".to_owned(),
@@ -83,7 +83,7 @@ pub struct AlbumItem {
     pub version: String,
     pub artists: String,
     pub artist_refs: Vec<ArtistRef>,
-    /// первые 4 символа release_date
+    /// the first 4 characters of release_date
     pub year: i64,
     /// album_kind_label
     pub kind: String,
@@ -91,7 +91,7 @@ pub struct AlbumItem {
     pub cover: String,
     pub cover_large: String,
     pub explicit: bool,
-    /// в библиотеке пользователя (если известно)
+    /// in the user's library (if known)
     pub saved: bool,
 }
 
@@ -104,7 +104,7 @@ pub struct ArtistItem {
     pub name: String,
     pub cover: String,
     pub cover_large: String,
-    /// жанры через ", "
+    /// genres joined with ", "
     pub genres: String,
     pub followers: i64,
 }
@@ -120,55 +120,55 @@ pub struct PlaylistItem {
     pub description: String,
     pub track_count: i64,
     pub cover: String,
-    /// имя владельца
+    /// the owner's name
     pub owner: String,
     pub owner_id: String,
-    /// свой, совместный или по приглашению (права из rootlist librespot)
+    /// own, collaborative or by invitation (the rights from librespot's rootlist)
     pub can_edit: bool,
     pub collaborative: bool,
     pub public: bool,
     pub snapshot_id: String,
-    /// закреплён локально
+    /// pinned locally
     pub pinned: bool,
 }
 
-/// AlbumData.info: поля AlbumItem + label, genre, durationMs, releaseDate, copyright, copyrights, courtesyLine.
+/// AlbumData.info: AlbumItem fields + label, genre, durationMs, releaseDate, copyright, copyrights, courtesyLine.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AlbumInfo {
     #[serde(flatten)]
     pub item: AlbumItem,
     pub label: String,
-    /// часто пусто у Spotify
+    /// often empty on Spotify
     pub genre: String,
     pub duration_ms: i64,
-    /// "2001-03-12" | "2001-03" | "2001" — с той точностью, что знает Spotify
+    /// "2001-03-12" | "2001-03" | "2001" — with whatever precision Spotify knows
     pub release_date: String,
     pub copyright: String,
-    /// все строки правообладателей с префиксом: "© 2001 …", "℗ 2001 …"
+    /// all copyright lines with a prefix: "© 2001 …", "℗ 2001 …"
     pub copyrights: Vec<String>,
-    /// строка «courtesy of …» (GraphQL-шлюз), часто пусто
+    /// the "courtesy of …" line (GraphQL gateway), often empty
     pub courtesy_line: String,
 }
 
-/// Всё, что известно о треке (окно «О треке»): поля TrackItem + номер, диск, ISRC, популярность и сведения
-/// об альбоме (дата выпуска, лейбл, правообладатели).
+/// Everything known about the track (the "About the track" window): TrackItem fields + number, disc, ISRC, popularity and details
+/// about the album (release date, label, copyright holders).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TrackDetails {
     #[serde(flatten)]
     pub track: TrackItem,
-    /// 0 — неизвестно
+    /// 0 — unknown
     pub track_number: i64,
     pub disc_number: i64,
-    /// дисков в альбоме (0 — неизвестно)
+    /// discs in the album (0 — unknown)
     pub disc_count: i64,
-    /// треков в альбоме (0 — неизвестно)
+    /// tracks in the album (0 — unknown)
     pub album_track_count: i64,
     pub isrc: String,
-    /// 0..100, -1 — неизвестно
+    /// 0..100, -1 — unknown
     pub popularity: i64,
-    /// album_kind_label альбома
+    /// the album's album_kind_label
     pub album_kind: String,
     pub release_date: String,
     pub label: String,
@@ -176,19 +176,19 @@ pub struct TrackDetails {
     pub courtesy_line: String,
 }
 
-/// ArtistData.info: поля ArtistItem + listeners, followed, biography, headerImage.
+/// ArtistData.info: ArtistItem fields + listeners, followed, biography, headerImage.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ArtistInfo {
     #[serde(flatten)]
     pub item: ArtistItem,
-    /// ежемесячные слушатели (GraphQL-шлюз; Web API не отдаёт — 0)
+    /// monthly listeners (GraphQL gateway; the Web API does not return them — 0)
     pub listeners: i64,
-    /// пользователь подписан
+    /// the user follows it
     pub followed: bool,
-    /// биография без HTML (GraphQL-шлюз; иначе пусто)
+    /// biography without HTML (GraphQL gateway; otherwise empty)
     pub biography: String,
-    /// широкая шапка исполнителя (GraphQL-шлюз; иначе пусто)
+    /// the artist's wide header (GraphQL gateway; otherwise empty)
     pub header_image: String,
 }
 
@@ -217,11 +217,11 @@ pub struct EpisodeItem {
     pub uri: String,
     pub title: String,
     pub description: String,
-    /// ISO-дата "2026-10-03"
+    /// ISO date "2026-10-03"
     pub release_date: String,
     pub duration_ms: i64,
     pub explicit: bool,
-    /// место, с которого продолжать (resume_point), 0 — сначала
+    /// where to resume from (resume_point), 0 — from the start
     pub resume_ms: i64,
     pub fully_played: bool,
     pub saved: bool,
@@ -229,12 +229,12 @@ pub struct EpisodeItem {
     pub cover_large: String,
     pub show_id: String,
     pub show_name: String,
-    /// номер выпуска, если известен (иначе 0)
+    /// the episode number if known (otherwise 0)
     pub number: i64,
 }
 
 impl EpisodeItem {
-    /// Как строка трека (очередь, плеер).
+    /// As a track row (the queue, the player).
     pub fn to_track(&self) -> TrackItem {
         TrackItem {
             track_id: self.episode_id.clone(),
@@ -264,73 +264,73 @@ pub struct DeviceItem {
     pub id: String,
     pub name: String,
     /// computer | smartphone | tablet | tv | speaker | avr | stb | automobile | gameconsole | castvideo | castaudio | …
-    /// (Device.type Spotify в нижнем регистре)
+    /// (Spotify's Device.type in lower case)
     #[serde(rename = "type")]
     pub kind: String,
     pub is_active: bool,
     pub is_this_computer: bool,
     pub is_restricted: bool,
     pub supports_volume: bool,
-    /// 0..100, -1 — неизвестно
+    /// 0..100, -1 — unknown
     pub volume: i32,
-    /// "api" — /me/player/devices, "zeroconf" — приёмник из локальной сети, ещё не в аккаунте
+    /// "api" — /me/player/devices, "zeroconf" — a receiver from the local network, not yet in the account
     pub source: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum QueueSection {
-    /// сейчас играет
+    /// playing right now
     #[default]
     Current,
-    /// «Далее в очереди» — поставленные пользователем (Playing next)
+    /// "Next in queue" — placed by the user (Playing next)
     Manual,
-    /// «Далее из контекста» (Next up)
+    /// "Next from the context" (Next up)
     Context,
 }
 
-/// Строка Player.queue (QUEUE_KEYS): section, uid + все ключи трека.
+/// A Player.queue row (QUEUE_KEYS): section, uid + all track keys.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct QueueRow {
     pub section: QueueSection,
-    /// уникален у каждого вхождения (дубликаты разрешены); стабилен, пока строка в очереди
+    /// unique per entry (duplicates allowed); stable while the row is in the queue
     pub uid: u64,
     #[serde(flatten)]
     pub track: TrackItem,
 }
 
-/// Элемент библиотеки (LIBRARY_KEYS): kind, id, uri, title, subtitle, cover, covers, owner, ownerId, canEdit,
+/// A library entry (LIBRARY_KEYS): kind, id, uri, title, subtitle, cover, covers, owner, ownerId, canEdit,
 /// readOnly, pinned, trackCount, addedAt, playedAt, folderId.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LibraryEntry {
-    /// liked | playlist | dj | folder | album | artist | show (| radio — только в полках главной)
+    /// liked | playlist | dj | folder | album | artist | show (| radio — only in the home shelves)
     pub kind: String,
     pub id: String,
     pub uri: String,
     pub title: String,
-    /// «Плейлист · Вы · 34 трека» — собирает сервис
+    /// "Playlist · You · 34 tracks" — assembled by the service
     pub subtitle: String,
     pub cover: String,
-    /// до 4 обложек (мозаика папки)
+    /// up to 4 covers (the folder mosaic)
     pub covers: Vec<String>,
     pub owner: String,
     pub owner_id: String,
     pub can_edit: bool,
-    /// папка или чужой плейлист
+    /// a folder or someone else's playlist
     pub read_only: bool,
     pub pinned: bool,
     pub track_count: i64,
-    /// ISO-время добавления в библиотеку, "" — неизвестно
+    /// ISO time it was added to the library, "" — unknown
     pub added_at: String,
-    /// ISO-время последнего прослушивания (локальная история), ""
+    /// ISO time of the last play (local history), ""
     pub played_at: String,
-    /// id родительской папки rootlist, "" — корень
+    /// id of the parent rootlist folder, "" — the root
     pub folder_id: String,
 }
 
-/// Аккаунт для Auth.account: id, uri, displayName, email, country, product, premium, avatar.
+/// An account for Auth.account: id, uri, displayName, email, country, product, premium, avatar.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Account {
@@ -346,7 +346,7 @@ pub struct Account {
     pub avatar: String,
 }
 
-/// Сид радио на орбите главной: uri (spotify:track|artist|album|playlist:ID), label, cover, kind.
+/// A radio seed in the home orbit: uri (spotify:track|artist|album|playlist:ID), label, cover, kind.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RadioSeed {
@@ -357,7 +357,7 @@ pub struct RadioSeed {
     pub kind: String,
 }
 
-/// Группа сидов: key (recent | artists | collections | any), title, items.
+/// A group of seeds: key (recent | artists | collections | any), title, items.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RadioSeedGroup {
@@ -366,8 +366,8 @@ pub struct RadioSeedGroup {
     pub items: Vec<RadioSeed>,
 }
 
-/// Полка главной: key (quick | recent | madeForYou | podcasts | topArtists | topTracks), title,
-/// kind (tiles | tracks | episodes | artists), items — строки соответствующих *Item / LibraryEntry.
+/// A home shelf: key (quick | recent | madeForYou | podcasts | topArtists | topTracks), title,
+/// kind (tiles | tracks | episodes | artists), items — rows of the matching *Item / LibraryEntry.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct HomeShelf {
@@ -377,7 +377,7 @@ pub struct HomeShelf {
     pub items: Vec<serde_json::Value>,
 }
 
-/// Счётчики поиска: tracks, albums, artists, playlists, shows, episodes.
+/// Search totals: tracks, albums, artists, playlists, shows, episodes.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SearchTotals {
@@ -389,7 +389,7 @@ pub struct SearchTotals {
     pub episodes: i64,
 }
 
-/// Лучший результат: {type: track|album|artist|playlist|show, item: {…}} (эвристика, у Spotify нет).
+/// The best result: {type: track|album|artist|playlist|show, item: {…}} (a heuristic, Spotify has none).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SearchBest {

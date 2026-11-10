@@ -1,4 +1,4 @@
-//! Tap пост-EQ звука для «дыхания» обложки (перенос spotifast/src/vis.rs без Winamp/MilkDrop).
+//! Post-EQ audio tap for the cover "breathing" (port of spotifast/src/vis.rs without Winamp/MilkDrop).
 //!
 //! The tap wraps the active sink and stores half a second of post-EQ,
 //! pre-volume audio. Its level drives the cover's breathing; the volume knob
@@ -19,15 +19,15 @@ const KEPT: usize = SAMPLE_RATE as usize / 2;
 /// How far behind the newest sample the level looks, so that it follows
 /// what the speaker is playing rather than what the sink has queued.
 pub const LAG: usize = SAMPLE_RATE as usize * 3 / 20;
-/// Окно RMS для уровня: ~50 мс.
+/// RMS window for the level: ~50 ms.
 pub const LEVEL_SAMPLES: usize = SAMPLE_RATE as usize / 20;
 
 /// The last half second of sound (mono mix), shared between the player's
 /// thread and whoever reads the level.
 pub struct AudioTap {
     samples: Mutex<VecDeque<f32>>,
-    /// Нужен ли уровень (core.levels_wanted): пока нет, `Tapped` не наполняет буфер —
-    /// даунмикс и блокировка на каждый пакет не нужны, пока обложка не «дышит».
+    /// Whether the level is wanted (core.levels_wanted): while it is not, `Tapped` does not fill the buffer —
+    /// the downmix and a lock on every packet are not needed until the cover "breathes".
     wanted: AtomicBool,
 }
 
@@ -51,8 +51,8 @@ impl AudioTap {
         Arc::new(Self::default())
     }
 
-    /// Включает наполнение буфера. При включении сбрасываем накопленное раньше:
-    /// уровень не должен прыгнуть от сэмплов, отложенных до паузы чтения.
+    /// Enables buffer filling. On enable we drop what was accumulated earlier:
+    /// the level must not jump from samples postponed until the read pause.
     pub fn set_wanted(&self, value: bool) {
         if !self.wanted.swap(value, Ordering::Relaxed) && value {
             self.clear();
@@ -99,7 +99,7 @@ impl AudioTap {
             .clear();
     }
 
-    /// Уровень для Player.level: RMS последних ~50 мс (с задержкой LAG) → дБ → level_from_db (0..1).
+    /// Level for Player.level: RMS of the last ~50 ms (delayed by LAG) → dB → level_from_db (0..1).
     pub fn level(&self) -> f64 {
         let window = self.window(LEVEL_SAMPLES, LAG);
         let power = window.iter().map(|s| f64::from(*s) * f64::from(*s)).sum::<f64>()
@@ -111,7 +111,7 @@ impl AudioTap {
     }
 }
 
-/// RMS-уровень (дБ) → 0..1, как в yamusic-md3: clamp((db + 42) / 36), бесконечность → 0.
+/// RMS level (dB) → 0..1, as in yamusic-md3: clamp((db + 42) / 36), infinity → 0.
 pub fn level_from_db(db: f64) -> f64 {
     if db.is_finite() { ((db + 42.0) / 36.0).clamp(0.0, 1.0) } else { 0.0 }
 }
@@ -191,9 +191,9 @@ impl Sink for Tapped {
         let packet = match packet {
             AudioPacket::Samples(mut samples) => {
                 self.eq.process(&mut samples);
-                // Наполняем буфер, только когда уровень кому-то нужен: пока обложка не
-                // «дышит» (core.levels_wanted), даунмикс половины секунды на каждый пакет —
-                // работа в никуда. Один Relaxed-загрузка на пакет.
+                // Fill the buffer only when someone wants the level: until the cover
+                // "breathes" (core.levels_wanted), a half-second downmix on every packet is
+                // work for nothing. One Relaxed load per packet.
                 if self.tap.wanted() {
                     // Post-EQ, pre-volume, pre-normalisation: the equalizer
                     // shapes what the bars show; the volume knob and the
@@ -336,9 +336,9 @@ mod tests {
     fn the_tap_buffers_samples_only_while_the_level_is_wanted() {
         let control = crate::engine::sink::AudioControl::new(crate::engine::sink::DEFAULT_BUFFER_MS);
         let (mut tapped, _recorded) = recorded_tap(Arc::clone(&control), crate::engine::eq::shared());
-        // Пока уровень никому не нужен, пакеты не попадают в буфер:
-        // один пакет целиком внутри LAG-окна, level() его не увидит —
-        // проверяем буфер напрямую.
+        // While nobody wants the level, packets do not enter the buffer:
+        // a whole packet inside the LAG window is not seen by level() —
+        // check the buffer directly.
         assert!(!tapped.tap.wanted());
         write_level(&mut tapped, 0.25);
         assert!(tapped
@@ -348,15 +348,15 @@ mod tests {
             .unwrap_or_else(|p| p.into_inner())
             .is_empty());
         assert_eq!(tapped.tap.level(), 0.0);
-        // Спросили уровень: буфер наполняется, но level() смотрит на окно
-        // за LAG сэмплов до новейшего (LAG больше пакета) — пишем с запасом.
+        // The level was asked for: the buffer fills, but level() looks at the window
+        // LAG samples before the newest (LAG is larger than a packet) — write with a margin.
         tapped.tap.set_wanted(true);
         for _ in 0..8 {
             write_level(&mut tapped, 0.25);
         }
         assert!(tapped.tap.level() > 0.0);
-        // Выключение и повторное включение сбрасывает буфер: отложенных
-        // сэмплов до паузы чтения остаться не должно.
+        // Disabling and re-enabling resets the buffer: postponed
+        // samples must not survive until the read pause.
         tapped.tap.set_wanted(false);
         tapped.tap.set_wanted(true);
         assert!(tapped

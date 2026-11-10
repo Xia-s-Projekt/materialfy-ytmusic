@@ -1,6 +1,6 @@
-//! DictListModel — список словарей с фиксированным набором ключей; ключи = роли QML.
-//! Замена TrackListModel/AlbumListModel/ArtistListModel/PlaylistListModel из models.py:
-//! QML обращается к ним только через count, loading, totalDurationMs, get(), find() и роли.
+//! DictListModel - a list of dicts with a fixed set of keys; keys = QML roles.
+//! Replacement for TrackListModel/AlbumListModel/ArtistListModel/PlaylistListModel from models.py:
+//! QML accesses them only via count, loading, totalDurationMs, get(), find() and roles.
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -53,7 +53,7 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "loadingChanged"]
         fn loading_changed(self: Pin<&mut DictListModel>);
-        /// Любое изменение строк (сброс, вставка, удаление, перестановка, замена) — для TrackFilter.
+        /// Any row change (reset, insert, delete, reorder, replace) - for TrackFilter.
         #[qsignal]
         #[cxx_name = "rowsChanged"]
         fn rows_changed(self: Pin<&mut DictListModel>);
@@ -126,10 +126,10 @@ pub mod qobject {
 
 cxx_qt::impl_transitive_cast!(qobject::DictListModel, qobject::QAbstractListModel, cxx_qt::QObject);
 
-/// Строка модели: словарь с ключами модели. Arc — дешёвые копии и сравнение по указателю (TrackFilter).
+/// A model row: a dict with the model's keys. Arc - cheap copies and comparison by pointer (TrackFilter).
 pub type Row = Arc<Map<String, Value>>;
 
-/// Набор ключей (= ролей QML); = serde-ключи md3-model.
+/// The set of keys (= QML roles); = md3-model serde keys.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ModelKind {
     #[default]
@@ -197,12 +197,12 @@ pub struct DictListModelRust {
     kind: ModelKind,
     rows: Vec<Row>,
     loading: bool,
-    /// откуда треки (для плеера и учёта прослушиваний); у моделей не-треков пустой
+    /// where the tracks come from (for the player and play tracking); empty for non-track models
     context: md3_model::PlayContext,
 }
 
 impl qobject::DictListModel {
-    /// Новая модель во владении Rust (CppOwnership уже выставлен — QML её не удалит).
+    /// A new model owned by Rust (CppOwnership is already set - QML will not delete it).
     pub fn create(kind: ModelKind) -> cxx::UniquePtr<Self> {
         let mut model = qobject::dict_list_model_make_unique();
         if let Some(pinned) = model.as_mut() {
@@ -254,15 +254,15 @@ impl qobject::DictListModel {
         }
     }
 
-    /// Перестановка одной строки (from → to — индексы до перемещения, как ListChange::Move).
+    /// Single row reorder (from -> to are indices before the move, like ListChange::Move).
     pub fn move_row(mut self: Pin<&mut Self>, from: usize, to: usize) {
         if self.as_mut().shift(from, to) {
             self.rows_changed();
         }
     }
 
-    /// Привести строки к `rows` минимальными изменениями по ключу `key` (uid очереди, id устройства):
-    /// удалить пропавшие, переставить, вставить новые, заменить изменившиеся. Пустой или повторный ключ — сброс.
+    /// Bring the rows to `rows` with minimal changes by the `key` (queue uid, device id):
+    /// delete the missing, reorder, insert the new, replace the changed. An empty or repeated key - reset.
     pub fn sync_rows(mut self: Pin<&mut Self>, rows: Vec<Row>, key: &str) {
         let Some(ops) = sync_ops(&self.rust().rows, &rows, key) else {
             self.reset_rows(rows);
@@ -321,7 +321,7 @@ impl qobject::DictListModel {
         if from >= len || to >= len || from == to {
             return false;
         }
-        // destinationChild у Qt — позиция до перемещения: при сдвиге вниз — на одну дальше
+        // Qt's destinationChild is the position before the move: when shifting down - one further
         let child = if to > from { to + 1 } else { to };
         let parent = QModelIndex::default();
         if !self.as_mut().begin_move_rows(&parent, from as i32, from as i32, &parent, child as i32) {
@@ -385,7 +385,7 @@ impl qobject::DictListModel {
     }
 }
 
-/// Шаг sync_rows; индексы — в строках модели на момент шага. Insert/Replace берут строки `rows[at..at + count]`.
+/// A sync_rows step; indices are in model rows at the time of the step. Insert/Replace take the rows `rows[at..at + count]`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SyncOp {
     Remove { at: usize, count: usize },
@@ -394,7 +394,7 @@ enum SyncOp {
     Replace { at: usize, count: usize },
 }
 
-/// Ключ строки текстом ("" — нет).
+/// The row key as text ("" - none).
 fn row_key(row: &Row, key: &str) -> String {
     match row.get(key) {
         Some(Value::String(s)) => s.clone(),
@@ -407,8 +407,8 @@ fn same_row(a: &Row, b: &Row) -> bool {
     Arc::ptr_eq(a, b) || **a == **b
 }
 
-/// Шаги от `old` к `new`: удаления (с конца, кусками), перестановки оставшихся, вставки (кусками), замены.
-/// None — ключ пустой или повторяется (тогда сброс). Пусто — строки уже совпадают.
+/// Steps from `old` to `new`: deletions (from the end, in chunks), reorders of the remaining, insertions (in chunks), replacements.
+/// None - the key is empty or repeated (then a reset). Empty - the rows already match.
 fn sync_ops(old: &[Row], new: &[Row], key: &str) -> Option<Vec<SyncOp>> {
     if old.len() == new.len() && old.iter().zip(new).all(|(a, b)| same_row(a, b)) {
         return Some(Vec::new());
@@ -425,7 +425,7 @@ fn sync_ops(old: &[Row], new: &[Row], key: &str) -> Option<Vec<SyncOp>> {
     }
     let mut ops = Vec::new();
 
-    // удаление — с конца, подряд идущие одним куском
+    // deletion - from the end, consecutive ones in a single chunk
     let mut end = cur.len();
     while end > 0 {
         if new_set.contains(cur[end - 1].as_str()) {
@@ -441,13 +441,13 @@ fn sync_ops(old: &[Row], new: &[Row], key: &str) -> Option<Vec<SyncOp>> {
         end = start;
     }
 
-    // перестановки оставшихся: их порядок → порядок `new` без новых строк
+    // reorders of the remaining: their order -> the order of `new` without the new rows
     let common: Vec<&String> = new_keys.iter().filter(|k| old_set.contains(*k)).collect();
     for target in 0..common.len() {
         if cur[target] == *common[target] {
             continue;
         }
-        // строка ушла вниз (следующая уже на её месте) — двигаем её, иначе подтягиваем нужную снизу
+        // the row moved down (the next one is already in its place) - move it, otherwise pull the needed one from below
         let (from, to) = if cur.get(target + 1) == Some(common[target]) {
             (target, common.iter().position(|k| **k == cur[target]).unwrap_or(target))
         } else {
@@ -461,7 +461,7 @@ fn sync_ops(old: &[Row], new: &[Row], key: &str) -> Option<Vec<SyncOp>> {
         }
     }
 
-    // вставка новых, подряд идущие одним куском
+    // insertion of the new, consecutive ones in a single chunk
     let mut at = 0;
     while at < new.len() {
         if old_set.contains(&new_keys[at]) {
@@ -476,7 +476,7 @@ fn sync_ops(old: &[Row], new: &[Row], key: &str) -> Option<Vec<SyncOp>> {
         at = end;
     }
 
-    // замена изменившихся: ключи уже совпадают по позициям, старые строки ищутся по ключу
+    // replacement of the changed: the keys already match by position, the old rows are looked up by key
     let old_by_key: std::collections::HashMap<String, &Row> = old.iter().map(|r| (row_key(r, key), r)).collect();
     let mut at = 0;
     while at < new.len() {
@@ -495,13 +495,13 @@ fn sync_ops(old: &[Row], new: &[Row], key: &str) -> Option<Vec<SyncOp>> {
     Some(ops)
 }
 
-// Общие части DictListModel и TrackFilter
+// Common parts of DictListModel and TrackFilter
 
 pub(crate) fn find_in(rows: &[Row], key: &str, value: &Value) -> Option<usize> {
     rows.iter().position(|row| row.get(key).is_some_and(|v| json_eq(v, value)))
 }
 
-/// sum(int(durationMs or 0)) из models.py
+/// sum(int(durationMs or 0)) from models.py
 pub(crate) fn total_duration(rows: &[Row]) -> i64 {
     rows.iter()
         .filter_map(|r| r.get("durationMs"))
@@ -533,7 +533,7 @@ pub(crate) fn role_names_for(keys: &[&str]) -> QHash<QHashPair_i32_QByteArray> {
     roles
 }
 
-/// Равенство как в Python (`item.get(key) == value`): числа сравниваются по значению (5 == 5.0).
+/// Equality as in Python (`item.get(key) == value`): numbers are compared by value (5 == 5.0).
 pub fn json_eq(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
@@ -557,7 +557,7 @@ mod tests {
         spec.iter().map(|(u, t)| row(*u, t)).collect()
     }
 
-    /// Применить шаги к списку так же, как sync_rows к модели.
+    /// Apply the steps to the list the same way sync_rows does to the model.
     fn apply(old: &[Row], new: &[Row]) -> (Vec<Row>, Vec<SyncOp>) {
         let ops = sync_ops(old, new, "uid").expect("keys are unique");
         let mut cur = old.to_vec();

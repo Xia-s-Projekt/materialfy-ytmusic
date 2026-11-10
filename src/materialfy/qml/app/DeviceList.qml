@@ -3,13 +3,13 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Список устройств Spotify Connect: «Слушать на» + обновить, текущее устройство с громкостью,
-// «Другие устройства», подпись про Cast. Общий для вкладки правой панели (DevicePanel) и листа снизу
-// в узком окне (DeviceSheet). Список запрашивают они сами при открытии; здесь — кнопка «обновить».
+// Spotify Connect device list: "Listen on" + refresh, the current device with volume,
+// "Other devices", a note about Cast. Shared by the right panel tab (DevicePanel) and the bottom sheet
+// in a narrow window (DeviceSheet). They request the list themselves when opened; here — a "refresh" button.
 ColumnLayout {
     id: content
 
-    property bool touch: false          // лист: действия видны кнопками, наведения нет
+    property bool touch: false          // sheet: actions are visible as buttons, there is no hover
     signal closeRequested()
 
     readonly property bool signedIn: Auth.state === "signedIn"
@@ -18,7 +18,7 @@ ColumnLayout {
     readonly property bool hasActive: (active.id ?? "") !== ""
     readonly property string movingTo: Devices.transferringTo ?? ""
 
-    // Этот компьютер: из списка устройств, а если его там нет — по имени из моста
+    // This computer: from the device list, and if it is not there — by name from the bridge
     readonly property var here: {
         const m = Devices.devices
         void Devices.active
@@ -47,7 +47,7 @@ ColumnLayout {
 
     spacing: 0
 
-    // Шапка
+    // Header
     RowLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: 44
@@ -94,7 +94,7 @@ ColumnLayout {
         device: content.active
     }
 
-    // Нигде не играет и выбрать не из чего (пока идёт запрос — «Ищем устройства…»)
+    // Nothing is playing anywhere and there is nothing to choose (while the request runs — "Looking for devices…")
     ColumnLayout {
         id: emptyBox
         readonly property bool looking: content.signedIn && Devices.loading === true
@@ -152,7 +152,7 @@ ColumnLayout {
         color: Theme.fgSurfaceVariant
     }
 
-    // Этот компьютер: «Слушать здесь» или «Настроить воспроизведение здесь»
+    // This computer: "Listen here" or "Set up playback here"
     DeviceRow {
         visible: content.showHere
         Layout.fillWidth: true
@@ -204,7 +204,7 @@ ColumnLayout {
         elide: Text.ElideNone
     }
 
-    // Подпись про Google Cast
+    // A note about Google Cast
     Rectangle {
         Layout.fillWidth: true
         Layout.topMargin: 6

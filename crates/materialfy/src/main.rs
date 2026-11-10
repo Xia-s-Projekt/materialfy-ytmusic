@@ -1,6 +1,6 @@
-// Materialfy — клиент Spotify: QML (src/materialfy/qml) + бэкенд на Rust (cxx-qt, librespot).
-// Оболочка: cli, context, display, engine, icons, images, models, qt, winframe; мосты QML — bridges.
-// релиз на Windows — GUI-подсистема, без чёрного окна консоли; отладочная сборка оставляет консоль для логов
+// Materialfy - a Spotify client: QML (src/materialfy/qml) + a Rust backend (cxx-qt, librespot).
+// Shell: cli, context, display, engine, icons, images, models, qt, winframe; QML bridges - bridges.
+// the release on Windows - the GUI subsystem, without a black console window; the debug build keeps the console for logs
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod bridges;
@@ -22,12 +22,12 @@ fn main() {
     std::process::exit(code);
 }
 
-/// Паника в GUI-потоке (или в коде, который зовёт Qt) роняет процесс без следа: у сборки для Windows нет консоли.
-/// Пишем её в <app_data_dir>/crash.log (последние ~64 КиБ) — с версией, потоком, местом и стеком вызовов.
+/// A panic in the GUI thread (or in code that calls Qt) brings the process down without a trace: the Windows build has no console.
+/// We write it to <app_data_dir>/crash.log (the last ~64 KiB) - with the version, thread, place and call stack.
 fn install_crash_log() {
     let log = mf_platform::dirs::app_data_dir().join("crash.log");
     let _ = std::fs::create_dir_all(mf_platform::dirs::app_data_dir());
-    // падения в нативном коде (Qt, драйвер видеокарты) — туда же, на Windows и Linux
+    // crashes in native code (Qt, the video driver) - go there too, on Windows and Linux
     qt::ffi::ffi::install_native_crash_log(&cxx_qt_lib::QString::from(log.to_string_lossy().as_ref()));
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {

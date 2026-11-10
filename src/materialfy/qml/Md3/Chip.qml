@@ -1,7 +1,7 @@
 import QtQuick
 
-// Filter chip MD3. Состояние `selected` задаётся снаружи и не переключается само,
-// поэтому группа чипов работает как радио: selected: model === current; onClicked: current = model.
+// MD3 filter chip. The selected state is set from outside and does not toggle itself,
+// so a group of chips works like radio buttons: selected: model === current; onClicked: current = model.
 Item {
     id: root
 
@@ -13,11 +13,11 @@ Item {
     signal clicked()
 
     implicitHeight: 32
-    // без текста — квадратный чип с одной иконкой
+    // without text — a square chip with a single icon
     readonly property bool _iconOnly: text === "" && _leading
     implicitWidth: _iconOnly ? 32 : _leftPad + content.implicitWidth + 16
     readonly property bool _leading: selected || icon !== ""
-    readonly property real _leftPad: _iconOnly ? 7 : _leading ? 10 : 16   // для иконки — до её видимого контура
+    readonly property real _leftPad: _iconOnly ? 7 : _leading ? 10 : 16   // for the icon — up to its visible outline
 
     property real cornerRadius: area.pressed ? 4 : 8
     Behavior on cornerRadius { NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutBack } }

@@ -3,12 +3,12 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Строка очереди: место под ручку перетаскивания (ручка — только в «Далее в очереди» на этом компьютере,
-// видна при наведении) · обложка · название/исполнители · длительность 36 px (при наведении — меню).
+// Queue row: space for a drag handle (the handle only exists in "Next in queue" on this computer,
+// visible on hover) · cover · title/artists · duration 36 px (on hover — a menu).
 Item {
     id: root
 
-    property var track: ({})              // строка Player.queue (QUEUE_KEYS)
+    property var track: ({})              // a Player.queue row (QUEUE_KEYS)
     property bool current: false
     property bool draggable: false
     property bool dragging: false
@@ -27,7 +27,7 @@ Item {
         const p = item.mapToItem(null, x, y)
         Catalog.requestTrackMenu(track, p.x, p.y)
     }
-    function openMenuAt(button) {   // у кнопки «⋯»
+    function openMenuAt(button) {   // at the "⋯" button
         const p = button.mapToItem(null, 0, 0)
         Catalog.requestTrackMenuAt(track, p.x, p.y, button.width, button.height)
     }
@@ -48,7 +48,7 @@ Item {
     }
     Elevation { target: bg; level: root.dragging ? 3 : 0 }
 
-    // под содержимым: клик по строке — перейти к ней
+    // under the content: a click on the row navigates to it
     StateLayer {
         anchors.fill: parent
         radius: Theme.shape.large
@@ -105,7 +105,7 @@ Item {
                 Layout.fillWidth: true
                 spacing: 6
                 Label {
-                    // сжимается до ширины строки (иначе длинное название выталкивает длительность за край)
+                    // shrinks to the row width (otherwise a long title pushes the duration past the edge)
                     Layout.fillWidth: true
                     Layout.maximumWidth: Math.ceil(implicitWidth)
                     text: root.track.title ?? ""
@@ -143,8 +143,8 @@ Item {
             }
         }
 
-        // Длительность; при наведении на её месте — «⋯» (панель узкая: отдельная колонка под кнопку
-        // отнимала у названия ~40 px, и оно обрезалось даже у коротких треков)
+        // Duration; on hover its place shows "⋯" (the panel is narrow: a separate column for the button
+        // would take ~40 px from the title, and it was cut even for short tracks)
         Item {
             Layout.preferredWidth: 36
             Layout.fillHeight: true
@@ -159,14 +159,14 @@ Item {
                 opacity: parent.menuShown ? 0 : 1
                 Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
             }
-            // «⋯» создаётся с первого наведения и остаётся: строк много, а наведена одна
+            // "⋯" is created on the first hover and stays: there are many rows but only one is hovered
             Loader {
                 id: menuLoader
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 width: 32
                 height: 32
-                // активная с клавиатуры строка тоже показывает «⋯», иначе она скрывает длительность без кнопки
+                // the keyboard-active row also shows "⋯", otherwise it hides the duration without a button
                 active: root.hovered || root.activeFocus || item !== null
                 sourceComponent: IconButton {
                     id: moreButton

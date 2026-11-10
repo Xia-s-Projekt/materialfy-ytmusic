@@ -1,6 +1,6 @@
 import QtQuick
 
-// Края окна без рамки: тянут startSystemResize (в тайлинге композитор просто игнорирует).
+// Edges of the frameless window: they pull startSystemResize (under tiling the compositor simply ignores it).
 Item {
     id: root
 

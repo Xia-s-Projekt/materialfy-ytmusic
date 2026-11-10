@@ -1,6 +1,6 @@
-//! Тексты (исполнитель «services-extra»): по PlayerEvent::TrackChanged с задержкой 350 мс (пролистывание подряд
-//! не запускает поиск на каждый трек) → mf-lyrics: кэш → Spotify первым (ExtraLrc: сессия librespot, ответ
-//! color-lyrics разбирает mf-lyrics) → NetEase/Musixmatch/LRCLIB. Выпуски — без текстов. Ответ для сменившегося трека отбрасывается.
+//! Lyrics (provider "services-extra"): on PlayerEvent::TrackChanged with a 350 ms delay (scrolling through in a row
+//! does not start a search for every track) → mf-lyrics: cache → Spotify first (ExtraLrc: librespot session, the
+//! color-lyrics answer is parsed by mf-lyrics) → NetEase/Musixmatch/LRCLIB. Episodes — no lyrics. The answer for a changed track is discarded.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -12,9 +12,9 @@ use tokio::runtime::Handle;
 use tokio::sync::{broadcast, watch};
 use mf_lyrics::{ExtraLrc, LyricsResult};
 
-/// Задержка поиска после смены трека.
+/// Search delay after a track change.
 pub const DEBOUNCE_MS: u64 = 350;
-/// Ожидание текста Spotify через сессию.
+/// Waiting for Spotify lyrics through the session.
 const SPOTIFY_TIMEOUT: Duration = Duration::from_secs(8);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -39,7 +39,7 @@ impl LyricsStatus {
         }
     }
 
-    /// Статус по результату: ok | notfound (источники ответили «нет») | error (источник ошибся).
+    /// Status by result: ok | notfound (the sources answered "no") | error (the source failed).
     pub fn of(result: &LyricsResult) -> Self {
         if result.ok {
             Self::Ok
@@ -120,7 +120,7 @@ impl LyricsService {
         self.snapshot.subscribe()
     }
 
-    /// Повторить для текущего трека (после ошибки).
+    /// Retry for the current track (after an error).
     pub fn retry(&self) {
         self.load(true);
     }
@@ -169,7 +169,7 @@ impl LyricsService {
         });
     }
 
-    /// Кэш → Spotify → остальные источники mf-lyrics.
+    /// Cache → Spotify → the other mf-lyrics sources.
     async fn fetch(&self, track: &TrackItem) -> LyricsResult {
         let query = query_for(track);
         let extra = spotify_json(self.player.clone(), track.play_uri());
@@ -188,7 +188,7 @@ impl LyricsService {
     }
 }
 
-/// Ответ color-lyrics Spotify через сессию librespot. Без сессии (играет другое устройство) — «нет текста», не ошибка.
+/// Spotify's color-lyrics answer through the librespot session. Without a session (another device is playing) — "no lyrics", not an error.
 fn spotify_json(player: PlayerHandle, uri: String) -> ExtraLrc {
     Arc::new(move || {
         let (player, uri) = (player.clone(), uri.clone());
@@ -206,7 +206,7 @@ fn spotify_json(player: PlayerHandle, uri: String) -> ExtraLrc {
     })
 }
 
-/// Запрос mf-lyrics по треку (title/artist/album/duration).
+/// An mf-lyrics request for a track (title/artist/album/duration).
 pub fn query_for(track: &TrackItem) -> mf_lyrics::LyricsQuery {
     mf_lyrics::LyricsQuery {
         track_id: track.track_id.clone(),

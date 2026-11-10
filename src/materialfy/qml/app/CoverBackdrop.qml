@@ -1,15 +1,15 @@
 import QtQuick
 import Md3
 
-// Размытая обложка во весь элемент: фон полноэкранного плеера и атмосферная подложка окна.
-// Размытие — увеличение крошечной копии обложки (сторона _side текселей) шейдером backdrop:
-// ни свёртки, ни полноэкранной текстуры; сила размытия blur (0..1) — размер копии.
-// mode — характер размытия:
-//   gauss    — ровное, как гауссово: гладкие переходы без сетки и полос;
-//   glass    — матовое стекло: обложка угадывается, поверх — мелкое зерно;
-//   palette  — без обложки: плавный градиент из цветов темы (они и так взяты из обложки);
-//   blobs    — крупные цветовые пятна (линейная интерполяция).
-// flow (0..1) — «плавание»: картинка на месте, переливается только размытие.
+// Blurred cover filling the whole item: the fullscreen player's background and the window's atmospheric underlay.
+// The blur is an upscale of a tiny copy of the cover (_side texels per side) by the backdrop shader:
+// no convolution, no fullscreen texture; the blur strength blur (0..1) sets the copy size.
+// mode is the character of the blur:
+//   gauss    — even, like a gaussian: smooth transitions without grid or banding;
+//   glass    — frosted glass: the cover is guessable, with fine grain on top;
+//   palette  — without the cover: a smooth gradient from the theme colors (they are taken from the cover anyway);
+//   blobs    — large color spots (linear interpolation).
+// flow (0..1) is "drifting": the image stays in place, only the blur shifts.
 Item {
     id: root
 
@@ -22,7 +22,7 @@ Item {
     readonly property bool _palette: mode === "palette"
     readonly property bool ready: _palette || img.status === Image.Ready
     readonly property real _blur: _palette ? 1 : Math.max(0, Math.min(1, blur))
-    readonly property bool _flowing: flow > 0 && _blur > 0.2   // чёткую обложку «переливать» нечего
+    readonly property bool _flowing: flow > 0 && _blur > 0.2   // a sharp cover has nothing to "drift"
     property real _t: 0
 
     readonly property int _side: {
@@ -37,7 +37,7 @@ Item {
         id: img
         width: root._side
         height: root._side
-        // для слабого размытия лучше крупная обложка (coverLarge) — её передаёт владелец
+        // for weak blur a larger cover (coverLarge) is better — the owner passes it
         source: root._palette ? "" : root.source
         sourceSize: Qt.size(root._side, root._side)
         asynchronous: true
@@ -48,7 +48,7 @@ Item {
         layer.textureSize: Qt.size(root._side, root._side)
     }
 
-    // Палитра: сетка 4×3 из цветов темы — шейдер растягивает её так же, как копию обложки
+    // Palette: a 4x3 grid of theme colors — the shader stretches it the same way as the copy of the cover
     Grid {
         id: swatches
         columns: 4
@@ -73,9 +73,9 @@ Item {
         }
     }
 
-    // Статичный фон без «плавания»: та же крошечная копия (img._side px), растянутая билинейно —
-    // почти тот же мягкий градиент, что в шейдере, но без полноэкранного прохода в каждом кадре.
-    // Декод offscreen (sourceSize + asynchronous): полноразмерная обложка в GUI-потоке — фриз.
+    // Static background without "drifting": the same tiny copy (img._side px), stretched bilinearly —
+    // almost the same soft gradient as in the shader, but without a fullscreen pass in every frame.
+    // Offscreen decode (sourceSize + asynchronous): a full-size cover in the GUI thread is a freeze.
     Image {
         id: staticImg
         anchors.fill: parent
@@ -89,8 +89,8 @@ Item {
 
     ShaderEffect {
         anchors.fill: parent
-        // Без «плавания» шейдер не нужен: он каждый кадр семплирует и смешивает всю площадь окна.
-        // Статичная копия обложки (та же кубическая интерполяция блюра) дешевле на порядки.
+        // Without "drifting" the shader is not needed: every frame it samples and blends the whole window area.
+        // A static copy of the cover (the same cubic blur interpolation) is cheaper by orders of magnitude.
         visible: root.ready && (root._palette || root._flowing)
         property var source: root._palette ? swatches : img
         property real time: root._t
@@ -108,8 +108,8 @@ Item {
 
     TickAnimation {
         running: root.running && root._flowing && root.ready && !Theme.quiet
-        // обновляем шейдер только когда _t реально сдвинулся: движение еле заметное,
-        // а каждый кадр униформы — перерисовка всей площади окна; так — ~8 Гц вместо 30
+        // update the shader only when _t has actually moved: the motion is barely noticeable,
+        // while uniforms every frame repaint the whole window area; this way ~8 Hz instead of 30
         property real _acc: 0
         onTriggered: {
             _acc += frameTime * (0.15 + 0.85 * Math.min(1, root.flow))

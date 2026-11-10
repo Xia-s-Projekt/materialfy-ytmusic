@@ -1,5 +1,5 @@
-//! Полки главной аккаунта на диске: пока сессия поднимается (на медленной сети это десятки секунд), главная
-//! показывает прошлый выпуск вместо пустого экрана. Свежие ответы перезаписывают кэш.
+//! The account's home shelves on disk: while the session comes up (on a slow network that is tens of seconds), home
+//! shows the previous edition instead of an empty screen. Fresh responses overwrite the cache.
 use std::path::Path;
 
 use md3_model::{ArtistItem, EpisodeItem, HomeShelf, LibraryEntry, TrackItem};
@@ -10,7 +10,7 @@ const VERSION: u32 = 1;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CachedHome {
     pub version: u32,
-    /// «Сделано для вас» и личные разделы главной Spotify с их заголовками
+    /// "Made for you" and the personal sections of Spotify home with their titles
     pub made_for_you: Vec<LibraryEntry>,
     pub feed: Vec<HomeShelf>,
     pub favorite_artists: Vec<ArtistItem>,
@@ -32,7 +32,7 @@ impl CachedHome {
         Self { version: VERSION, made_for_you, feed, favorite_artists, podcasts, top_artists, top_tracks }
     }
 
-    /// Пустой выпуск кэш не заменяет: пустая главная на экране хуже прошлой.
+    /// An empty edition does not replace the cache: an empty home on screen is worse than the previous one.
     fn valid(&self) -> bool {
         self.version == VERSION && !self.is_empty()
     }

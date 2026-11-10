@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Большая плитка «Любимые треки» (две ячейки сетки библиотеки): градиент primaryContainer → tertiaryContainer,
-// образцы треков, фигура-ореол с сердцем (softSquare → softSquare при наведении), «Слушать».
+// The large "Liked tracks" tile (two library grid cells): primaryContainer → tertiaryContainer gradient,
+// track thumbnails, a halo shape with a heart (softSquare → softSquare on hover), "Play".
 Item {
     id: root
 
@@ -18,7 +18,7 @@ Item {
     implicitWidth: 358
     implicitHeight: 216
 
-    // «Исполнитель Трек · …» по первым строкам Любимых
+    // "Artist Track · …" from the first rows of Liked
     readonly property string sample: {
         const m = Library.liked
         const out = []
@@ -40,8 +40,8 @@ Item {
             GradientStop { position: 1; color: Theme.tertiaryContainer }
         }
 
-        // clip у Rectangle — по прямоугольнику, не по скруглению: фигура не должна доходить до угла карточки,
-        // иначе за скруглённым углом остаётся её квадратный край
+        // Rectangle's clip is a rectangle, not the rounding: the shape must not reach the card corner,
+        // otherwise its square edge shows past the rounded corner
         MorphShape {
             x: parent.width - width + 4
             y: -14

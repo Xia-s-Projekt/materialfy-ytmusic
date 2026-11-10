@@ -3,11 +3,11 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Страница со списком треков (виртуализированный ListView): шапка прокручивается вместе со списком.
-// Поиск по списку (кнопка в шапке или Ctrl+F): пока в поле есть текст, список показывает найденное,
-// и «Слушать», «Перемешать», клик по треку ставят в очередь именно найденное.
-// editing — правка своего плейлиста: строки с ручкой и «убрать», перестановка (moveRequested),
-// шапка — editHero вместо обычной.
+// Page with a track list (virtualized ListView): the header scrolls along with the list.
+// Search within the list (button in the header or Ctrl+F): while the field has text, the list shows the matches,
+// and "Play", "Shuffle", clicking a track queue exactly what was found.
+// editing — editing your own playlist: rows with a handle and "remove", reordering (moveRequested),
+// the header is editHero instead of the usual one.
 Item {
     id: page
 
@@ -16,49 +16,49 @@ Item {
     property string subtitle
     property string description
     property bool showHeader: true
-    property var model: null                  // DictListModel треков
+    property var model: null                  // DictListModel of tracks
     property string emptyIcon: "music_note"
     property string emptyTitle: I18n.t("Nothing here")
     property string emptyText: ""
-    property string emptyActionText: ""       // кнопка под пустым списком (например, «Повторить»)
+    property string emptyActionText: ""       // button under an empty list (for example, "Repeat")
     property string emptyActionIcon: ""
     signal emptyAction()
-    property Component headerExtra: null       // доп. содержимое шапки (кнопки и т. п.)
-    property Component heroMeta: null          // строка под подзаголовком (владелец, бейджи)
-    property Component heroNote: null          // подсказка под кнопками
-    property Component footerExtra: null       // под списком (например, «+ Добавить треки»)
-    // Шапка-«герой»: обложка + надзаголовок + название + «N треков · длительность» + Слушать/Перемешать
-    property string overline                   // «ПЛЕЙЛИСТ», «КОЛЛЕКЦИЯ»
-    property string heroImage                  // обложка (url, лучше coverLarge); если пусто — фигура с иконкой
+    property Component headerExtra: null       // extra header content (buttons etc.)
+    property Component heroMeta: null          // line under the subtitle (owner, badges)
+    property Component heroNote: null          // hint under the buttons
+    property Component footerExtra: null       // under the list (for example, "+ Add tracks")
+    // "Hero" header: cover + overline + title + "N tracks · duration" + Play/Shuffle
+    property string overline                   // "PLAYLIST", "COLLECTION"
+    property string heroImage                  // cover (url, coverLarge is better); if empty — a shape with an icon
     property string heroIcon: "queue_music"
     property var heroShape: "softSquare"
-    property var heroArtistRefs: []            // исполнители-ссылки под названием (альбом)
+    property var heroArtistRefs: []            // artist links under the title (album)
     property bool showPlayButtons: true
     readonly property bool scrolled: list.contentY - list.originY > 48
 
-    // Правка плейлиста
+    // Playlist editing
     property bool editing: false
     property Component editHero: null
-    property string addedColumn                // "" / "by" / "at" — колонка «Добавил»/«Добавлено»
-    property bool showPlays: false             // колонка прослушиваний (альбом)
-    property bool showAlbum: true              // колонка альбома (на странице альбома не нужна)
-    property real contentRightInset: 0         // место справа под боковую панель (AddTracksPanel)
+    property string addedColumn                // "" / "by" / "at" — the "Added by" / "Added" column
+    property bool showPlays: false             // play count column (album)
+    property bool showAlbum: true              // album column (not needed on the album page)
+    property real contentRightInset: 0         // space on the right for the side panel (AddTracksPanel)
     Behavior on contentRightInset { enabled: Theme.reducedMotion !== true; NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate } }
     readonly property alias listView: list
 
     property bool searchOpen: false
     property string searchText
-    // запрос уходит в фильтр с задержкой: полный сброс модели на каждый символ дороги
+    // the query goes to the filter with a delay: a full model reset per character is expensive
     onSearchTextChanged: searchDebounce.restart()
-    readonly property var shownModel: model ? filter : null   // то, что в списке: всё или найденное
+    readonly property var shownModel: model ? filter : null   // what is in the list: everything or the matches
 
     signal trackActivated(int row)
-    signal trackRemoved(int row)               // «убрать» в режиме правки (row — индекс в model)
+    signal trackRemoved(int row)               // "remove" in edit mode (row — index in model)
     signal moveRequested(int from, int to)
 
     onEditingChanged: if (editing) closeSearch()
 
-    // Прокрутить к треку и мигнуть им, когда список загрузится (один раз)
+    // Scroll to a track and flash it once the list has loaded (once)
     property string highlightTrackId
     property string _flashId
     property int _flashRow: -1
@@ -76,7 +76,7 @@ Item {
             }
         }
     }
-    // Мигнуть строкой по индексу (после добавления в конец / возврата удалённой)
+    // Flash a row by index (after adding to the end / restoring a deleted one)
     function flashRow(row) {
         if (row < 0)
             return
@@ -94,8 +94,8 @@ Item {
     }
     Timer { id: flashReset; interval: Theme.reducedMotion === true ? 1000 : 1600; onTriggered: { page._flashId = ""; page._flashRow = -1 } }
 
-    // Ctrl+F: открыть поиск по списку. false — искать тут нечего или поле уже в фокусе
-    // (тогда повторный Ctrl+F уходит в общий поиск).
+    // Ctrl+F: open search within the list. false — nothing to search here or the field is already focused
+    // (then a repeated Ctrl+F goes to the global search).
     function findInPage() {
         if (!model || model.count === 0 || !showHeader || editing)
             return false
@@ -116,7 +116,7 @@ Item {
     TrackFilter {
         id: filter
         source: page.model
-        // query ставит searchDebounce: привязка к page.searchText сбрасывала модель на каждый символ
+        // query goes through searchDebounce: binding to page.searchText reset the model on every character
     }
     Timer {
         id: searchDebounce
@@ -129,11 +129,11 @@ Item {
         return m >= 60 ? I18n.t("{0} h {1} min", Math.floor(m / 60), m % 60) : I18n.t("{0} min", m)
     }
 
-    // Медленно плывущие фигуры за шапкой. Слой вне ListView (иначе его clip режет фигуры по краю
-    // списка) и заходит под прозрачную верхнюю панель; сверху и снизу фигуры растворяются,
-    // поэтому видимой рамки нет. Едет вместе с шапкой, стоит, когда она уехала из виду.
-    // Декоративное движение шапки стартует, когда страница доехала и список встал: открытие и так
-    // самый тяжёлый момент (создание страницы и строк, переход), не добавляем к нему перерисовки
+    // Slowly drifting shapes behind the header. The layer sits outside the ListView (otherwise its clip cuts the shapes at the
+    // edge of the list) and slides under the transparent top panel; top and bottom the shapes dissolve,
+    // so there is no visible border. It travels with the header, freezes when it has scrolled out of view.
+    // The header's decorative motion starts once the page has arrived and the list has settled: opening is already
+    // the heaviest moment (creating the page and the rows, the transition), so we add no repaints to it
     property bool _settled: false
     Timer { interval: 900; running: page.visible && !page._settled; onTriggered: page._settled = true }
 
@@ -163,7 +163,7 @@ Item {
         interactive: !dragActive
         onMoveRequested: (from, to) => page.moveRequested(from, to)
 
-        // удаление в правке: строка гаснет, соседи подтягиваются
+        // removal in edit mode: the row fades out, the neighbours pull up
         remove: Transition {
             enabled: page.editing && Theme.reducedMotion !== true
             NumberAnimation { property: "opacity"; to: 0; duration: Theme.motion.spatialFast; easing.type: Easing.OutCubic }
@@ -173,12 +173,12 @@ Item {
             NumberAnimation { property: "y"; duration: Theme.motion.spatialFast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized }
         }
 
-        // ListView не сдвигает contentY, когда шапка меняет высоту (подзаголовок «N треков»
-        // появляется после загрузки) или модель сбрасывается, — и заголовок оказывается обрезан.
-        // Пока пользователь не прокручивал, держим список у самого верха.
+        // ListView does not shift contentY when the header changes height (the "N tracks" subtitle
+        // appears after loading) or the model is reset, — and the heading ends up cut off.
+        // Until the user has scrolled, keep the list at the very top.
         property bool userScrolled: false
         function keepTop() { if (!userScrolled) Qt.callLater(() => contentY = originY) }
-        onMovementStarted: userScrolled = true   // касание
+        onMovementStarted: userScrolled = true   // touch
         Connections {
             target: page.shownModel
             ignoreUnknownSignals: true
@@ -196,7 +196,7 @@ Item {
                 id: heroLoader
                 visible: page.showHeader
                 x: 16
-                y: 24     // запас сверху: фигура за обложкой больше неё и не должна упираться в край списка
+                y: 24     // top margin: the shape behind the cover is larger than it and must not press against the list edge
                 width: parent.width - 32
                 sourceComponent: page.editing && page.editHero ? page.editHero : defaultHero
             }
@@ -234,9 +234,9 @@ Item {
             liked: Library.likesRevision >= 0 && Library.isLiked(model.trackId)
             current: model.trackId === Player.trackId
             highlighted: (page._flashId !== "" && model.trackId === page._flashId) || page._flashRow === index
-            // pos — позиция в самом списке (для «Убрать из этого плейлиста»); при поиске неизвестна.
-            // Словарь для меню TrackRow собирает сам, лениво (trackData()) — get(index) целиком
-            // (18 ролей в QVariantMap на каждую строку) здесь больше не нужен
+            // pos — position in the list itself (for "Remove from this playlist"); unknown while searching.
+            // TrackRow builds the dict for its menu itself, lazily (trackData()) — get(index) in full
+            // (18 roles in a QVariantMap per row) is no longer needed here
             pos: filter.active ? -1 : index
             z: dragging ? 10 : 0
             transform: Translate {
@@ -271,8 +271,8 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: extraLoader.height
                 visible: page.model && page.model.loading && page.model.count > 0
-                // Длинный плейлист грузится страницами секундами; крутящийся индикатор перерисовывает окно
-                // с частотой монитора, поэтому крутится, только когда низ списка на экране
+                // A long playlist loads in pages over seconds; a spinning indicator repaints the window
+                // at monitor rate, so it only spins while the bottom of the list is on screen
                 running: footerBox.y < list.contentY + list.height
             }
             Label {
@@ -282,7 +282,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
                 visible: filter.active && filter.count === 0 && !(page.model && page.model.loading)
-                // цитируем filter.query, а не searchText: текст должен совпадать с тем, что реально отражает список
+                // quote filter.query, not searchText: the text must match what the list actually shows
                 text: I18n.t("Nothing in this list matches “{0}”", filter.query.trim())
                 type: "bodyLarge"
                 color: Theme.fgSurfaceVariant
@@ -300,7 +300,7 @@ Item {
             spacing: page.width < 560 ? 18 : 28
             Behavior on spacing { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
 
-            // Обложка или фигура с иконкой; за обложкой — фигура побольше
+            // Cover or a shape with an icon; behind the cover — a slightly bigger shape
             Item {
                 Layout.preferredWidth: page.width > 760 ? 184 : page.width < 560 ? 96 : 128
                 Layout.preferredHeight: Layout.preferredWidth
@@ -401,7 +401,7 @@ Item {
                     visible: active
                     sourceComponent: page.heroMeta
                 }
-                // в узком окне кнопки переносятся, а не распирают шапку
+                // in a narrow window the buttons wrap instead of stretching the header
                 Flow {
                     Layout.fillWidth: true
                     Layout.topMargin: 14
@@ -472,7 +472,7 @@ Item {
         }
     }
 
-    // Первая загрузка / пусто
+    // First load / empty
     LoadingIndicator {
         anchors.centerIn: parent
         size: 64

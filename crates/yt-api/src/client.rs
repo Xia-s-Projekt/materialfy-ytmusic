@@ -361,7 +361,7 @@ impl YtClient {
             .await
     }
 
-    /// Podcasts the account follows (library → «Подкасты»).
+    /// Podcasts the account follows (library → "Podcasts").
     pub async fn get_library_podcasts(&self, limit: u32) -> Result<Value> {
         self.call("get_library_podcasts", json!({"limit": limit})).await
     }

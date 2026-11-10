@@ -1,4 +1,4 @@
-//! Приёмники Spotify Connect в локальной сети (перенос spotifast/src/zeroconf.rs). Блокирующие функции — звать через spawn_blocking.
+//! Spotify Connect receivers on the local network (port of spotifast/src/zeroconf.rs). Blocking functions — call via spawn_blocking.
 //! Spotify Connect receivers on the local network.
 //!
 //! Spotify's Web API lists only devices already signed in. Receivers waiting

@@ -1,7 +1,7 @@
 import QtQuick
 
-// Выпадающий выбор MD3: пилюля 44 px со значением и arrow_drop_down, открывает Md3/Menu.
-// model — список строк или {id, text}; currentValue — строка или id выбранного пункта.
+// MD3 dropdown: a 44 px pill with the value and arrow_drop_down, opens Md3/Menu.
+// model — a list of strings or {id, text}; currentValue — the string or id of the selected item.
 Item {
     id: root
 

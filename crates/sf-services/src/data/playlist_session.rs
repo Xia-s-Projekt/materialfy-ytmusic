@@ -1,7 +1,7 @@
-//! Плейлисты через сессию librespot того же аккаунта (sf_player::engine::session_playlists): список
-//! библиотеки из rootlist, правки, создание, подписка, видимость, обложка — без квоты Web API.
-//! None — сессии нет или она не смогла: повторяемую запись и чтение можно отдать Web API. Неповторяемая
-//! запись (добавление, перенос), чей ответ потерялся, — ошибка, а не повтор через Web API (могла лечь).
+//! Playlists through a librespot session of the same account (sf_player::engine::session_playlists): the library
+//! list from rootlist, edits, creation, following, visibility, cover — with no Web API quota.
+//! None — there is no session or it could not do it: a repeatable write and a read can go to the Web API. A non-repeatable
+//! write (adding, moving) whose answer was lost — is an error, not a retry through the Web API (it may have gone through).
 use std::time::Duration;
 
 use sf_api::models::{Image, Playlist};
@@ -14,15 +14,15 @@ pub use sf_player::engine::session_playlists::Library;
 
 use super::route;
 
-/// Сколько ждать запись через сессию.
+/// How long to wait for a write through the session.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(20);
-/// Сколько ждать список библиотеки (rootlist и имена владельцев).
+/// How long to wait for the library list (rootlist and owner names).
 const LIBRARY_TIMEOUT: Duration = Duration::from_secs(30);
-/// Сколько ждать готовности сессии при входе, прежде чем спросить список у Web API.
+/// How long to wait for the session to be ready at sign-in before asking the Web API for the list.
 pub const SESSION_WAIT: Duration = Duration::from_secs(12);
 
-/// Ответ сессии как ответ Web API; None — спросить Web API (для неповторяемой записи — только если
-/// запрос не дошёл).
+/// A session answer as a Web API answer; None — ask the Web API (for a non-repeatable write — only if
+/// the request never arrived).
 fn settle<T>(result: Result<Result<T, Failure>, tokio::time::error::Elapsed>, repeatable: bool) -> Option<Result<T, ApiError>> {
     match result {
         Ok(Ok(value)) => Some(Ok(value)),
@@ -49,8 +49,8 @@ async fn run<T>(
     settle(tokio::time::timeout(WRITE_TIMEOUT, run(session)).await, repeatable)
 }
 
-/// Запись через сессию. Она идёт мимо Web API, поэтому после успеха его кэш GET (20 с) забываем:
-/// иначе запасное чтение через Web API отдало бы плейлист до правки.
+/// A write through the session. It bypasses the Web API, so after success we forget its GET cache (20 s):
+/// otherwise the fallback read through the Web API would return the playlist from before the edit.
 async fn write<T>(
     api: &ApiGateway,
     player: &PlayerHandle,
@@ -64,7 +64,7 @@ async fn write<T>(
     result
 }
 
-/// Сессия того же аккаунта; ждёт её до `wait` (вход: движок ещё подключается).
+/// A session of the same account; waits for it up to `wait` (sign-in: the engine is still connecting).
 pub async fn wait_session(api: &ApiGateway, player: &PlayerHandle, wait: Duration) -> Option<sf_player::Session> {
     let deadline = tokio::time::Instant::now() + wait;
     loop {
@@ -78,7 +78,7 @@ pub async fn wait_session(api: &ApiGateway, player: &PlayerHandle, wait: Duratio
     }
 }
 
-/// Плейлисты библиотеки: дерево rootlist и шапки; None — сессия не готова или не ответила.
+/// Library playlists: the rootlist tree and headers; None — the session is not ready or did not answer.
 pub async fn library(api: &ApiGateway, player: &PlayerHandle, wait: Duration) -> Option<Library> {
     let session = wait_session(api, player, wait).await?;
     match tokio::time::timeout(LIBRARY_TIMEOUT, session::library(&session)).await {
@@ -98,19 +98,19 @@ pub async fn library(api: &ApiGateway, player: &PlayerHandle, wait: Duration) ->
     }
 }
 
-/// Коллаж обложек для плейлиста без своей; пусто — не вышло.
+/// A cover collage for a playlist without its own; empty — it did not work out.
 pub async fn mosaic(api: &ApiGateway, player: &PlayerHandle, id: &str) -> Vec<Image> {
     let Some(session) = route::account_session(api, player) else { return Vec::new() };
     tokio::time::timeout(WRITE_TIMEOUT, session::mosaic(&session, id)).await.unwrap_or_default()
 }
 
-/// Правка плейлиста; Ok — snapshot_id после записи.
+/// A playlist edit; Ok — snapshot_id after the write.
 pub async fn change(api: &ApiGateway, player: &PlayerHandle, id: &str, change: Change) -> Option<Result<Option<String>, ApiError>> {
     let repeatable = !matches!(change, Change::Add { .. } | Change::Move { .. });
     write(api, player, repeatable, async move |session| session::change(&session, id, &change).await).await
 }
 
-/// Какие из `uris` уже есть в плейлисте.
+/// Which of `uris` are already in the playlist.
 pub async fn duplicates(api: &ApiGateway, player: &PlayerHandle, id: &str, uris: &[String]) -> Option<Result<Vec<String>, ApiError>> {
     run(api, player, true, async move |session| session::duplicates(&session, id, uris).await).await
 }
@@ -134,7 +134,7 @@ pub async fn set_public(api: &ApiGateway, player: &PlayerHandle, id: &str, publi
     write(api, player, true, async move |session| session::set_public(&session, &uri, public).await).await
 }
 
-/// Обложка из JPEG; Ok — snapshot_id после записи.
+/// A cover from JPEG; Ok — snapshot_id after the write.
 pub async fn upload_cover(api: &ApiGateway, player: &PlayerHandle, id: &str, jpeg: Vec<u8>) -> Option<Result<Option<String>, ApiError>> {
     let http = api.http().client().ok()?;
     write(api, player, true, async move |session| session::upload_cover(&session, &http, id, jpeg).await).await

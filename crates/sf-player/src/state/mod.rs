@@ -1,8 +1,8 @@
-//! Внутренние модули «queue-state»: актор плеера, модель очереди (queue.md), слияние Local/Remote, удержания.
-//! Новые файлы верхнего слоя sf-player создавать только здесь; объявлять в этом mod.rs. Тесты очереди — здесь же.
+//! The internal "queue-state" modules: the player actor, the queue model (queue.md), merging Local/Remote, holds.
+//! Create new top-layer sf-player files only here; declare them in this mod.rs. The queue tests live here too.
 pub(crate) mod actor;
 pub mod backend;
-/// Spotify Connect через сессию librespot (кластер connect-state, команды другим устройствам)
+/// Spotify Connect through the librespot session (the connect-state cluster, commands to other devices)
 pub mod connect;
 pub mod core;
 pub(crate) mod diff;

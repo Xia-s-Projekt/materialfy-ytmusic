@@ -1,9 +1,9 @@
-// Сквозная проверка гейта декода на настоящем MorphImage (Md3 зарегистрирован в приложении):
+// End-to-end check of the decode gate on the real MorphImage (Md3 is registered in the app):
 //   QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
 //     target/release/materialfy --offline --new-instance --qml tests/qml/integration/GateHarness.qml
-// 32 обложки с реальным локальным файлом: гейт пускает по 12, очередь должна разобраться до конца —
-// ни одна обложка не «застревает» (это и есть регрессия, которую чинили в MorphImage/ImageGate).
-// Итог — SMOKE-RESULT PASS/FAIL; проверяет вызывающая команда.
+// 32 covers with a real local file: the gate lets through 12 at a time, the queue must drain fully —
+// no cover gets "stuck" (that is the regression fixed in MorphImage/ImageGate).
+// Result — SMOKE-RESULT PASS/FAIL; the calling command checks it.
 import QtQuick
 import QtQuick.Controls.Basic
 import Md3

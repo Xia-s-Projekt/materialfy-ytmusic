@@ -1,4 +1,4 @@
-//! Перенос spotifast/src/resample.rs (как есть).
+//! Port of spotifast/src/resample.rs (as is).
 //! Sample rate conversion for an output that will not take 44.1 kHz.
 //!
 //! Spotify audio is stereo 44.1 kHz, but many shared Windows devices run at

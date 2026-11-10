@@ -4,33 +4,33 @@ import QtQuick.Effects
 import Md3
 import Materialfy.Core
 
-// Полноэкранный плеер. Раскрывается через «окно» — случайную фигуру MD3 Expressive:
-// фаза 1 — фигура быстро вращается и растёт из маленькой (на обложке мини-плеера) до средней,
-// уходя к центру; фаза 2 — растёт на весь экран, пока весь экран не окажется внутри неё.
-// Закрытие — тот же путь в обратную сторону. Маска (MultiEffect) включена только на время перехода.
+// Fullscreen player. It opens through a "window" — a random MD3 Expressive shape:
+// phase 1 — the shape rotates quickly and grows from tiny (on the mini player cover) to medium,
+// moving toward the center; phase 2 — it grows to fill the screen until the whole screen is inside it.
+// Closing is the same path in reverse. The mask (MultiEffect) is enabled only for the duration of the transition.
 Item {
     id: root
 
     property bool open: false
-    // Уровни звука нужны (Player.levelsWanted ставит Main.qml — их просит и островок): у другого устройства
-    // уровня нет — пульт не просит его и не «дышит»; мини-плееру (MiniMode) тоже — там обложка и фон дышат в такт
+    // Volume levels are needed (Player.levelsWanted is set by Main.qml — the island asks for them too): on another device
+    // there is no level — the remote does not request it and does not "breathe"; the same for the mini player (MiniMode) — there the cover and background breathe in time
     readonly property bool wantsLevels: ((visible && open) || (Window.window && Window.window.layoutMode === "mini"))
         && Settings.coverPulse && Player.playing && Player.isLocal === true && !Theme.quiet
     property point origin: Qt.point(width / 2, height - 60)
-    property string tab: "lyrics"          // lyrics | queue | "" ("" — центр-режим: без очереди/текста)
+    property string tab: "lyrics"          // lyrics | queue | "" ("" — center mode: no queue/lyrics)
     readonly property bool coverOnly: root.tab === ""
-    // Фоновая сборка вкладок после раскрытия плеера: первый клик без холодной сборки
+    // Background build of the tabs after the player opens: the first click has no cold build
     property bool _tabsWarmed: false
     Timer {
         id: tabsWarmup
         interval: 400
         onTriggered: root._tabsWarmed = true
     }
-    // узкое окно: одна колонка; текст/очередь открываются вместо плеера (sheetOpen) переключателем сверху
+    // narrow window: one column; lyrics/queue open in place of the player (sheetOpen) via the switch on top
     property bool compact: false
     property bool sheetOpen: false
-    // Раскладка (одна колонка / две) меняется не мгновенно, а «сквозным затуханием» MD3:
-    // старая гаснет, раскладка переключается, новая проявляется с лёгким увеличением
+    // The layout (one column / two) does not change instantly, but with an MD3 "cross-fade":
+    // the old one fades out, the layout switches, the new one fades in with a slight scale up
     property bool layoutCompact: false
     Component.onCompleted: layoutCompact = compact
     onCompactChanged: {
@@ -58,7 +58,7 @@ Item {
 
     readonly property var _windowShapes: ["softSquare", "softSquare", "softSquare", "softSquare", "softSquare", "softSquare", "softSquare", "softSquare"]
     readonly property real _split: 0.45
-    // reduced motion: без растущей фигуры — экран сразу во весь размер и проявляется затуханием
+    // reduced motion: without the growing shape — the screen is full size at once and fades in
     readonly property real _g: Theme.reducedMotion ? (reveal > 0 ? 1 : 0) : reveal
     readonly property real _a: Math.min(1, _g / _split)
     readonly property real _b: Math.max(0, (_g - _split) / (1 - _split))
@@ -90,11 +90,11 @@ Item {
     Behavior on reveal {
         NumberAnimation {
             id: revealAnim
-            // программный рендер — сразу: кадры раскрытия (два слоя и маска на весь экран) рисует процессор
+            // software rendering — immediately: the opening frames (two layers and a full-screen mask) are drawn by the CPU
             duration: Theme.lowPower ? 0 : Theme.reducedMotion ? Theme.motion.effectsDefault : root.open ? 820 : 620
-            easing.type: Easing.Linear     // кривые — у каждой фазы свои, см. blob
-            // onFinished здесь не приходит (анимация внутри Behavior сигнал не шлёт).
-            // Linear заканчивается ровно на to — снап не нужен.
+            easing.type: Easing.Linear     // each phase has its own curve, see blob
+            // onFinished does not arrive here (the animation inside Behavior does not send the signal).
+            // Linear ends exactly on to — no snap needed.
         }
     }
 
@@ -103,7 +103,7 @@ Item {
         return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
     }
 
-    // Маска раскрытия: фигура-«окно»
+    // Opening mask: the "window" shape
     Item {
         id: revealMask
         anchors.fill: parent
@@ -115,7 +115,7 @@ Item {
             readonly property real e2: root._inOut(root._b)
             readonly property real small: 36
             readonly property real medium: 0.42 * Math.min(root.width, root.height)
-            // Во впадинах фигура уже описанного круга — берём с запасом, чтобы углы окна оказались внутри
+            // In the concave parts the shape is already inside the described circle — we take a margin so the window corners fall inside it
             readonly property real full: 2 * 1.6 * Math.hypot(root.width / 2, root.height / 2)
             readonly property real d: root._b > 0 ? medium + (full - medium) * e2 : small + (medium - small) * e1
             readonly property real cx: root.origin.x + (root.width / 2 - root.origin.x) * e1
@@ -130,7 +130,7 @@ Item {
         }
     }
 
-    // Содержимое (в самом конце сворачивания гаснет — без «обрубка» в крошечной фигуре)
+    // Content (it fades out at the very end of collapsing — no "stub" inside the tiny shape)
     Item {
         id: content
         anchors.fill: parent
@@ -143,13 +143,13 @@ Item {
             maskSpreadAtMin: 1.0
         }
 
-        // Фон: размытая обложка + вуаль цвета темы
+        // Background: blurred cover + a theme-colored veil
         Rectangle { anchors.fill: parent; color: Theme.surface }
-        // Режим, сила размытия и «плавание» — из настроек (см. CoverBackdrop); при смене трека фон
-        // меняется вместе с цветами темы — под той же шторкой (см. TrackBackdrop)
+        // Mode, blur strength and "floating" — from settings (see CoverBackdrop); on a track change the background
+        // changes together with the theme colors — under the same curtain (see TrackBackdrop)
         TrackBackdrop {
             anchors.fill: parent
-            // на весь экран — крупная обложка (CoverBackdrop размер в URL не подменяет)
+            // full screen — a large cover (CoverBackdrop does not substitute the size in the URL)
             source: Player.coverLarge !== "" ? Player.coverLarge : Player.cover
             mode: Settings.backdropMode
             blur: Settings.nowPlayingBlur
@@ -163,10 +163,10 @@ Item {
             opacity: Theme.dark ? 0.62 : 0.55
         }
 
-        // Блокирует клики по приложению под плеером
+        // Blocks clicks on the application under the player
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
 
-        // Верхняя панель: свернуть + переключатель очередь/текст (над правой колонкой)
+        // Top bar: collapse + the queue/lyrics switch (above the right column)
         RowLayout {
             id: topRow
             anchors.left: parent.left
@@ -176,7 +176,7 @@ Item {
             spacing: 12
             IconButton { icon: "keyboard_arrow_down"; style: "tonal"; onClicked: root.hide() }
             Item { Layout.fillWidth: true }
-            DeviceButton { iconOnly: root.layoutCompact; usePanel: false }   // правая панель — под этим экраном
+            DeviceButton { iconOnly: root.layoutCompact; usePanel: false }   // the right panel is under this screen
             ButtonGroup {
                 model: [{ icon: "title" }, { icon: "queue_music" }]
                 autoSelect: false
@@ -186,16 +186,16 @@ Item {
                     if (root.layoutCompact && root.sheetOpen && root.tab === next) {
                         root.sheetOpen = false
                     } else if (!root.layoutCompact && root.tab === next) {
-                        // Повторное нажатие активной вкладки — центр-режим: только плеер по центру
+                        // Pressing the active tab again — center mode: only the player in the middle
                         root.tab = ""
-                        root.sheetOpen = false  // иначе после сужения окна — пустой экран
+                        root.sheetOpen = false  // otherwise after narrowing the window there is an empty screen
                     } else {
                         root.tab = next
                         root.sheetOpen = true
                     }
                 }
             }
-            // плеер закрывает всё окно — кнопки окна и перетаскивание за пустое место панели здесь свои
+            // the player covers the whole window — the window buttons and dragging by the panel's empty space have their own here
             WindowButtons {
                 id: windowButtons
                 Layout.alignment: Qt.AlignVCenter
@@ -228,14 +228,14 @@ Item {
             anchors.margins: root.layoutCompact ? 16 : 32
             anchors.topMargin: 8
 
-            // ---- Колонка плеера (слева, с отступом от края): обложка и управление ----
+            // ---- Player column (on the left, inset from the edge): cover and controls ----
             ColumnLayout {
                 id: left
                 visible: !root.layoutCompact || !root.sheetOpen
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                // x/width интерполируются blend'ом (0 — обычный, 1 — центр): ресайз окна мгновенен,
-                // переход — плавный. Правая панель занимает остаток и тает по мере вытеснения.
+                // x/width are interpolated by blend (0 — normal, 1 — center): window resizing is instant,
+                // the transition is smooth. The right panel takes the remainder and fades as it is pushed out.
                 property real _blend: root.coverOnly && !root.layoutCompact ? 1 : 0
                 Behavior on _blend { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate } }
                 readonly property real _normalW: Math.min(460, root.width * 0.42)
@@ -245,14 +245,14 @@ Item {
                 x: root.layoutCompact ? 0 : _normalX + (_coverX - _normalX) * _blend
                 width: root.layoutCompact ? body.width : _normalW + (_coverW - _normalW) * _blend
                 spacing: 12
-                // ширина колонки из размеров окна, а не из уже разложенной колонки: иначе обложка и подписи
-                // меняют ширину, от которой сами зависят (recursive rearrange)
+                // the column width comes from the window size, not from the already laid-out column: otherwise the cover and labels
+                // change the width they themselves depend on (recursive rearrange)
                 readonly property real colWidth: left.width
 
                 Item { Layout.fillHeight: true }
 
-                // «Дыхание» в такт: уровень звука плеера (просит Main.qml по root.wantsLevels); доля над
-                // скользящим средним — удар
+                // "Breathing" in time: the player's volume level (requested by Main.qml via root.wantsLevels); the fraction above
+                // the sliding mean is the beat
                 property real avgLevel: 0
                 property real beat: 0
                 Behavior on beat { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
@@ -261,8 +261,8 @@ Item {
                     function onLevelChanged() {
                         left.avgLevel += (Player.level - left.avgLevel) * 0.06
                         const b = Math.max(0, Math.min(1, (Player.level - left.avgLevel) * 4))
-                        // пишем только значимые сдвиги: каждый старт Behavior перерисовывает всё окно,
-                        // а события уровня приходят 30–60 раз в секунду
+                        // only meaningful shifts are written: every Behavior start redraws the whole window,
+                        // and level events arrive 30–60 times a second
                         if (Math.abs(b - left.beat) > 0.04)
                             left.beat = b
                     }
@@ -274,11 +274,11 @@ Item {
 
                 NowPlayingCover {
                     id: bigCover
-                    // Всё остальное в колонке занимает ~360 px (в узком окне ~310) — обложка берёт оставшееся
-                    // плашка пульта (если видна) тоже забирает высоту
-                    // Центр-режим: панель справа убрана, колонка шире — обложке даём вырасти по ширине;
-                    // вертикальный бюджет тот же (текст и управление остаются)
-                    // Размер интерполируется blend'ом (0 — обычный, 1 — центр-режим): ресайз окна мгновенен
+                    // Everything else in the column takes ~360 px (in a narrow window ~310) — the cover takes the rest
+                    // the remote plate (if visible) also takes height
+                    // Center mode: the panel on the right is removed and the column is wider — the cover is allowed to grow in width;
+                    // the vertical budget is the same (lyrics and controls remain)
+                    // The size is interpolated by blend (0 — normal, 1 — center mode): window resizing is instant
                     property real _max: root.coverOnly ? 520 : 440
                     Behavior on _max { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate } }
                     readonly property real s: root.layoutCompact ? Math.max(96, Math.min(left.colWidth, body.height - 316 - npBanner.implicitHeight, 360))
@@ -306,7 +306,7 @@ Item {
                     }
                 }
 
-                // Подписи при смене трека проявляются заново, чуть снизу
+                // On a track change the labels fade in again, slightly from below
                 property real infoIn: 1
                 Connections {
                     target: Player
@@ -355,7 +355,7 @@ Item {
                     visible: Player.isEpisode !== true
                     refs: Player.track ? (Player.track.artistRefs ?? []) : []
                     text: Player.artist
-                    opacity: Math.max(0, left.infoIn * 1.3 - 0.3)    // чуть позже названия
+                    opacity: Math.max(0, left.infoIn * 1.3 - 0.3)    // a bit later than the title
                     transform: Translate { y: (1 - left.infoIn) * 18 }
                     type: "titleMedium"
                     color: Theme.fgSurfaceVariant
@@ -366,7 +366,7 @@ Item {
                     Layout.topMargin: -6
                     horizontalAlignment: Text.AlignHCenter
                     visible: Player.isEpisode === true
-                    // у выпуска подкаста под названием — подкаст: ссылка на его страницу
+                    // for a podcast episode, under the title — the podcast: a link to its page
                     linkEnabled: (Player.track.showId ?? "") !== ""
                     onClicked: Catalog.openShow(Player.track.showId ?? "")
                     opacity: Math.max(0, left.infoIn * 1.3 - 0.3)
@@ -380,17 +380,17 @@ Item {
                     Layout.maximumWidth: left.colWidth
                     Layout.topMargin: -6
                     horizontalAlignment: Text.AlignHCenter
-                    // у выпуска подкаста и трека без альбома ссылки нет
+                    // a podcast episode and a track without an album have no link
                     linkEnabled: (Player.track.albumId ?? "") !== ""
                     onClicked: Catalog.openAlbum(Player.track.albumId ?? "")
-                    opacity: Math.max(0, left.infoIn * 1.3 - 0.3)    // чуть позже названия
+                    opacity: Math.max(0, left.infoIn * 1.3 - 0.3)    // a bit later than the title
                     transform: Translate { y: (1 - left.infoIn) * 18 }
                     text: Player.album + (Player.codec !== "" && Player.isLocal === true ? "  ·  " + Player.codec : "")
                     type: "bodySmall"
                     color: Theme.fgSurfaceVariant
                 }
 
-                // Прогресс
+                // Progress
                 readonly property alias progress: playerProgress.value
                 PlayerProgress { id: playerProgress; active: bigSeek.visible && !bigSeek.dragging }
                 RowLayout {
@@ -420,7 +420,7 @@ Item {
                     }
                 }
 
-                // Кнопки
+                // Buttons
                 RowLayout {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 4
@@ -456,10 +456,10 @@ Item {
                     }
                 }
 
-                // Не рекомендовать (радио) · устройство · громкость · лайк или закладка выпуска
+                // Do not recommend (radio) · device · volume · like, or a bookmark for an episode
                 RowLayout {
                     id: volumeRow
-                    // громкость играющего устройства; у части устройств её меняют только на них самих
+                    // volume of the playing device; on some devices it can only be changed on the device itself
                     readonly property bool locked: Player.remote === true && Player.canSetVolume === false
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 4
@@ -525,7 +525,7 @@ Item {
                     color: Theme.fgSurfaceVariant
                 }
 
-                // Пульт: «Играет на … · Слушать здесь», устройство пропало — «Продолжить здесь?»
+                // Remote: "Playing on … · Listen here", the device disappeared — "Continue here?"
                 ConnectBanner {
                     id: npBanner
                     Layout.fillWidth: true
@@ -537,19 +537,19 @@ Item {
                 Item { Layout.fillHeight: true }
             }
 
-            // ---- Колонка очереди / текста (справа) ----
-            // Смена вкладки — shared axis X (порядок как у переключателя: текст слева, очередь справа):
-            // уходящая уезжает в свою сторону и гаснет, новая выезжает с другой.
+            // ---- Queue / lyrics column (on the right) ----
+            // Tab change — shared axis X (order as in the switch: lyrics on the left, queue on the right):
+            // the outgoing one slides its own way and fades, the new one slides in from the other side.
             Item {
-                // Центр-режим: панель тает и сжимается, место отдаётся колонке плеера
+                // Center mode: the panel fades and shrinks, the space goes to the player column
                 opacity: root.coverOnly ? 0 : 1
                 Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsDefault } }
                 visible: opacity > 0.001 && (!root.layoutCompact || root.sheetOpen)
                 enabled: !root.coverOnly
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
-                // Геометрия — целевая (не от анимированной колонки): текст и очередь при возврате
-                // из центра раскладываются сразу, анимируется только прозрачность
+                // Geometry is the target one (not from the animated column): lyrics and queue, on returning
+                // from the center, lay out immediately, only opacity is animated
                 x: root.layoutCompact ? 0 : left._normalX + left._normalW + 48
                 width: root.layoutCompact ? parent.width
                     : Math.max(0, parent.width - x - Math.max(16, root.width * 0.06))
@@ -568,10 +568,10 @@ Item {
                     visible: shown > 0.001
                     opacity: Math.pow(shown, 1.6)
                     transform: Translate { x: (1 - queueTab.shown) * 80 }
-                    // во время выезда строкам очереди нечего пересчитывать: отключаем интерактив,
-                    // чтобы hover-морфы и StateLayer не инвалидировали кадры анимации
+                    // while sliding out the queue rows have nothing to recompute: we disable interactivity,
+                    // so hover morphs and the StateLayer do not invalidate animation frames
                     enabled: shown > 0.99
-                    // Сборка очереди асинхронно: холодная сборка на клик давала фриз
+                    // The queue is built asynchronously: a cold build on click caused a freeze
                     Loader {
                         anchors.fill: parent
                         asynchronous: true
@@ -580,7 +580,7 @@ Item {
                     }
                 }
 
-                // Текст песни собирается асинхронно: холодная сборка на клик давала фриз
+                // Lyrics are built asynchronously: a cold build on click caused a freeze
                 Item {
                     id: lyricsTab
                     property real shown: root.tab === "lyrics" ? 1 : 0

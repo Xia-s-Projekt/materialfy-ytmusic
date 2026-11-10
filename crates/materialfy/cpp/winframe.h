@@ -4,13 +4,13 @@
 
 namespace mf {
 
-// Окно без рамки на Windows: нативный ресайз за края, Aero Snap, тень DWM (контракт §7).
-// window — QWindow* корня (после load). grip — ширина зоны ресайза в логических пикселях (6).
-// false — не QWindow или нет HWND.
+// A frameless window on Windows: native resize by the edges, Aero Snap, a DWM shadow (contract §7).
+// window — the root's QWindow* (after load). grip — the width of the resize area in logical pixels (6).
+// false — not a QWindow, or there is no HWND.
 bool winframe_install(QObject* window, int grip);
 
-// Свернуть, сохранив «развёрнуто» / «на весь экран»: setWindowStates(windowStates() | Qt::WindowMinimized).
-// QWindow::showMinimized() ставит ровно Minimized — Windows и X11 тогда возвращают окно обычным (issue #2).
+// Minimize while keeping "maximized" / "fullscreen": setWindowStates(windowStates() | Qt::WindowMinimized).
+// QWindow::showMinimized() sets exactly Minimized — Windows and X11 then restore the window as a normal one (issue #2).
 void window_minimize(QObject* window);
 
 } // namespace mf

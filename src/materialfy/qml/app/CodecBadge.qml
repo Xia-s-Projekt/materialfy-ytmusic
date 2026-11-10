@@ -2,8 +2,8 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Кодек играющего трека (OGG 320…) — маленькая плашка над временем в мини-плеере.
-// У чужого устройства кодека нет: на этом месте RemoteLabel.
+// Codec of the playing track (OGG 320...) — a small plate above the time in the mini player.
+// On a remote device there is no codec: RemoteLabel sits in that place instead.
 Rectangle {
     visible: Player.hasTrack && Player.codec !== "" && !Player.remote
     implicitWidth: codec.implicitWidth + 10

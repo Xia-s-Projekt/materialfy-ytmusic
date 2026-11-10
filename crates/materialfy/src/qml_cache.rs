@@ -1,8 +1,8 @@
-//! Кэш скомпилированного QML (его пишет сам Qt, QML_DISK_CACHE_PATH): своя папка на версию приложения и сброс
-//! после неудачного запуска. Испорченный файл кэша (процесс убит посреди записи) Qt берёт как есть — содержимое
-//! он не проверяет, — и движок QML падает на каждом старте (Qt6Qml.dll, 0xc0000005 в 0.3.1 у пользователя).
-//! Метка «запуск не завершён» снимается через 15 с работы; нашли её при старте — прошлый запуск упал, кэш
-//! стираем, QML скомпилируется заново.
+//! Compiled QML cache (written by Qt itself, QML_DISK_CACHE_PATH): its own folder per application version and a reset
+//! after a failed launch. A corrupted cache file (process killed mid-write) is taken by Qt as-is - the content
+//! is not checked, - and the QML engine crashes on every start (Qt6Qml.dll, 0xc0000005 in 0.3.1 for a user).
+//! The "launch not finished" marker is cleared after 15 s of running; if we find it at startup - the previous launch crashed, the cache
+//! is erased, QML will compile again.
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -12,8 +12,8 @@ pub struct StartGuard {
     marker: PathBuf,
 }
 
-/// Вызывать до создания QApplication (ставит QML_DISK_CACHE_PATH). `guard` — следить за неудачными запусками
-/// (не в режиме снимков: там процесс выходит раньше, чем метка снимется). None — путь кэша задал пользователь.
+/// Call before creating QApplication (sets QML_DISK_CACHE_PATH). `guard` - watch for failed launches
+/// (not in screenshot mode: there the process exits before the marker is cleared). None - the user set the cache path.
 pub fn prepare(guard: bool) -> Option<StartGuard> {
     if std::env::var_os("QML_DISK_CACHE_PATH").is_some() {
         return None;
@@ -31,7 +31,7 @@ pub fn prepare(guard: bool) -> Option<StartGuard> {
         tracing::warn!("QML cache {}: {error}", dir.display());
         return None;
     }
-    // через Qt: на Windows он читает переменные из копии C-рантайма, std::env::set_var её не меняет
+    // via Qt: on Windows it reads variables from a copy of the C runtime, std::env::set_var does not change it
     crate::qt::ffi::ffi::set_qt_env(
         &cxx_qt_lib::QString::from("QML_DISK_CACHE_PATH"),
         &cxx_qt_lib::QString::from(dir.to_string_lossy().as_ref()),
@@ -40,7 +40,7 @@ pub fn prepare(guard: bool) -> Option<StartGuard> {
 }
 
 impl StartGuard {
-    /// Поставить метку (когда ясно, что этот процесс и правда запускает окно) и снять её через SETTLE работы.
+    /// Set the marker (once it is clear that this process really is launching a window) and clear it after SETTLE of running.
     pub fn arm(self, rt: &tokio::runtime::Handle) {
         let _ = std::fs::write(&self.marker, b"");
         rt.spawn(async move {
@@ -50,7 +50,7 @@ impl StartGuard {
     }
 }
 
-/// Кэш прошлых версий и старый плоский кэш (файлы прямо в qmlcache, до 0.3.2) — удалить.
+/// The cache of past versions and the old flat cache (files directly in qmlcache, before 0.3.2) - delete.
 fn remove_other_versions(root: &Path, version: &str) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;

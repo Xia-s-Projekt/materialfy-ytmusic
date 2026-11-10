@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Заголовок секции страницы с необязательной кнопкой справа («Все», «Свернуть»).
+// Page section header with an optional button on the right ("All", "Collapse").
 RowLayout {
     id: root
 

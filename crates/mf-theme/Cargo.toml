@@ -1,6 +1,6 @@
 [package]
 name = "mf-theme"
-description = "Цветовые схемы Material You (MD3, spec 2025) из seed-цвета или картинки"
+description = "Material You color schemes (MD3, spec 2025) from a seed color or an image"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

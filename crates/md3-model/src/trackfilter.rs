@@ -1,15 +1,15 @@
-//! Поиск внутри списка треков (как trackfilter.py в yamusic-md3) — чистые функции для QML-типа TrackFilter.
-//! Запрос делится на слова; каждое должно встретиться в title, version, artists или album
-//! (без учёта регистра — str.casefold, «ё» = «е»).
+//! Search inside a list of tracks (like trackfilter.py in yamusic-md3) — pure functions for the QML TrackFilter type.
+//! The query is split into words; each must be found in title, version, artists or album
+//! (case-insensitive — str.casefold, 'ё' = 'е').
 use serde_json::{Map, Value};
 
-/// casefold + ё→е. Для полного соответствия casefold: to_lowercase и замена 'ß' → "ss".
+/// casefold + 'ё'→'е'. For full casefold parity: to_lowercase and replacing 'ß' → "ss".
 pub fn normalize(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars().flat_map(char::to_lowercase) {
         match c {
             'ß' => out.push_str("ss"),
-            // casefold не различает конечную сигму
+            // casefold does not distinguish the final sigma
             'ς' => out.push('σ'),
             'ё' => out.push('е'),
             c => out.push(c),
@@ -18,7 +18,7 @@ pub fn normalize(text: &str) -> String {
     out
 }
 
-/// str(item.get(k) or ""): пустые/ложные значения — "", числа и bool — как в Python.
+/// str(item.get(k) or ""): empty/false values — "", numbers and bool as in Python.
 fn field_text(value: Option<&Value>) -> String {
     match value {
         None | Some(Value::Null) | Some(Value::Bool(false)) => String::new(),
@@ -32,13 +32,13 @@ fn field_text(value: Option<&Value>) -> String {
     }
 }
 
-/// Строка поиска по треку: normalize(" ".join(title, version, artists, album)).
+/// The search string for a track: normalize(" ".join(title, version, artists, album)).
 pub fn haystack(row: &Map<String, Value>) -> String {
     let parts: Vec<String> = ["title", "version", "artists", "album"].iter().map(|k| field_text(row.get(*k))).collect();
     normalize(&parts.join(" "))
 }
 
-/// Слова запроса (normalize + split по пробелам); пусто — фильтр неактивен.
+/// Query words (normalize + split on whitespace); empty — the filter is inactive.
 pub fn query_words(query: &str) -> Vec<String> {
     normalize(query).split_whitespace().map(str::to_owned).collect()
 }
@@ -47,19 +47,19 @@ pub fn matches(haystack: &str, words: &[String]) -> bool {
     words.iter().all(|w| haystack.contains(w.as_str()))
 }
 
-/// Как применить новый результат фильтра к модели (_refresh(reset=False) в yamusic-md3):
-/// обычно источник меняется одним куском — догрузка, новый лайк в начале, снятый лайк.
+/// How to apply a new filter result to the model (_refresh(reset=False) in yamusic-md3):
+/// usually the source changes in one piece — a page load, a new like at the top, a removed like.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RefreshPlan {
-    /// ничего не изменилось
+    /// nothing changed
     Keep,
-    /// вставить found[at..at + count]
+    /// insert found[at..at + count]
     Insert { at: usize, count: usize },
     Remove { at: usize, count: usize },
     Reset,
 }
 
-/// `same` — тождество строк (в модели — `Arc::ptr_eq`).
+/// `same` — identity of rows (in the model — `Arc::ptr_eq`).
 pub fn refresh_plan<T>(old: &[T], found: &[T], same: impl Fn(&T, &T) -> bool) -> RefreshPlan {
     let common = old.len().min(found.len());
     let mut head = 0;
@@ -92,16 +92,16 @@ mod tests {
 
     #[test]
     fn normalize_like_casefold() {
-        assert_eq!(normalize("ЁЖИК Straße"), "ежик strasse");
+        assert_eq!(normalize("HEDGEHOG Straße"), "hedgehog strasse");
         assert_eq!(normalize("ΣΟΦΟΣ"), "σοφοσ");
-        assert_eq!(normalize("Ёлка"), "елка");
+        assert_eq!(normalize("ё"), "е");
         assert_eq!(normalize(""), "");
     }
 
     #[test]
     fn haystack_fields() {
-        let r = row(json!({"title": "Звёзды", "version": "Remix", "artists": "A, B", "album": "Ё", "trackId": "1"}));
-        assert_eq!(haystack(&r), "звезды remix a, b е");
+        let r = row(json!({"title": "Stars", "version": "Remix", "artists": "A, B", "album": "E", "trackId": "1"}));
+        assert_eq!(haystack(&r), "stars remix a, b e");
         let r = row(json!({"title": "X", "version": null}));
         assert_eq!(haystack(&r), "x   ");
         let r = row(json!({"title": 0, "version": 12, "artists": true}));
@@ -111,11 +111,11 @@ mod tests {
     #[test]
     fn query_and_match() {
         assert!(query_words("   ").is_empty());
-        let words = query_words("  ЗВЁЗДЫ  remix ");
-        assert_eq!(words, ["звезды", "remix"]);
-        assert!(matches("звезды remix a, b е", &words));
-        assert!(!matches("звезды a", &words));
-        assert!(matches("что угодно", &[]));
+        let words = query_words("  STARS  remix ");
+        assert_eq!(words, ["stars", "remix"]);
+        assert!(matches("stars remix a, b e", &words));
+        assert!(!matches("stars a", &words));
+        assert!(matches("anything", &[]));
     }
 
     #[test]

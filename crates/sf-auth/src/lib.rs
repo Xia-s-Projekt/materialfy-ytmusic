@@ -1,5 +1,5 @@
-//! Вход в Spotify без UI: PKCE-гранты (oauth), хранилище секретов (credentials), прокси (proxy).
-//! Нижний крейт sf-*: от него зависят sf-api, sf-player, sf-services.
+//! Signing in to Spotify without a UI: PKCE grants (oauth), secret storage (credentials), proxy (proxy).
+//! The bottom sf-* crate: sf-api, sf-player and sf-services depend on it.
 
 pub mod credentials;
 pub mod oauth;
@@ -12,7 +12,7 @@ pub use oauth::{
 };
 pub use proxy::{ManualProxy, ProxyConfig, ProxyMode};
 
-/// Открыть URL в браузере по умолчанию (не блокирует).
+/// Open a URL in the default browser (does not block).
 pub fn open_browser(url: &str) -> Result<(), String> {
     open::that_detached(url).map_err(|e| e.to_string())
 }

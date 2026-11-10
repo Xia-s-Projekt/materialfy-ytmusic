@@ -3,19 +3,19 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// «Добавить треки» в свой плейлист: справа 328 px (поверхность как у правой панели), в узком окне — шторка
-// снизу на 72 % высоты над затемнением. Источники: поиск по Spotify, «Недавние» (Library.recent),
-// «Любимые» (Library.liked). Трек добавляется в конец (Library.addTracks); дубликат помечен «уже есть»,
-// добавить его можно ещё раз. added(track) — странице: мигнуть строкой и предложить «Отменить».
+// "Add tracks" to your own playlist: 328 px on the right (same surface as the right panel), in a narrow window — a sheet
+// from the bottom at 72 % height over a scrim. Sources: Spotify search, "Recent" (Library.recent),
+// "Liked" (Library.liked). A track is added at the end (Library.addTracks); a duplicate is marked "already added",
+// and adding it again is still possible. added(track) — to the page: flash the row and offer "Undo".
 Item {
     id: root
 
     required property string playlistId
     property string playlistTitle
-    property var playlistModel: null        // треки плейлиста — для пометки «уже есть»
+    property var playlistModel: null        // playlist tracks — for the "already added" mark
     property bool opened: false
     property bool compact: false
-    property real bottomInset: 104          // над плавающим мини-плеером
+    property real bottomInset: 104          // above the floating mini player
     readonly property real panelWidth: 328
 
     signal closeRequested()
@@ -23,8 +23,8 @@ Item {
 
     property string source: "recent"        // recent | liked
     property string query
-    property var _addedNow: ({})            // uri → true: добавлено из панели в этот раз
-    property var _present: ({})             // uri → true: уже в плейлисте
+    property var _addedNow: ({})            // uri → true: added from the panel this time
+    property var _present: ({})             // uri → true: already in the playlist
 
     readonly property bool searching: query.trim() !== ""
     readonly property var listModel: searching ? Catalog.searchTracks
@@ -71,7 +71,7 @@ Item {
 
     visible: opened || sheet.opacity > 0
 
-    // Затемнение под шторкой (только в узком окне)
+    // Scrim under the sheet (narrow window only)
     Rectangle {
         anchors.fill: parent
         visible: root.compact && opacity > 0

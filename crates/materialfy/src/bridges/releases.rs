@@ -1,5 +1,5 @@
-// Releases — зеркало ReleasesService: «Радар новинок» (radar: ключи PlaylistItem, {} — не найден),
-// свежие релизы исполнителей (releases: ключи AlbumItem + releaseDate, dateLabel, group).
+// Releases — a mirror of ReleasesService: "New releases radar" (radar: PlaylistItem keys, {} — not found),
+// fresh artist releases (releases: AlbumItem keys + releaseDate, dateLabel, group).
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -24,7 +24,7 @@ pub mod qobject {
 
     unsafe extern "RustQt" {
         #[qobject]
-        // Свой сигнал у списков: смена loading не пересобирает сетку и строки
+        // Lists get their own signal: a loading change does not rebuild the grid and rows
         #[qproperty(QMap_QString_QVariant, radar, READ, NOTIFY = radar_changed)]
         #[qproperty(bool, radar_checked, cxx_name = "radarChecked", READ, NOTIFY = radar_changed)]
         #[qproperty(QList_QVariant, releases, READ, NOTIFY = releases_changed)]
@@ -42,7 +42,7 @@ pub mod qobject {
         #[cxx_name = "stateChanged"]
         fn state_changed(self: Pin<&mut Releases>);
 
-        /// Обновить (force — без 6-часового ограничения; без force — только если данные устарели).
+        /// Refresh (force — bypassing the 6-hour limit; without force — only if the data is stale).
         #[qinvokable]
         fn refresh(self: &Releases, force: bool);
     }
@@ -100,7 +100,7 @@ impl cxx_qt::Initialize for qobject::Releases {
     fn initialize(mut self: Pin<&mut Self>) {
         let mut watch = ctx().services.releases.watch();
         let snapshot = watch.borrow_and_update().clone();
-        // первый снимок публикуется целиком (prev == default отсекло бы пустой)
+        // the first snapshot is published in full (prev == default would cut off an empty one)
         let mut this = self.as_mut().rust_mut();
         this.radar = snapshot.radar.as_ref().map(to_qmap).unwrap_or_default();
         this.radar_checked = snapshot.radar_checked;

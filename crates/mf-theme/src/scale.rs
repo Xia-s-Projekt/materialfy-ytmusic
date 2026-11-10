@@ -1,16 +1,16 @@
-//! Уменьшение картинки как QImage::scaled(…, IgnoreAspectRatio, SmoothTransformation) + Format_RGB888.
-//! Qt: ARGB32 → ARGB32_Premultiplied (qPremultiply), qSmoothScaleImage (qimagescale.cpp, усреднение по
-//! площади в фиксированной точке 14 бит), затем RGB888 через qUnpremultiply. Здесь — та же арифметика
-//! для уменьшения по обеим осям; увеличение (картинка меньше 112) — честный box-фильтр.
+//! Shrinking an image like QImage::scaled(…, IgnoreAspectRatio, SmoothTransformation) + Format_RGB888.
+//! Qt: ARGB32 → ARGB32_Premultiplied (qPremultiply), qSmoothScaleImage (qimagescale.cpp, area averaging in
+//! 14-bit fixed point), then RGB888 via qUnpremultiply. Here is the same arithmetic
+//! for shrinking along both axes; enlarging (an image smaller than 112) — an honest box filter.
 use image::RgbaImage;
 
-/// qPremultiply для одного канала.
+/// qPremultiply for a single channel.
 fn premultiply(c: u32, a: u32) -> u32 {
     let t = c * a;
     (t + (t >> 8) + 0x80) >> 8
 }
 
-/// qUnpremultiply для одного канала (qt_inv_premul_factor = 0x00ff00ff / a).
+/// qUnpremultiply for a single channel (qt_inv_premul_factor = 0x00ff00ff / a).
 fn unpremultiply(c: u32, a: u32) -> u8 {
     match a {
         0 => 0,
@@ -19,7 +19,7 @@ fn unpremultiply(c: u32, a: u32) -> u8 {
     }
 }
 
-/// qimageCalcXPoints / ypoints при уменьшении: индекс первого исходного пикселя.
+/// qimageCalcXPoints / ypoints when shrinking: the index of the first source pixel.
 fn points(src: u32, dst: u32) -> Vec<usize> {
     let inc = (i64::from(src) << 16) / i64::from(dst);
     (0..i64::from(dst))
@@ -27,7 +27,7 @@ fn points(src: u32, dst: u32) -> Vec<usize> {
         .collect()
 }
 
-/// qimageCalcApoints при уменьшении: (доля первого пикселя, доля остальных), сумма — 1 << 14.
+/// qimageCalcApoints when shrinking: (the first pixel's share, the rest's share), the sum is 1 << 14.
 fn apoints(src: u32, dst: u32) -> Vec<(u32, u32)> {
     let (s, d) = (i64::from(src), i64::from(dst));
     let inc = (s << 16) / d;
@@ -41,7 +41,7 @@ fn apoints(src: u32, dst: u32) -> Vec<(u32, u32)> {
         .collect()
 }
 
-/// qt_qimageScaleAARGBA_helper: свёртка вдоль строки начиная с `start`.
+/// qt_qimageScaleAARGBA_helper: convolution along the row starting at `start`.
 fn helper(pix: &[[u32; 4]], start: usize, xyap: u32, cxy: u32) -> [u64; 4] {
     let at = |i: usize| pix[i.min(pix.len() - 1)];
     let mut acc = [0u64; 4];
@@ -63,7 +63,7 @@ fn helper(pix: &[[u32; 4]], start: usize, xyap: u32, cxy: u32) -> [u64; 4] {
     acc
 }
 
-/// Пиксели RGB построчно, `width × height`.
+/// RGB pixels row by row, `width × height`.
 pub fn smooth_scale_rgb(image: &RgbaImage, width: u32, height: u32) -> Vec<[u8; 3]> {
     let (sw, sh) = image.dimensions();
     if sw == 0 || sh == 0 || width == 0 || height == 0 {
@@ -72,7 +72,7 @@ pub fn smooth_scale_rgb(image: &RgbaImage, width: u32, height: u32) -> Vec<[u8; 
     if width > sw || height > sh {
         return box_scale_rgb(image, width, height);
     }
-    // ARGB32_Premultiplied, порядок каналов r, g, b, a
+    // ARGB32_Premultiplied, channel order r, g, b, a
     let pix: Vec<[u32; 4]> = image
         .pixels()
         .map(|p| {
@@ -120,7 +120,7 @@ pub fn smooth_scale_rgb(image: &RgbaImage, width: u32, height: u32) -> Vec<[u8; 
     out
 }
 
-/// Увеличение (редкий случай — крошечные обложки): усреднение по площади в предумноженной альфе.
+/// Enlarging (a rare case — tiny covers): area averaging in premultiplied alpha.
 fn box_scale_rgb(image: &RgbaImage, width: u32, height: u32) -> Vec<[u8; 3]> {
     let (sw, sh) = image.dimensions();
     let spans = |src: u32, dst: u32| -> Vec<(usize, Vec<f64>)> {
@@ -194,8 +194,8 @@ mod tests {
         assert!(up.iter().all(|p| *p == [1, 2, 3]));
     }
 
-    /// Пиксели Qt для seed.png (tests/seed_112.rgb): сейчас отличаются 17 из 12544, каждый на 1
-    /// в одном канале (округление qUnpremultiply в Qt зависит от SIMD-пути).
+    /// Qt's pixels for seed.png (tests/seed_112.rgb): 17 of 12544 currently differ, each by 1
+    /// in one channel (Qt's qUnpremultiply rounding depends on the SIMD path).
     #[test]
     fn close_to_qt() {
         let root = env!("CARGO_MANIFEST_DIR");
@@ -209,7 +209,7 @@ mod tests {
             .zip(qt.as_chunks::<3>().0)
             .filter(|(a, b)| a != b)
             .count();
-        println!("пикселей с отличием: {differ}");
+        println!("pixels differing: {differ}");
         assert!(differ < 112 * 112 / 100, "{differ}");
     }
 }

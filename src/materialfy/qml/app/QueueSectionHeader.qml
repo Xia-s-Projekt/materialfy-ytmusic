@@ -2,15 +2,15 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Заголовок секции очереди: подпись, бейдж-счётчик, волнистая линия до края, необязательная кнопка.
+// Queue section header: label, count badge, wavy line to the edge, optional button.
 Item {
     id: root
 
     property string title
-    property int count: -1                 // < 0 — без бейджа
+    property int count: -1                 // < 0 — no badge
     property string actionIcon
-    property string actionText             // подсказка кнопки
-    property string note                   // строка под заголовком («Новые треки встают в конец»)
+    property string actionText             // button tooltip
+    property string note                   // line under the title ("New tracks go to the end")
 
     signal action()
 

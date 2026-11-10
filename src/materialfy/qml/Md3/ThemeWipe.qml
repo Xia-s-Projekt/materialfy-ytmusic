@@ -1,13 +1,13 @@
 import QtQuick
 
-// Смена темы через снимок: снимок source со старыми цветами кладётся поверх, тема переключается
-// мгновенно под ним, и снимок уходит. Дешевле плавной анимации цветов: все привязки пересчитываются
-// один раз, а не каждый кадр, дальше — один текстурный слой. Как уходит снимок — mode:
-//   wipe     — шторка в сторону direction;
-//   ripple   — новое расходится фигурой от центра originItem (без него — от центра окна);
-//   dissolve — снимок равномерно тает;
-//   liquid   — снимок тает по плавному шуму и «плывёт», волна идёт в сторону direction.
-// Подключение: Theme.wipe = themeWipe (source — всё содержимое окна, сам ThemeWipe — вне его, поверх).
+// Theme change via a snapshot: a snapshot of source with the old colors is placed on top, the theme switches
+// instantly beneath it, and the snapshot leaves. Cheaper than animating colors smoothly: all bindings are recalculated
+// once instead of every frame, then it is a single textured layer. How the snapshot leaves — mode:
+//   wipe     — a curtain toward direction;
+//   ripple   — the new one spreads as a shape from the center of originItem (without it — the window center);
+//   dissolve — the snapshot fades evenly;
+//   liquid   — the snapshot fades along smooth noise and "drifts", the wave moving toward direction.
+// Wiring: Theme.wipe = themeWipe (source is the whole window content, the ThemeWipe itself sits outside it, on top).
 Item {
     id: root
 
@@ -18,19 +18,19 @@ Item {
     readonly property bool running: _phase !== 0
 
     readonly property int _mode: Math.max(0, ["wipe", "ripple", "dissolve", "liquid"].indexOf(mode))
-    property int _phase: 0          // 0 — нет, 1 — снимаем кадр, 2 — снимок уходит
+    property int _phase: 0          // 0 — none, 1 — grabbing the frame, 2 — the snapshot is leaving
     property int _frames: 0
     property real _dir: 1
     property point _origin: Qt.point(0.5, 0.5)
     property real _seed: 0
     property var _apply: null
 
-    // Окно рисуется: шторке окна, которого не видно, снимок не снять
+    // The window is drawn: a curtain over a window that is not visible has no snapshot to take
     readonly property bool onScreen: visible && Window.window !== null && Window.window.visible
         && Window.visibility !== Window.Minimized
 
-    // Запуск: ready(wipe) — снимок со старыми цветами готов и лежит поверх; тема переключается под ним,
-    // и reveal() уводит снимок. Несколько окон так меняют тему разом (Theme.floatingWipes).
+    // Start: ready(wipe) — the snapshot with the old colors is ready and lies on top; the theme switches beneath it,
+    // and reveal() takes the snapshot away. Several windows change theme at once this way (Theme.floatingWipes).
     function start(direction, ready) {
         anim.stop()
         effect.progress = 0
@@ -57,7 +57,7 @@ Item {
         visible: false
     }
 
-    // Видна и во время снимка (с shown: 0): текстура источника обновляется, только когда её кто-то рисует.
+    // Visible even while the snapshot is taken (with shown: 0): the source texture updates only when someone draws it.
     function reveal() {
         if (_phase === 2 && !anim.running)
             anim.restart()
@@ -85,14 +85,14 @@ Item {
             from: 0
             to: 1
             duration: root.duration
-            // шторка и волна — быстро стартуют и долго тормозят; таяние — ровно
+            // the curtain and the wave start fast and take long to slow; the dissolve is even
             easing.type: root._mode >= 2 ? Easing.InOutSine : Easing.BezierSpline
             easing.bezierCurve: [0.2, 0.0, 0.0, 1.0, 1.0, 1.0]
             onFinished: root._phase = 0
         }
     }
 
-    // Снимок рендерится в синхронизации ближайшего кадра; на втором тике он точно готов.
+    // The snapshot is rendered in sync with the nearest frame; on the second tick it is definitely ready.
     FrameAnimation {
         running: root._phase === 1
         onTriggered: {

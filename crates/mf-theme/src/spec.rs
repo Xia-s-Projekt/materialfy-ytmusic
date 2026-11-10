@@ -1,16 +1,16 @@
-//! Порт разрешения ролей из materialyoucolor 3.0.4 (dynamiccolor/color_spec_2021.py, color_spec_2025.py,
-//! ColorCalculationDelegateImpl2021/2025 в color_spec.py), platform "phone".
+//! Port of role resolution from materialyoucolor 3.0.4 (dynamiccolor/color_spec_2021.py, color_spec_2025.py,
+//! ColorCalculationDelegateImpl2021/2025 in color_spec.py), platform "phone".
 //!
-//! Почему не DynamicScheme::get_rgb из material-colors: Python расходится с ним в нескольких местах,
-//! а значения должны совпасть до бита. Известные отличия:
-//! - роли *Dim в схемах spec 2021 (content/fidelity/monochrome): Python для полярности "darker" берёт
-//!   «ближнюю» роль в тёмной теме, material-colors — в светлой;
-//! - expressive, тёмная: primaryContainer = t_max_c(30, 93), а не t_min_c;
-//! - expressive primary: проверки yellow/cyan одинаковы для тёмной и светлой;
-//! - TonalPalette.tone(99) для жёлтых оттенков — среднее T98 и T100 (только расчёт 2021);
-//! - банковское округление round() в Dislike.
+//! Why not DynamicScheme::get_rgb from material-colors: Python diverges from it in a few places,
+//! and the values must match bit for bit. Known differences:
+//! - the *Dim roles in spec 2021 schemes (content/fidelity/monochrome): for the "darker" polarity Python takes
+//!   the "nearer" role in the dark theme, material-colors in the light one;
+//! - expressive, dark: primaryContainer = t_max_c(30, 93), not t_min_c;
+//! - expressive primary: the yellow/cyan checks are the same for dark and light;
+//! - TonalPalette.tone(99) for yellow hues — the mean of T98 and T100 (2021 calculation only);
+//! - banker's rounding of round() in Dislike.
 //!
-//! Палитры, HCT и солвер — из material-colors (совпадают с Python).
+//! Palettes, HCT and the solver come from material-colors (they match Python).
 use std::cell::Cell;
 
 use material_colors::color::{Rgb, linearized, y_from_lstar};
@@ -18,8 +18,8 @@ use material_colors::dynamic_color::{DynamicScheme, Role, SpecVersion, Variant};
 use material_colors::hct::Hct;
 use material_colors::palette::TonalPalette;
 
-// L* как в utils/color_utils.py: material-colors считает через mul_add/cbrt и на краях даёт -2e-16
-// вместо 0 (у чёрного seed это меняет onPrimaryContainer), поэтому тоны, которые идут в контраст, — свои.
+// L* as in utils/color_utils.py: material-colors computes it via mul_add/cbrt and at the edges gives -2e-16
+// instead of 0 (for a black seed this changes onPrimaryContainer), so the tones that feed into contrast are our own.
 
 fn lab_f(t: f64) -> f64 {
     let e = 216.0 / 24389.0;
@@ -35,7 +35,7 @@ fn lstar_from_y(y: f64) -> f64 {
     lab_f(y / 100.0) * 116.0 - 16.0
 }
 
-/// Hct.tone цвета (lstar_from_argb).
+/// The color's Hct.tone (lstar_from_argb).
 fn lstar(rgb: Rgb) -> f64 {
     let y = linearized(rgb.red) * 0.2126
         + linearized(rgb.green) * 0.7152
@@ -90,7 +90,7 @@ impl Curve {
     }
 }
 
-/// get_curve из color_spec_2025.py.
+/// get_curve from color_spec_2025.py.
 fn std_curve(default: f64) -> Curve {
     match default {
         1.5 => curve(1.5, 1.5, 3.0, 5.5),
@@ -157,7 +157,7 @@ enum Pal {
     Error,
 }
 
-/// clamp_double(min, max, x) из Python: без паники при min > max.
+/// clamp_double(min, max, x) from Python: no panic when min > max.
 fn clamp(min: f64, max: f64, x: f64) -> f64 {
     if x < min {
         min
@@ -254,7 +254,7 @@ fn foreground_tone(bg_tone: f64, ratio: f64) -> f64 {
     }
 }
 
-// --- палитры и тоны ---------------------------------------------------------------------------------
+// --- palettes and tones ---------------------------------------------------------------------------------
 
 fn find_best_tone_for_chroma(
     hue: f64,
@@ -278,7 +278,7 @@ fn find_best_tone_for_chroma(
     answer
 }
 
-/// find_desired_chroma_by_tone из color_spec_2021.py.
+/// find_desired_chroma_by_tone from color_spec_2021.py.
 fn find_desired_chroma_by_tone(hue: f64, chroma: f64, tone: f64, by_decreasing_tone: bool) -> f64 {
     let mut answer = tone;
     let mut closest = Hct::from(hue, chroma, tone);
@@ -302,7 +302,7 @@ fn find_desired_chroma_by_tone(hue: f64, chroma: f64, tone: f64, by_decreasing_t
     answer
 }
 
-/// TonalPalette.tone(t) из Python: T99 у жёлтых — среднее T98 и T100.
+/// TonalPalette.tone(t) from Python: T99 for yellows is the mean of T98 and T100.
 fn palette_tone(palette: &TonalPalette, tone: f64) -> Rgb {
     if tone == 99.0 && Hct::is_yellow(palette.hue()) {
         let a = palette_tone(palette, 98.0);
@@ -343,7 +343,7 @@ fn is_fixed_dim(role: Role) -> bool {
     )
 }
 
-/// is_background расширенного цвета — всегда от определения 2021 (у *Dim — от 2025); они совпадают.
+/// is_background of the extended color — always from the 2021 definition (for *Dim — from 2025); they agree.
 fn is_background(role: Role) -> bool {
     use Role::*;
     matches!(
@@ -381,7 +381,7 @@ fn is_background(role: Role) -> bool {
     )
 }
 
-/// Разрешение ролей одной схемы. Тоны кэшируются (чистые функции схемы и роли).
+/// Role resolution for a single scheme. Tones are cached (pure functions of the scheme and the role).
 pub(crate) struct Resolver<'a> {
     scheme: &'a DynamicScheme,
     dark: bool,
@@ -411,7 +411,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// ARGB роли (get_argb в Python).
+    /// The role's ARGB (get_argb in Python).
     pub(crate) fn argb(&self, role: Role) -> u32 {
         let tone = self.tone(role);
         let palette = self.palette(role);
@@ -427,7 +427,7 @@ impl<'a> Resolver<'a> {
         rgb.as_argb_u32()
     }
 
-    // --- общие хелперы ---
+    // --- shared helpers ---
 
     fn variant(&self) -> Variant {
         self.scheme.variant
@@ -479,8 +479,8 @@ impl<'a> Resolver<'a> {
         Hct::is_yellow(self.scheme.neutral_palette.hue())
     }
 
-    /// Определение какой версии действует для роли: в схеме 2025 — 2025, если роль переопределена;
-    /// в схеме 2021 — 2021, кроме ролей *Dim, которых в 2021 нет.
+    /// Which version's definition applies to a role: in a 2025 scheme — 2025, if the role is overridden;
+    /// in a 2021 scheme — 2021, except for the *Dim roles, which 2021 does not have.
     fn def_spec(&self, role: Role) -> Spec {
         use Role::*;
         let has_2025 = !matches!(
@@ -501,7 +501,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// Роль, чьё определение 2025 копирует данная (clone() в Python): свойства те же, имя своё.
+    /// A role whose 2025 definition this one copies (clone() in Python): same properties, its own name.
     fn alias_2025(role: Role) -> Role {
         match role {
             Role::SurfaceVariant => Role::SurfaceContainerHighest,
@@ -648,7 +648,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// Исходный тон (лямбда tone определения), до контраста и пар.
+    /// The source tone (the definition's tone lambda), before contrast and pairs.
     fn raw_tone(&self, role: Role) -> f64 {
         match self.def_spec(role) {
             Spec::V2021 => self.raw_tone_2021(role),
@@ -656,7 +656,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// Итоговый тон (get_tone): расчёт по версии схемы.
+    /// The final tone (get_tone): computed by the scheme's version.
     fn tone(&self, role: Role) -> f64 {
         let slot = &self.tones[role as usize];
         if slot.get().is_nan() {
@@ -669,7 +669,7 @@ impl<'a> Resolver<'a> {
         slot.get()
     }
 
-    /// Тон по умолчанию у from_palette без tone: тон фона или 50.
+    /// The default tone for from_palette without tone: the background's tone, or 50.
     fn tone_from_background(&self, role: Role) -> f64 {
         self.background(role).map_or(50.0, |bg| self.tone(bg))
     }
@@ -966,7 +966,7 @@ impl<'a> Resolver<'a> {
                     30.0
                 }
             }
-            // *Dim в 2021 не определены — сюда не попадают (def_spec)
+            // *Dim is not defined in 2021 — they do not end up here (def_spec)
             PrimaryDim | SecondaryDim | TertiaryDim | ErrorDim => self.raw_tone_2025(role),
         }
     }
@@ -1059,7 +1059,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// Тон роли в светлой схеме со стандартным контрастом (для *Fixed).
+    /// The role's tone in the light scheme with standard contrast (for *Fixed).
     fn light_standard_tone(&self, role: Role) -> f64 {
         if !self.dark && self.contrast == 0.0 {
             return self.tone(role);
@@ -1072,7 +1072,7 @@ impl<'a> Resolver<'a> {
         let d = self.dark;
         let v = self.variant();
         let yellow = self.neutral_yellow();
-        // поверхности: тёмная / жёлтая / vibrant / прочие
+        // surfaces: dark / yellow / vibrant / the rest
         let surface = |dark: f64, yellow_t: f64, vibrant: f64, other: f64| {
             if d {
                 dark
@@ -1327,7 +1327,7 @@ impl<'a> Resolver<'a> {
                     self.t_max_c(Pal::Error, 0.0, 90.0)
                 }
             }
-            // ключевые цвета, shadow, scrim в 2025 не переопределены — сюда не попадают (def_spec)
+            // the key colors, shadow, scrim are not overridden in 2025 — they do not end up here (def_spec)
             PrimaryPaletteKeyColor
             | SecondaryPaletteKeyColor
             | TertiaryPaletteKeyColor
@@ -1336,12 +1336,12 @@ impl<'a> Resolver<'a> {
             | ErrorPaletteKeyColor
             | Shadow
             | Scrim => self.raw_tone_2021(role),
-            // on*, outline* — от фона
+            // on*, outline* — from the background
             _ => self.tone_from_background(role),
         }
     }
 
-    // --- расчёт тона ---
+    // --- tone calculation ---
 
     /// ColorCalculationDelegateImpl2021.get_tone.
     fn calc_tone_2021(&self, role: Role) -> f64 {
@@ -1484,7 +1484,7 @@ impl<'a> Resolver<'a> {
         self.dual_background(role, answer, desired)
     }
 
-    /// Общий хвост обоих расчётов: второй фон (onXFixed в 2021).
+    /// The shared tail of both calculations: the second background (onXFixed in 2021).
     fn dual_background(&self, role: Role, answer: f64, desired: f64) -> f64 {
         let (Some(bg1), Some(bg2)) = (self.background(role), self.second_background(role)) else {
             return answer;

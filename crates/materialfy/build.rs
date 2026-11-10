@@ -1,5 +1,5 @@
-// Сборка: все файлы src/**/*.rs с #[cxx_qt::bridge] собираются автоматически —
-// новый мост не требует правки этого файла. Иконка exe — materialfy.ico из корня репозитория (логотип «Волна-M»).
+// Build: every src/**/*.rs file with #[cxx_qt::bridge] is compiled automatically —
+// a new bridge needs no change to this file. The exe icon is materialfy.ico from the repository root (the "Wave-M" logo).
 use std::path::{Path, PathBuf};
 
 use cxx_qt_build::CxxQtBuilder;
@@ -33,16 +33,16 @@ fn main() {
         println!("cargo::rustc-env=MATERIALFY_COMMIT={short}");
     }
 
-    // winframe.cpp, taskbar.cpp и floating.cpp собираются везде (вне Windows — заглушка), чтобы привязки
-    // в qt/ffi.rs и winframe.rs не зависели от ОС
+    // winframe.cpp, taskbar.cpp, and floating.cpp are compiled everywhere (outside Windows — a stub) so that the bindings
+    // in qt/ffi.rs and winframe.rs do not depend on the OS
     let mut cpp = vec!["cpp/mf_shell.cpp", "cpp/register.cpp", "cpp/taskbar.cpp", "cpp/winframe.cpp", "cpp/floating.cpp"];
-    // островок над строкой меню и вырез экрана — AppKit
+    // the island above the menu bar and the screen notch — AppKit
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         cpp.push("cpp/floating_mac.mm");
     }
 
-    // Без QmlModule: он требует, чтобы все мосты лежали в одном каталоге (QTBUG-93443);
-    // типы Materialfy.Core регистрирует cpp/register.cpp.
+    // Without QmlModule: it requires all bridges to live in one directory (QTBUG-93443);
+    // the Materialfy.Core types are registered by cpp/register.cpp.
     let builder = CxxQtBuilder::new()
         .qt_module("Gui")
         .qt_module("Qml")
@@ -64,7 +64,7 @@ fn main() {
 
     match std::env::var("CARGO_CFG_TARGET_OS").as_deref() {
         Ok("windows") => {
-            // IDI_ICON1 — иконка exe (ярлыки, панель задач); Qt берёт её же для окон без своей иконки
+            // IDI_ICON1 — the exe icon (shortcuts, the taskbar); Qt uses it for windows without their own icon too
             let ico = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../materialfy.ico")
                 .canonicalize()
@@ -72,7 +72,7 @@ fn main() {
             println!("cargo::rerun-if-changed={}", ico.display());
             let rc = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("materialfy.rc");
             let ico = ico.to_string_lossy().trim_start_matches(r"\\?\").replace('\\', "\\\\");
-            // VERSIONINFO: имя «Materialfy» в диспетчере задач и свойствах файла
+            // VERSIONINFO: the name "Materialfy" in Task Manager and the file properties
             let version = env!("CARGO_PKG_VERSION");
             let num = |i: usize| version.split(['.', '-']).nth(i).and_then(|p| p.parse::<u16>().ok()).unwrap_or(0);
             let (major, minor, patch) = (num(0), num(1), num(2));
@@ -105,10 +105,10 @@ END
             println!("cargo::rustc-link-lib=user32");
             println!("cargo::rustc-link-lib=dwmapi");
             println!("cargo::rustc-link-lib=shell32");
-            // taskbar.cpp: ITaskbarList3 (COM), тема панели задач из реестра
+            // taskbar.cpp: ITaskbarList3 (COM), the taskbar theme from the registry
             println!("cargo::rustc-link-lib=ole32");
             println!("cargo::rustc-link-lib=advapi32");
-            // floating.cpp: границы кнопок панели задач — UI Automation (COM, BSTR)
+            // floating.cpp: the taskbar buttons' bounds — UI Automation (COM, BSTR)
             println!("cargo::rustc-link-lib=oleaut32");
         }
         // dlsym (display.rs: QWindowSystemInterface::handlePrimaryScreenChanged)

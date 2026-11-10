@@ -1,8 +1,8 @@
-//! История прослушиваний (исполнитель «services-core»): локальная (librespot-воспроизведение Spotify не
-//! записывает; засчёт после 30 с или половины трека, ≤ 500 записей, mf_platform::dirs::history_file()) +
-//! недавнее Spotify, слияние (data::journal::merged). Перенос spotifast/src/history.rs.
-//! Недавнее Spotify — через сессию librespot (spclient recently-played + подписи GraphQL, data::home_feed);
-//! /me/player/recently-played Web API — только без сессии или при её сбое, с таймаутом.
+//! Play history (provider "services-core"): local (librespot playback of Spotify does not
+//! record; counted after 30 s or half the track, ≤ 500 records, mf_platform::dirs::history_file()) +
+//! Spotify's recent, merging (data::journal::merged). Port of spotifast/src/history.rs.
+//! Spotify's recent — through the librespot session (spclient recently-played + GraphQL labels, data::home_feed);
+//! /me/player/recently-played of Web API — only without a session or when it fails, with a timeout.
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
@@ -19,20 +19,20 @@ use crate::data::{home_feed, known, route};
 use crate::extra::feed;
 use crate::lock;
 
-/// Сколько записей Spotify держать в памяти.
+/// How many Spotify records to keep in memory.
 const REMOTE_KEPT: usize = 200;
-/// Недавних контекстов у сессии (столько же, сколько у веб-плеера).
+/// Recent contexts from the session (as many as the web player has).
 const SESSION_RECENT: u32 = 50;
-/// Чтение недавнего через сессию и запасной Web API.
+/// Reading the recent through the session and the fallback Web API.
 const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
-/// Одно прослушивание.
+/// One play.
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PlayRecord {
     pub track: TrackItem,
     pub context: PlayContext,
-    /// ISO-время
+    /// ISO time
     pub played_at: String,
 }
 
@@ -45,13 +45,13 @@ pub enum HistoryEvent {
 struct State {
     journal: Journal,
     remote: Vec<PlayRecord>,
-    /// поздний ответ Web API после выхода отбрасывается
+    /// a late Web API answer after logout is discarded
     generation: u64,
-    /// чтение в полёте: повторные refresh (вход, главная) его не дублируют
+    /// a read in flight: repeated refreshes (login, home) do not duplicate it
     loading: bool,
-    /// последнее чтение удалось через сессию (иначе, когда она встанет, прочитать ещё раз)
+    /// the last read succeeded through the session (otherwise, when it comes up, read once more)
     via_session: bool,
-    /// сессия встала во время чтения без неё — по его окончании прочитать ещё раз
+    /// the session came up during a read without it — read once more when it finishes
     session_pending: bool,
 }
 
@@ -65,7 +65,7 @@ pub struct HistoryService {
     me: Weak<HistoryService>,
 }
 
-/// Тип контекста Web API (Context.type) → PlayContext.kind.
+/// Web API context type (Context.type) → PlayContext.kind.
 fn context_kind(kind: &str) -> &str {
     match kind {
         "collection" => contexts::LIKED,
@@ -78,12 +78,12 @@ fn context_kind(kind: &str) -> &str {
 }
 
 impl HistoryService {
-    /// Слушает PlayerEvent::TrackStarted/TrackEnded (только local = true пишется локально).
+    /// Listens to PlayerEvent::TrackStarted/TrackEnded (only local = true is written locally).
     pub fn new(rt: Handle, auth: Arc<AuthService>, player: PlayerHandle) -> Arc<Self> {
         Self::with_file(rt, auth, player, mf_platform::dirs::history_file())
     }
 
-    /// То же с другим файлом истории (тесты).
+    /// The same with a different history file (tests).
     pub fn with_file(rt: Handle, auth: Arc<AuthService>, player: PlayerHandle, path: PathBuf) -> Arc<Self> {
         let journal = Journal::load(&path);
         let service = Arc::new_cyclic(|me| Self {
@@ -148,7 +148,7 @@ impl HistoryService {
         });
     }
 
-    /// Трек доигран/пропущен на этом ПК: засчитать, если слушали достаточно (`played` — секунды).
+    /// A track played out/skipped on this PC: count it if it was listened to enough (`played` — seconds).
     pub fn note_played(&self, track: TrackItem, context: PlayContext, played: f64) {
         if track.uri.is_empty() && track.track_id.is_empty() {
             return;
@@ -174,7 +174,7 @@ impl HistoryService {
         });
     }
 
-    /// Последние прослушивания (локальные + Web API), новые первыми.
+    /// The last plays (local + Web API), newest first.
     pub fn recent(&self, limit: usize) -> Vec<PlayRecord> {
         let state = lock(&self.state);
         let mut plays = journal::merged(state.journal.plays(), &state.remote);
@@ -182,7 +182,7 @@ impl HistoryService {
         plays
     }
 
-    /// Недавние уникальные контексты (для сидов радио и «Недавно прослушанное»).
+    /// Recent unique contexts (for radio seeds and "Recently played").
     pub fn recent_contexts(&self, limit: usize) -> Vec<PlayContext> {
         let mut seen = HashSet::new();
         self.recent(usize::MAX)
@@ -195,7 +195,7 @@ impl HistoryService {
             .collect()
     }
 
-    /// Время последнего прослушивания по URI контекста (сортировка «Недавние» и LibraryEntry.played_at).
+    /// Time of the last play by context URI (sorting "Recent" and LibraryEntry.played_at).
     pub fn context_times(&self) -> HashMap<String, String> {
         let mut times = HashMap::new();
         for play in self.recent(usize::MAX) {
@@ -206,7 +206,7 @@ impl HistoryService {
         times
     }
 
-    /// Сессия встала: чтение без неё повторить через неё; идущее — по его окончании.
+    /// The session came up: repeat the read that went without it through it; one in progress — when it finishes.
     fn session_ready(&self) {
         let again = {
             let mut state = lock(&self.state);
@@ -224,7 +224,7 @@ impl HistoryService {
         }
     }
 
-    /// Недавнее Spotify (до 50): через сессию, без неё — Web API фоном. Идущее чтение не дублируется.
+    /// Spotify's recent (up to 50): through the session, without it — Web API in the background. A read in progress is not duplicated.
     pub fn refresh(&self) {
         let generation = {
             let mut state = lock(&self.state);
@@ -256,10 +256,10 @@ impl HistoryService {
         });
     }
 
-    /// Одно чтение недавнего; Some(через сессию ли) — прочитано.
+    /// One read of the recent; Some(whether through the session) — read.
     async fn read_recent(&self, generation: u64) -> Option<bool> {
         let api = self.auth.api();
-        // сессия ответила (в том числе «истории нет») — Web API не спрашиваем
+        // the session answered (including "no history") — Web API is not asked
         let session = route::wait_account_session(&api, &self.player, route::STARTUP_SESSION_WAIT).await;
         let from_session = match session {
             Some(session) => {
@@ -308,7 +308,7 @@ impl HistoryService {
                         played_at: play.played_at.clone().unwrap_or_default(),
                     })
                     .collect();
-                // у недавнего сессии треки неполные — в реестр только ответ Web API
+                // the session's recent has incomplete tracks — only the Web API answer goes into the registry
                 known::remember(records.iter().map(|record| &record.track));
                 records
             }
@@ -342,13 +342,13 @@ impl HistoryService {
         self.events.subscribe()
     }
 
-    /// Сохранить на диск (выход).
+    /// Save to disk (exit).
     pub fn flush(&self) {
         lock(&self.state).journal.save(&self.path);
     }
 }
 
-/// Недавние контексты аккаунта сессии с подписями и обложками (lookup GraphQL; без подписей — только URI).
+/// The session account's recent contexts with labels and covers (GraphQL lookup; without labels — URI only).
 async fn session_recent(http: &sf_api::Http, session: &sf_player::Session) -> anyhow::Result<Vec<PlayRecord>> {
     let recent = home_feed::recently_played(session, SESSION_RECENT).await?;
     if recent.is_empty() {

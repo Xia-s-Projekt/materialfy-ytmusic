@@ -1,7 +1,7 @@
 import QtQuick
 import Md3
 
-// Неинтерактивный чип состояния: ok — primaryContainer + check, warn — errorContainer + block, neutral.
+// Non-interactive state chip: ok — primaryContainer + check, warn — errorContainer + block, neutral.
 Rectangle {
     id: root
 

@@ -1,4 +1,4 @@
-//! Общий HTTP-клиент с заменой на лету (смена прокси без перезапуска). Перенос spotifast/src/http.rs.
+//! Shared HTTP client with hot swapping (proxy change without a restart). Ported from spotifast/src/http.rs.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -14,7 +14,7 @@ use sf_auth::ProxyConfig;
 #[derive(Clone)]
 pub struct Http {
     inner: Arc<RwLock<Result<reqwest::Client, String>>>,
-    /// «Обложки мимо прокси»: пока флаг поднят, client() отдаёт прямой клиент (см. `bypassing`)
+    /// "Covers bypass proxy": while the flag is up, client() returns the direct client (see `bypassing`)
     bypass: Option<(Arc<AtomicBool>, reqwest::Client)>,
 }
 
@@ -26,8 +26,8 @@ impl Http {
         }
     }
 
-    /// Тот же клиент, но пока `direct` поднят — прямой, без прокси (обложки: CDN картинок часто доступен
-    /// напрямую, а прокси медленный или платный по трафику). Смена прокси по-прежнему видна, пока флаг опущен.
+    /// The same client, but while `direct` is up — direct, without the proxy (covers: the image CDN is often reachable
+    /// directly, while the proxy is slow or paid by traffic). A proxy change is still visible while the flag is down.
     pub fn bypassing(&self, direct: Arc<AtomicBool>) -> Self {
         let client = build_client(&ProxyConfig::Off).unwrap_or_default();
         Self { inner: self.inner.clone(), bypass: Some((direct, client)) }

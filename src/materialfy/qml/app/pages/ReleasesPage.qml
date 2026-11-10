@@ -4,8 +4,8 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Новинки: личный «Радар новинок» Spotify (шапка + треки, играет как плейлист) и сетка свежих альбомов
-// и синглов исполнителей, на которых подписан пользователь (плитка открывает страницу альбома).
+// New releases: Spotify personal "Release radar" (header + tracks, plays as a playlist) and a grid of fresh albums
+// and singles by artists the user follows (a tile opens the album page).
 Page {
     id: page
 
@@ -19,8 +19,8 @@ Page {
     // Keep the model stable while visible and release it when the retained page is hidden/destroyed.
     property var radarTracks: null
     property string _radarOwnerId: ""
-    // Скрытие снимает владение (отмена чтения), модель остаётся: возврат на Releases
-    // не пересоздаёт строки. Обнуление — при смене id и уничтожении.
+    // Hiding drops ownership (cancels the read), the model remains: returning to Releases
+    // does not recreate the rows. Clearing — on an id change and destruction.
     function _syncRadarModel() {
         if (radarId === _radarOwnerId)
             return
@@ -79,7 +79,7 @@ Page {
         readonly property int value: Math.max(1, Math.floor((page.width - 2 * page.sideMargin + 20) / (168 + 20)))
     }
 
-    // ---- «Радар новинок» ----
+    // ---- "Release radar" ----
     SectionHeader {
         text: I18n.t("Release Radar")
         actionText: page.radarId !== "" ? I18n.t("Open playlist") : ""
@@ -94,7 +94,7 @@ Page {
         visible: page.radarId === "" && !Releases.radarChecked && Auth.state === "signedIn"
     }
 
-    // не нашёлся: Spotify не отдал категорию «Сделано для вас», а в библиотеке его нет
+    // not found: Spotify did not return the "Made for you" category, and it is not in the library
     Item {
         Layout.fillWidth: true
         Layout.preferredHeight: missingRow.implicitHeight + 32
@@ -134,7 +134,7 @@ Page {
         }
     }
 
-    // шапка «Радара»: обложка, название, описание, Слушать / Перемешать
+    // the "Radar" header: cover, title, description, Listen / Shuffle
     RowLayout {
         Layout.fillWidth: true
         visible: page.radarId !== ""
@@ -216,7 +216,7 @@ Page {
                 liked: Library.likesRevision >= 0 && Library.isLiked(model.trackId)
                 current: model.trackId === Player.trackId
                 track: page.radarTracks.get(index)
-                // с этого трека — плейлистом: дальше играет весь «Радар»
+                // from this track — as a playlist: the whole "Radar" plays next
                 onActivated: Player.playFrom(page.radarTracks, index)
                 onLikeClicked: Library.toggleLike(page.radarTracks.get(index))
             }
@@ -237,7 +237,7 @@ Page {
         }
     }
 
-    // ---- Новые релизы ----
+    // ---- New releases ----
     SectionHeader {
         text: I18n.t("New releases from your artists")
         actionText: Releases.loading ? "" : I18n.t("Refresh")
@@ -279,7 +279,7 @@ Page {
         onAction: Releases.refresh(true)
     }
 
-    // фильтр ничего не оставил — сказать об этом, а не показывать пустое место
+    // the filter left nothing — say so, rather than showing an empty space
     Label {
         Layout.fillWidth: true
         visible: page.releases.length > 0 && page.shown.length === 0

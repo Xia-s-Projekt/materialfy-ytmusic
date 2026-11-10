@@ -12,7 +12,7 @@ TrackListPage {
             : Library.liked.loading && Library.liked.count === 0 ? I18n.t("Loading…")
             : I18n.n(Library.liked.count, "{0} track", "{0} tracks")
     model: Auth.state === "signedIn" ? Library.liked : null
-    // не загрузилось (сессия не ответила, Web API под 429) — ошибка и «Повторить», а не «пусто»
+    // failed to load (the session did not answer, the Web API is rate-limited at 429) — an error and "Retry", not "empty"
     readonly property bool failed: Library.errorText !== ""
     emptyIcon: failed ? "cloud_off" : "favorite"
     emptyTitle: failed ? I18n.t("Couldn’t load Liked Songs") : I18n.t("Nothing here yet")
@@ -21,7 +21,7 @@ TrackListPage {
     emptyActionIcon: "refresh"
     onEmptyAction: Library.refresh()
 
-    // Не вошли — приглашение войти
+    // Not signed in — an invitation to sign in
     EmptyState {
         anchors.centerIn: parent
         width: Math.min(parent.width - 64, 420)

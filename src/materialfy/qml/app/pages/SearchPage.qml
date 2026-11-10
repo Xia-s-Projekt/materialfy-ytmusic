@@ -4,8 +4,8 @@ import Md3
 import Materialfy.Core
 import ".."
 
-// Поиск: поле с задержкой ввода, фильтры-чипы. «Всё» — лучший результат + по несколько из каждой
-// категории, остальные фильтры — полный список одной категории.
+// Search: a field with input debounce, filter chips. "All" — the best result plus a few from each
+// category; the other filters — a full list of one category.
 Page {
     id: page
     title: I18n.t("Search")
@@ -21,7 +21,7 @@ Page {
     readonly property string type: filters[filter].type
     readonly property bool all: type === "all"
     readonly property bool signedIn: Auth.state === "signedIn"
-    // в старом бинарнике новых моделей поиска может ещё не быть
+    // an old binary may not have the new search models yet
     readonly property var showsModel: Catalog.searchShows ?? null
     readonly property var episodesModel: Catalog.searchEpisodes ?? null
     readonly property int perRow: Math.max(1, Math.floor((width - 2 * sideMargin + 20) / (168 + 20)))
@@ -32,7 +32,7 @@ Page {
         return I18n.nCompact(n, "{0} follower", "{0} followers")
     }
     function focusSearch() { field.inputItem.forceActiveFocus() }
-    // запрос уже запущен снаружи (Catalog.openUri("spotify:search:…")): только показать его
+    // the query was already started externally (Catalog.openUri("spotify:search:...")): just show it
     function showQuery(q) {
         if (q === "" || q === field.text)
             return
@@ -61,7 +61,7 @@ Page {
         implicitHeight: 56
         placeholder: I18n.t("Track, album, artist, playlist or podcast")
         onTextChanged: debounce.restart()
-        // Enter — искать сразу, не дожидаясь паузы ввода; Esc — очистить поле
+        // Enter — search at once, without waiting for the input debounce; Esc — clear the field
         onAccepted: {
             debounce.stop()
             if (field.text.trim() !== "")
@@ -92,7 +92,7 @@ Page {
         }
     }
 
-    // ---- Состояния ----
+    // ---- States ----
     EmptyState {
         Layout.alignment: Qt.AlignHCenter
         Layout.topMargin: 48
@@ -124,14 +124,14 @@ Page {
         visible: page.signedIn && Catalog.searchState === "loading"
     }
 
-    // ---- Результаты ----
+    // ---- Results ----
     ColumnLayout {
         id: results
         Layout.fillWidth: true
         spacing: 24
         visible: page.signedIn && Catalog.searchState === "ok"
 
-        // Лучший результат
+        // Best result
         Item {
             id: bestCard
             readonly property var best: Catalog.best
@@ -194,7 +194,7 @@ Page {
             }
         }
 
-        // Треки
+        // Tracks
         SectionHeader {
             visible: Catalog.searchTracks.count > 0 && (page.all || page.type === "tracks")
             text: I18n.t("Tracks")
@@ -233,7 +233,7 @@ Page {
             }
         }
 
-        // Исполнители
+        // Artists
         SectionHeader {
             visible: Catalog.searchArtists.count > 0 && (page.all || page.type === "artists")
             text: I18n.t("Artists")
@@ -260,7 +260,7 @@ Page {
             }
         }
 
-        // Альбомы
+        // Albums
         SectionHeader {
             visible: Catalog.searchAlbums.count > 0 && (page.all || page.type === "albums")
             text: I18n.t("Albums")
@@ -286,7 +286,7 @@ Page {
             }
         }
 
-        // Плейлисты
+        // Playlists
         SectionHeader {
             visible: Catalog.searchPlaylists.count > 0 && (page.all || page.type === "playlists")
             text: I18n.t("Playlists")
@@ -315,7 +315,7 @@ Page {
             }
         }
 
-        // Подкасты
+        // Podcasts
         SectionHeader {
             visible: page.showsModel !== null && page.showsModel.count > 0 && (page.all || page.type === "shows")
             text: I18n.t("Podcasts")
@@ -342,7 +342,7 @@ Page {
             }
         }
 
-        // Выпуски
+        // Episodes
         SectionHeader {
             visible: page.episodesModel !== null && page.episodesModel.count > 0 && (page.all || page.type === "episodes")
             text: I18n.t("Episodes")

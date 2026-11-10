@@ -40,10 +40,8 @@ cat > "$APPDIR/usr/share/applications/materialfy.desktop" <<'DESKTOP'
 Type=Application
 Name=Materialfy
 GenericName=Music Player
-GenericName[ru]=Музыкальный плеер
 GenericName[pt_BR]=Reprodutor de música
 Comment=Spotify client in Material 3 Expressive style
-Comment[ru]=Клиент Spotify в стиле Material 3 Expressive
 Comment[pt_BR]=Cliente Spotify em Material 3 Expressive
 Exec=materialfy %U
 Icon=materialfy

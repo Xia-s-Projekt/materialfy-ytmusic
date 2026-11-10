@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Группа настроек: заголовок секции + карточка.
+// A settings group: section heading plus a card.
 ColumnLayout {
     id: root
 

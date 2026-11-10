@@ -1,4 +1,4 @@
-//! Вывод звука librespot через fastframe-audio (перенос spotifast/src/sink.rs; тексты ошибок — по-русски).
+//! librespot audio output through fastframe-audio (port of spotifast/src/sink.rs).
 //! Audio output for local playback.
 //!
 //! librespot's rodio sink panics if no output device is available. Release
@@ -265,7 +265,7 @@ impl AudioControl {
 
     /// Releases the gate if the requested replacement stopped instead.
     pub fn stopped(&self) {
-        // очередь не чистим: Sink::stop её уже доиграл, а без сброса следующая сессия пишет в ту же
+        // the queue is not cleared: Sink::stop has already played it out, and without a reset the next session writes to the same
         self.waiting_for_track.store(false, Ordering::SeqCst);
     }
 
@@ -309,7 +309,7 @@ impl AudioControl {
 
     /// How far the sound being heard is behind the packet librespot reports, in milliseconds.
     pub(crate) fn backlog_ms(&self) -> u32 {
-        // диджей играет на 1.0×, без растяжения
+        // the dj plays at 1.0×, without stretching
         let speed = if self.report.narrating.load(Ordering::Relaxed) { 1.0 } else { super::fx::speed() };
         self.backlog_ms_at(f64::from(speed))
     }
@@ -1273,8 +1273,8 @@ fn open_output(
     Ok(output)
 }
 
-/// Имена устройств вывода для Settings.audioDevices (устройство по умолчанию — пустая строка, в список не входит).
-/// Блокирующий вызов (cpal): звать из spawn_blocking. Ошибка перечисления — пустой список.
+/// Output device names for Settings.audioDevices (the default device is an empty string and is not in the list).
+/// Blocking call (cpal): call from spawn_blocking. An enumeration error is an empty list.
 pub fn output_devices() -> Vec<String> {
     match fastframe_audio::output_device_names() {
         Ok(mut names) => {

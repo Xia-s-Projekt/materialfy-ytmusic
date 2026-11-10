@@ -1,9 +1,9 @@
 pragma Singleton
 import QtQuick
 
-// Глобальный лимит одновременных загрузок обложек. Десятки MorphImage одной страницы запрашивают
-// декод разом — QQuickPixmapDecoder душит GUI-поток и открытие страницы встаёт под 100 % ядра.
-// Очередь пускает по двенадцати: декод растянут на пару кадров дольше, но окно остаётся живым.
+// Global limit on concurrent cover loads. Dozens of MorphImages on one page request
+// decoding at once — QQuickPixmapDecoder chokes the GUI thread and opening the page pins 100% of a core.
+// The queue lets twelve through: decoding stretches a couple of frames longer, but the window stays responsive.
 QtObject {
     id: root
 
@@ -20,7 +20,7 @@ QtObject {
         return false
     }
 
-    // item обязан вызвать release, когда загрузка кончилась (Ready/Error/Null) или источник сменился на ""
+    // the item must call release when loading finishes (Ready/Error/Null) or the source changes to ""
     function release(item) {
         root.running = Math.max(0, root.running - 1)
         while (root._queue.length > 0 && root.running < root.limit) {
@@ -32,8 +32,8 @@ QtObject {
         }
     }
 
-    // Ждавший в очереди уходит (источник сброшен/элемент уничтожен): из очереди без возврата слота —
-    // слот ему не выдавался, и release() ошибочно опустил бы счётчик (лишний параллельный декод).
+    // Something waiting in the queue goes away (source reset / element destroyed): it leaves the queue without
+    // returning a slot — no slot was issued to it, and release() would wrongly decrement the counter (an extra parallel decode).
     function cancel(item) {
         const i = root._queue.indexOf(item)
         if (i >= 0)

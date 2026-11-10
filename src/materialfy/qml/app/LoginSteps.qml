@@ -2,18 +2,18 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Две карточки входа: 1 — вход в YouTube Music (медиатека, поиск), 2 — воспроизведение здесь.
-// Один вход через заголовки открывает и то, и другое.
-// Активная — обводка primary 2 px, у выполненного номер морфится в «солнце» с галочкой;
-// шаг 2 до выполнения шага 1 — surfaceContainerLow. В узкой колонке карточки идут друг под другом.
+// Two login cards: 1 — sign in to YouTube Music (library, search), 2 — playback here.
+// One header-based sign-in unlocks both.
+// The active one has a primary 2 px outline; a completed one's number morphs into a "sun" with a check mark;
+// step 2 before step 1 is done is surfaceContainerLow. In a narrow column the cards stack.
 GridLayout {
     id: root
 
-    property int active: 1                 // 0 (ни один) | 1 | 2
+    property int active: 1                 // 0 (none) | 1 | 2
     property bool done1: false
     property bool done2: false
-    property bool compact: false           // сжатые тексты (рейл, узкое окно)
-    property string waitingText: ""        // подпись вместо метки шага 1 («Ждём подтверждения…»)
+    property bool compact: false           // condensed texts (rail, narrow window)
+    property string waitingText: ""        // label instead of the step 1 marker ("Waiting for confirmation…")
 
     readonly property bool _instant: Theme.reducedMotion === true
 
@@ -38,8 +38,8 @@ GridLayout {
         Layout.preferredWidth: 0
         implicitHeight: col.implicitHeight + 36
         radius: Theme.shape.extraLarge
-        // «позже» — утоплен: в тёмной теме Low темнее фона страницы, в светлой Low светлее (выглядел бы
-        // приподнятым), поэтому там — цвет фона и тонкая обводка
+        // "later" is sunken: in a dark theme Low is darker than the page background, in a light theme Low is lighter (it would look
+        // raised), so there it is the background color with a thin outline
         color: !later ? Theme.surfaceContainerHigh : Theme.dark ? Theme.surfaceContainerLow : Theme.surfaceContainer
         border.width: isActive ? 2 : later && !Theme.dark ? 1 : 0
         border.color: isActive ? Theme.primary : Theme.outlineVariant
@@ -130,7 +130,7 @@ GridLayout {
     StepCard {
         number: 1
         title: I18n.t("Library")
-        // в сжатом виде — одна строка вместо описания и метки
+        // in the condensed view — one line instead of the description and marker
         text: root.compact ? (root.done1 ? I18n.t("Done") : root.waitingText !== "" ? root.waitingText : I18n.t("Playlists, search"))
                            : I18n.t("Playlists, Liked Songs, search and history.")
         tag: root.compact ? "" : root.done1 ? I18n.t("Done") : root.waitingText !== "" ? root.waitingText : I18n.t("One sign-in · now")

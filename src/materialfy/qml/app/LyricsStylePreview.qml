@@ -1,7 +1,7 @@
 import QtQuick
 
-// Превью в настройках — это настоящий LyricsView со своим текстом и часами:
-// тот же шейдер заливки, масштаб активной строки, размытие и паузы, а не отдельная имитация.
+// The preview in settings is a real LyricsView with its own text and clock:
+// the same fill shader, active line scaling, blur and pauses, not a separate imitation.
 Item {
     id: root
 

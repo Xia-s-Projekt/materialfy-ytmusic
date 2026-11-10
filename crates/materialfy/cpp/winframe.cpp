@@ -1,8 +1,8 @@
-// Нативная рамка окна без хрома на Windows (WM_NCCALCSIZE + WM_NCHITTEST). Владелец — агент «shell».
-// Стиль окна получает WS_THICKFRAME и компанию обратно (Qt снял их из-за FramelessWindowHint):
-// плавный нативный ресайз, Aero Snap, Win+стрелки, анимации, тень DWM. Хром Windows не рисует —
-// вся площадь клиентская. Перетаскивание — в QML (TopBar → startSystemMove, ему нужен WS_SYSMENU),
-// HTCAPTION не возвращаем: в той же полосе живут сайдбар и кнопки.
+// A native window frame without chrome on Windows (WM_NCCALCSIZE + WM_NCHITTEST). Owner — the "shell" agent.
+// The window style gets WS_THICKFRAME and company back (Qt removed them because of FramelessWindowHint):
+// smooth native resize, Aero Snap, Win+arrows, animations, a DWM shadow. Windows does not draw chrome —
+// the whole area is client area. Dragging is in QML (TopBar → startSystemMove, it needs WS_SYSMENU),
+// we do not return HTCAPTION: the sidebar and buttons live in the same strip.
 #include "winframe.h"
 
 #include <QtGui/QWindow>
@@ -15,8 +15,8 @@ window_minimize(QObject* object)
   auto* window = qobject_cast<QWindow*>(object);
   if (!window)
     return;
-  // Qt на Windows ставит WPF_RESTORETOMAXIMIZED по флагу Maximized нового состояния; FullScreen остаётся —
-  // окно возвращается из панели задач на весь экран
+  // Qt on Windows sets WPF_RESTORETOMAXIMIZED from the new state's Maximized flag; FullScreen stays —
+  // the window comes back from the taskbar fullscreen
   window->setWindowStates(window->windowStates() | Qt::WindowMinimized);
 }
 
@@ -49,7 +49,7 @@ namespace mf {
 
 namespace {
 
-// WS_THICKFRAME и компания: нативный ресайз, Aero Snap, Win+стрелки, анимации
+// WS_THICKFRAME and company: native resize, Aero Snap, Win+arrows, animations
 void
 apply_frame_style(HWND hwnd)
 {
@@ -61,9 +61,9 @@ apply_frame_style(HWND hwnd)
   SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-// Windows 11: скруглённые углы MD3. DWM рисует их сам (вместе с тонкой обводкой) и делает прямыми у развёрнутого
-// окна. На весь экран (F11) окно по стилю обычное (WS_THICKFRAME возвращаем мы) — углы и обводку DWM оставил бы,
-// поэтому там они выключаются явно. Windows 10 атрибутов не знает — вызовы вернут ошибку, углы прямые.
+// Windows 11: MD3 rounded corners. DWM draws them itself (together with a thin outline) and makes them square on a maximized
+// window. In fullscreen (F11) the window is ordinary by style (we restore WS_THICKFRAME ourselves) — DWM would have left the corners and outline,
+// so there they are turned off explicitly. Windows 10 does not know these attributes — the calls return an error, the corners are square.
 void
 apply_corners(HWND hwnd, bool fullscreen)
 {
@@ -112,8 +112,8 @@ public:
         *result = hit_test(GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam));
         return true;
       case WM_STYLECHANGED:
-        // Qt пересчитывает стиль из флагов окна (например, «поверх всех окон») и снимает WS_THICKFRAME —
-        // возвращаем после того, как Qt закончит
+        // Qt recomputes the style from the window flags (for example, "always on top") and removes WS_THICKFRAME —
+        // we restore it after Qt finishes
         if (msg->wParam == static_cast<WPARAM>(GWL_STYLE)
             && !(reinterpret_cast<const STYLESTRUCT*>(msg->lParam)->styleNew & WS_THICKFRAME)) {
           QMetaObject::invokeMethod(
@@ -126,8 +126,8 @@ public:
   }
 
 private:
-  // Развёрнутое окно со WS_THICKFRAME Windows кладёт за края монитора на толщину рамки — обрезаем
-  // клиентскую область по рабочей области монитора (если Qt уже ограничил окно ею, ничего не меняется).
+  // A maximized window with WS_THICKFRAME is placed by Windows past the monitor edges by the frame thickness — we clip
+  // the client area to the monitor's work area (if Qt already constrained the window to it, nothing changes).
   void fit_maximized(RECT& rect) const
   {
     MONITORINFO info{};
@@ -135,7 +135,7 @@ private:
     if (!GetMonitorInfoW(MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST), &info))
       return;
     RECT work = info.rcWork;
-    // Панель задач с автоскрытием не выезжает над окном во весь монитор — оставляем ей 1 px
+    // An auto-hiding taskbar does not slide over a full-monitor window — we leave it 1 px
     if (EqualRect(&info.rcWork, &info.rcMonitor) && taskbar_autohide())
       work.bottom -= 1;
     rect.left = std::max(rect.left, work.left);
@@ -193,18 +193,18 @@ winframe_install(QObject* object, int grip)
   if (!hwnd)
     return false;
 
-  // Фильтр — раньше SetWindowPos: он должен поймать WM_NCCALCSIZE от SWP_FRAMECHANGED.
-  // Живёт до конца процесса (окно главное).
+  // The filter comes before SetWindowPos: it has to catch the WM_NCCALCSIZE from SWP_FRAMECHANGED.
+  // It lives until the process ends (the window is the main one).
   QGuiApplication::instance()->installNativeEventFilter(new FrameFilter(window, hwnd, grip));
 
   apply_frame_style(hwnd);
 
-  // Тень DWM (Windows 10 и 11)
+  // The DWM shadow (Windows 10 and 11)
   const MARGINS margins{ 0, 0, 0, 1 };
   DwmExtendFrameIntoClientArea(hwnd, &margins);
 
   apply_corners(hwnd, window->windowStates().testFlag(Qt::WindowFullScreen));
-  // Свёрнутое окно углы не меняет: из панели задач оно вернётся в прежнем состоянии
+  // A minimized window does not change corners: from the taskbar it comes back in its previous state
   QObject::connect(window, &QWindow::windowStateChanged, window, [hwnd](Qt::WindowState state) {
     if (state != Qt::WindowMinimized)
       apply_corners(hwnd, state == Qt::WindowFullScreen);

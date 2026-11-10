@@ -1,10 +1,10 @@
-//! QuantizeCelebi из materialyoucolor (C++-расширение celebi.pyd = material-color-utilities/cpp:
-//! quantize/celebi.cc, wu.cc, wsmeans.cc, lab.cc). Свой порт, а не material_colors::quantize: там другие
-//! матрица XYZ→sRGB и генератор случайных чисел, и кластеры выходят на ±1 в канале другими.
+//! QuantizeCelebi from materialyoucolor (the C++ extension celebi.pyd = material-color-utilities/cpp:
+//! quantize/celebi.cc, wu.cc, wsmeans.cc, lab.cc). Our own port rather than material_colors::quantize: there the
+//! XYZ→sRGB matrix and the random number generator differ, and the clusters come out ±1 per channel differently.
 //!
-//! WSMeans раскладывает точки по кластерам через srand(42688)/rand() из CRT, поэтому сам Python даёт разные
-//! результаты на разных ОС (на картинках-тестах — у половины); здесь повторяется rand() нужной C-библиотеки,
-//! по умолчанию — платформы сборки (CrtRand::native). Сверено с Python на Windows (MSVC).
+//! WSMeans lays points out across clusters via srand(42688)/rand() from the CRT, which is why Python itself gives different
+//! results on different OSes (on the test images, for half of them); here the rand() of the required C library is reproduced,
+//! by default that of the build platform (CrtRand::native). Verified against Python on Windows (MSVC).
 use std::collections::{BTreeMap, HashMap};
 
 // --- Lab (quantize/lab.cc) -------------------------------------------------------------------------
@@ -105,21 +105,21 @@ fn argb_from_rgb(r: u32, g: u32, b: u32) -> u32 {
     0xFF00_0000 | (r & 0xff) << 16 | (g & 0xff) << 8 | (b & 0xff)
 }
 
-// --- rand() из CRT -----------------------------------------------------------------------------------
+// --- rand() from the CRT -----------------------------------------------------------------------------------
 
-/// Чей srand/rand повторять: C-библиотека, с которой собран Python-модуль на данной ОС.
+/// Whose srand/rand to reproduce: the C library the Python module on this OS was built with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CrtRand {
     /// MSVC (Windows): holdrand = holdrand * 214013 + 2531011; (holdrand >> 16) & 0x7fff.
     Msvc,
-    /// glibc (Linux): TYPE_3, r[i] = r[i-31] + r[i-3], первые 310 значений отбрасываются.
+    /// glibc (Linux): TYPE_3, r[i] = r[i-31] + r[i-3], the first 310 values are discarded.
     Glibc,
-    /// BSD libc (macOS): «minimal standard» Парка — Миллера.
+    /// BSD libc (macOS): Park–Miller "minimal standard".
     Bsd,
 }
 
 impl CrtRand {
-    /// Генератор платформы, под которую собрана программа.
+    /// The generator of the platform the program was built for.
     pub const fn native() -> Self {
         if cfg!(any(target_os = "linux", target_os = "android")) {
             Self::Glibc
@@ -181,7 +181,7 @@ impl Rng {
                 (v as u32) >> 1
             }
             Self::Bsd(next) => {
-                // srand(1) → 16807, 282475249, … (так ведёт себя rand() в macOS; не сверено с Python на macOS)
+                // srand(1) → 16807, 282475249, … (this is how rand() behaves in macOS; not verified against Python on macOS)
                 if *next == 0 {
                     *next = 123459876;
                 }
@@ -472,7 +472,7 @@ fn quantize_wu(pixels: &[u32], max_colors: usize) -> Vec<u32> {
         } else {
             cubes[next] = one;
             volume_variance[next] = 0.0;
-            // в C++ здесь i--, а затем ++i цикла — та же итерация повторяется
+            // in C++ there is an i-- here, then the loop's ++i — the same iteration repeats
             i -= 1;
         }
         next = 0;
@@ -621,7 +621,7 @@ fn quantize_wsmeans(
         }
     }
 
-    // одинаковые после округления кластеры сливаются; итог — std::map (по возрастанию ARGB)
+    // clusters that are identical after rounding merge; the result is a std::map (ascending ARGB)
     let mut swatches: Vec<(u32, u32)> = Vec::new();
     for i in 0..cluster_count {
         let count = pixel_count_sums[i];
@@ -637,7 +637,7 @@ fn quantize_wsmeans(
     swatches.into_iter().collect()
 }
 
-/// QuantizeCelebi(pixels, max_colors): ARGB → популяция, по возрастанию ARGB (как dict из std::map).
+/// QuantizeCelebi(pixels, max_colors): ARGB → population, in ascending ARGB order (like a dict from std::map).
 pub fn quantize_celebi(pixels: &[u32], max_colors: usize, crt: CrtRand) -> Vec<(u32, u32)> {
     let max_colors = max_colors.min(256);
     let opaque: Vec<u32> = pixels.iter().copied().filter(|p| p >> 24 == 0xff).collect();
@@ -671,7 +671,7 @@ mod tests {
         let result = quantize_celebi(&[red, red, green, green, green], 128, CrtRand::native());
         assert_eq!(result, vec![(green, 3), (red, 2)]);
         assert!(quantize_celebi(&[], 128, CrtRand::native()).is_empty());
-        // полупрозрачные отбрасываются
+        // semi-transparent ones are discarded
         assert!(quantize_celebi(&[0x80FF0000], 128, CrtRand::native()).is_empty());
     }
 

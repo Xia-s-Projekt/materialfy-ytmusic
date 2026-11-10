@@ -1,14 +1,14 @@
-//! Системные предпочтения интерфейса.
+//! System interface preferences.
 
-/// Система просит меньше анимаций. Читает мост Settings → Settings.systemReducedMotion → Theme.reducedMotion
-/// при Settings.animations == "system". Windows — SPI_GETCLIENTAREAANIMATION == FALSE; Linux — GNOME
-/// `enable-animations` == false; macOS — «Уменьшить движение». Не удалось узнать — false.
+/// The system asks for fewer animations. Reads the Settings bridge → Settings.systemReducedMotion → Theme.reducedMotion
+/// when Settings.animations == "system". Windows — SPI_GETCLIENTAREAANIMATION == FALSE; Linux — GNOME
+/// `enable-animations` == false; macOS — "Reduce motion". If it cannot be determined — false.
 pub fn reduced_motion() -> bool {
     imp::reduced_motion()
 }
 
-/// Тема панели задач (для значка трея): Some(true) — тёмная. Знает только Windows
-/// (HKCU\…\Themes\Personalize, SystemUsesLightTheme); на других ОС — None, QML берёт тему Qt.
+/// The taskbar theme (for the tray icon): Some(true) — dark. Only Windows knows it
+/// (HKCU\…\Themes\Personalize, SystemUsesLightTheme); on other OSes — None, QML takes Qt's theme.
 pub fn taskbar_dark() -> Option<bool> {
     imp::taskbar_dark()
 }
@@ -21,13 +21,13 @@ mod imp {
         let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
             .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
             .ok()?;
-        // нет значения — Windows 10 до 1903: панель тёмная
+        // no value — Windows 10 before 1903: the taskbar is dark
         Some(key.get_value::<u32, _>("SystemUsesLightTheme").unwrap_or(0) == 0)
     }
 
     pub fn reduced_motion() -> bool {
         let mut enabled: i32 = 1;
-        // SAFETY: pvParam указывает на BOOL, как требует SPI_GETCLIENTAREAANIMATION
+        // SAFETY: pvParam points to a BOOL, as SPI_GETCLIENTAREAANIMATION requires
         let ok = unsafe { SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, (&raw mut enabled).cast(), 0) };
         ok != 0 && enabled == 0
     }
@@ -68,7 +68,7 @@ mod imp {
     }
 }
 
-/// Вывод команды без пробелов по краям; None — нет команды или код ошибки.
+/// A command's output with edge whitespace stripped; None — no command or an error code.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn command_output(program: &str, args: &[&str]) -> Option<String> {
     let out = std::process::Command::new(program)
@@ -84,7 +84,7 @@ fn command_output(program: &str, args: &[&str]) -> Option<String> {
 mod tests {
     #[test]
     fn answers_without_panic() {
-        // значение зависит от машины — проверяем только, что вызов работает
+        // the value depends on the machine — we only check that the call works
         let _ = super::reduced_motion();
         let _ = super::taskbar_dark();
     }

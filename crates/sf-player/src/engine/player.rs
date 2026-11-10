@@ -1,4 +1,4 @@
-//! librespot: Session + Spirc + Player + softvol (перенос spotifast/src/player.rs).
+//! librespot: Session + Spirc + Player + softvol (port of spotifast/src/player.rs).
 //! Local Spotify Connect playback through librespot.
 //!
 //! The engine owns one librespot session, player, mixer, and Spirc (the
@@ -314,29 +314,29 @@ pub enum EngineEvent {
 
 pub type Notify = Arc<dyn Fn(EngineEvent) + Send + Sync>;
 
-/// Ошибка трека, которого нет у Spotify (в LocalState.error, дальше — Player.errorText).
-/// Ошибки в LocalState.error — непереведённый английский; переводит `state::core::engine_error_text`.
+/// Track error for a track Spotify does not have (in LocalState.error, then Player.errorText).
+/// Errors in LocalState.error are untranslated English; `state::core::engine_error_text` translates them.
 pub const UNAVAILABLE: &str = "Track unavailable";
 pub const AUDIO_KEY_REFUSED: &str = "Spotify didn't provide a playback key. Try again later";
-/// Локальное воспроизведение без Premium: librespot 0.8 на таком аккаунте завершает процесс (exit(1)).
-/// Английский ключ перевода; наружу уходит `mf_i18n::t(PREMIUM_REQUIRED)` (в обоих языках есть «Premium»).
+/// Local playback without Premium: librespot 0.8 on such an account terminates the process (exit(1)).
+/// English translation key; outward goes `mf_i18n::t(PREMIUM_REQUIRED)` (both languages have "Premium").
 pub const PREMIUM_REQUIRED: &str = "Spotify Premium is required to play on this computer";
-/// Время на точки доступа (повторы), резолвер и вход: как у spotifast.
+/// Time for access points (retries), the resolver and login: same as spotifast.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(75);
-/// Английский ключ перевода; наружу уходит `mf_i18n::t(CONNECT_TIMED_OUT)`.
+/// English translation key; outward goes `mf_i18n::t(CONNECT_TIMED_OUT)`.
 pub const CONNECT_TIMED_OUT: &str = "Couldn't reach Spotify: timed out";
 
-/// Тип аккаунта из Web API (`/me` → `product`), известный процессу. `Engine::connect` отказывает,
-/// если он известен и это не Premium. `None` — неизвестен (проверяет вызывающий).
+/// Account type from Web API (`/me` → `product`), known to the process. `Engine::connect` refuses
+/// if it is known and it is not Premium. `None` — unknown (the caller checks).
 static ACCOUNT_PRODUCT: Mutex<Option<String>> = Mutex::new(None);
 
-/// Запомнить тип аккаунта (зовёт вход после `/me`; `None` при выходе).
+/// Remember the account type (login calls this after `/me`; `None` on logout).
 pub fn note_account_product(product: Option<&str>) {
     *ACCOUNT_PRODUCT.lock().unwrap_or_else(|p| p.into_inner()) =
         product.map(|product| product.trim().to_ascii_lowercase());
 }
 
-/// Можно ли поднимать librespot для этого аккаунта: да, пока тип неизвестен или это Premium.
+/// Whether librespot can be started for this account: yes, while the type is unknown or it is Premium.
 pub fn playback_allowed() -> bool {
     ACCOUNT_PRODUCT
         .lock()
@@ -345,8 +345,8 @@ pub fn playback_allowed() -> bool {
         .is_none_or(|product| product == "premium")
 }
 
-/// Ошибка подключения в виде для интерфейса (уже переведена). Текст премиум-отказа в обоих языках содержит
-/// «Premium» — по нему `state::host` и sf-services узнают отказ.
+/// Connection error in UI form (already translated). The premium-refusal text in both languages contains
+/// "Premium" — by it `state::host` and sf-services recognize the refusal.
 pub fn friendly_connect_error(error: &anyhow::Error) -> String {
     let text = format!("{error:#}");
     let lower = text.to_lowercase();
@@ -391,13 +391,13 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Переиспользуемые креды librespot после Spirc::new (патч форка: Cache::with_memory_credentials).
+    /// Reusable librespot credentials after Spirc::new (fork patch: Cache::with_memory_credentials).
     pub fn credentials(&self) -> Option<Credentials> {
         self.session.cache().and_then(|cache| cache.credentials())
     }
     /// Connects to Spotify and announces this device on Spotify Connect.
-    /// Не дольше `CONNECT_TIMEOUT`; без Premium (если тип аккаунта известен) — сразу отказ.
-    /// Ошибка уже в виде для интерфейса (`friendly_connect_error`).
+    /// No longer than `CONNECT_TIMEOUT`; without Premium (if the account type is known) — an immediate refusal.
+    /// The error is already in UI form (`friendly_connect_error`).
     pub async fn connect(
         config: &EngineConfig,
         proxy: Option<reqwest::Url>,
@@ -521,7 +521,7 @@ impl Engine {
             Arc::clone(&mixer),
         )
         .await
-        // без «connect»/«dns»/«premium»: friendly_connect_error ищет их в тексте ошибки
+        // without "connect"/"dns"/"premium": friendly_connect_error looks for them in the error text
         .with_context(|| mf_i18n::t("Spotify session didn't start"))?;
 
         {
@@ -1929,8 +1929,8 @@ mod tests {
         assert_eq!(Heard::at(set_here).level(), set_here);
     }
 
-    /// librespot завершает процесс на не-Premium аккаунте, поэтому известный Free-аккаунт
-    /// отсекается до подключения; неизвестный тип пропускается (его проверяет вход).
+    /// librespot terminates the process on a non-Premium account, so a known Free account
+    /// is cut off before connecting; an unknown type is let through (login checks it).
     #[test]
     fn only_a_known_free_account_is_refused_before_connecting() {
         note_account_product(None);
@@ -1964,7 +1964,7 @@ mod tests {
         let quick = with_deadline(Duration::from_secs(5), async { 7 }).await;
         assert_eq!(quick.unwrap(), 7);
     }
-    /// Прокси из настроек доходит до librespot: его HTTP-клиент идёт к Spotify через CONNECT.
+    /// The proxy from settings reaches librespot: its HTTP client goes to Spotify through CONNECT.
     #[tokio::test]
     async fn librespot_http_client_sends_connect_through_an_http_proxy() {
         use std::io::{Read, Write};
@@ -2006,8 +2006,8 @@ mod tests {
         );
     }
 
-    /// Аудио с CDN часто по http://: через прокси и оно идёт туннелем CONNECT, а не «GET http://…» —
-    /// его многие прокси не пропускают, и треки не грузились, хотя страницы работали.
+    /// Audio from the CDN is often over http://: through a proxy it goes as a CONNECT tunnel, not "GET http://…" —
+    /// many proxies do not pass that, and tracks did not load although the pages worked.
     #[tokio::test]
     async fn plain_http_audio_is_tunnelled_through_the_proxy() {
         use std::io::{Read, Write};
@@ -2047,7 +2047,7 @@ mod tests {
         );
     }
 
-    /// HTTP-прокси с логином: движок не отказывается от него, а отдаёт логин в Proxy-Authorization.
+    /// HTTP proxy with a login: the engine does not refuse it, it passes the login in Proxy-Authorization.
     #[tokio::test]
     async fn librespot_authenticates_to_an_http_proxy_with_a_login() {
         use base64::Engine as _;

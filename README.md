@@ -37,7 +37,7 @@ docs below are kept for reference except where marked as fork-specific.
 
 ---
 
-<p align="center"><b>English</b> · <a href="README.ru.md">Русский</a> · <a href="README.pt-BR.md">Português</a></p>
+<p align="center"><b>English</b> · <a href="README.ru.md">Russian</a> · <a href="README.pt-BR.md">Português</a></p>
 
 <div align="center">
 

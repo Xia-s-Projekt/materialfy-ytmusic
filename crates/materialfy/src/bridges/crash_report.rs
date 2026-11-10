@@ -1,6 +1,6 @@
-//! CrashReport: прошлый запуск упал или зависал — в crash.log (main.rs, cpp/mf_shell.cpp) появились новые записи.
-//! Окно при старте предлагает сообщить: папка с журналом и новый issue на GitHub с заготовкой текста.
-//! «Просмотрено» — размер и время файла в crash.log.seen рядом с ним.
+//! CrashReport: the previous launch crashed or hung - new entries appeared in crash.log (main.rs, cpp/mf_shell.cpp).
+//! The window at startup offers to report it: a folder with the log and a new GitHub issue with a text template.
+//! "Viewed" - the size and time of the crash.log.seen file next to it.
 use std::path::PathBuf;
 use std::pin::Pin;
 
@@ -16,11 +16,11 @@ pub mod qobject {
 
     unsafe extern "RustQt" {
         #[qobject]
-        /// в crash.log есть записи, которых пользователь ещё не видел
+        /// crash.log has entries the user has not seen yet
         #[qproperty(bool, pending, READ, NOTIFY = pending_changed)]
-        /// file:/// URL папки с crash.log
+        /// file:/// URL of the folder with crash.log
         #[qproperty(QString, folder, READ, CONSTANT)]
-        /// новый issue на GitHub: версия и ОС уже вписаны
+        /// a new GitHub issue: the version and OS are already filled in
         #[qproperty(QString, issue_url, cxx_name = "issueUrl", READ, CONSTANT)]
         type CrashReport = super::CrashReportRust;
 
@@ -28,7 +28,7 @@ pub mod qobject {
         #[cxx_name = "pendingChanged"]
         fn pending_changed(self: Pin<&mut CrashReport>);
 
-        /// Пометить текущие записи просмотренными.
+        /// Mark the current entries as viewed.
         #[qinvokable]
         fn dismiss(self: Pin<&mut CrashReport>);
     }
@@ -48,7 +48,7 @@ fn seen_path() -> PathBuf {
     mf_platform::dirs::app_data_dir().join("crash.log.seen")
 }
 
-/// Отпечаток журнала: размер и время изменения (журнал обрезается до 64 КиБ, так что одного размера мало).
+/// A log fingerprint: size and modification time (the log is truncated to 64 KiB, so size alone is not enough).
 fn stamp() -> Option<String> {
     let meta = std::fs::metadata(log_path()).ok().filter(|meta| meta.len() > 0)?;
     let modified = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn the_issue_link_is_encoded() {
-        assert_eq!(percent_encode("a b/ё"), "a%20b%2F%D1%91");
+        assert_eq!(percent_encode("a b/é"), "a%20b%2F%C3%A9");
         let url = issue_url();
         assert!(url.starts_with("https://github.com/fatyzzz/materialfy/issues/new?title=Crash%20report%20%28"));
         assert!(!url.contains(' ') && !url.contains('\n'));

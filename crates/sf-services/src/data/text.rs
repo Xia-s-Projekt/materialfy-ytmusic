@@ -1,13 +1,13 @@
-//! Подписи (mf_i18n) и разница списков для ListChange.
+//! Labels (mf_i18n) and the list diff for ListChange.
 use md3_model::ListChange;
 
-/// «1 track» / «5 tracks» (ru: 1 трек, 2 трека, 5 треков).
+/// "1 track" / "5 tracks" (Russian has three forms: one, few, many).
 pub fn tracks(count: i64) -> String {
     mf_i18n::n(count, "{0} track", "{0} tracks")
 }
 
-/// Как изменить `old`, чтобы получить `new`, не теряя прокрутку: дописывание, одна вставка, одно удаление
-/// или перестановка одной строки; иначе — сброс. None — без изменений.
+/// How to change `old` to get `new` without losing the scroll position: an append, one insert, one removal
+/// or a swap of one row; otherwise — a reset. None — no changes.
 pub fn list_change<T: Clone + PartialEq>(old: &[T], new: &[T]) -> Option<ListChange<T>> {
     if old == new {
         return None;

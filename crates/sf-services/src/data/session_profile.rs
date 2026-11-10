@@ -1,7 +1,7 @@
-//! Профиль аккаунта без Web API. После входа librespot: тип аккаунта и страна — из атрибутов сессии,
-//! имя и аватар — из spclient `user-profile-view/v3/profile/{username}`. До входа (токен из браузера):
-//! тип аккаунта — из spclient `melody/v1/product_state`. Проверено вживую (2026-10): атрибут `type`
-//! приходит через ~0,1 с после входа; профиль отдаёт `name` и `image_url` (нет аватара — нет поля);
+//! The account profile without the Web API. After librespot sign-in: the account type and country — from the session attributes,
+//! the name and avatar — from spclient `user-profile-view/v3/profile/{username}`. Before sign-in (token from the browser):
+//! the account type — from spclient `melody/v1/product_state`. Verified live (2026-10): the `type` attribute
+//! arrives ~0.1 s after sign-in; the profile returns `name` and `image_url` (no avatar — no field);
 //! product_state — `{"product":"premium","catalogue":"premium","country":"IN",…}`.
 use std::time::{Duration, Instant};
 
@@ -9,18 +9,18 @@ use serde_json::Value;
 use sf_api::models::{Image, User};
 
 const PRODUCT_STATE_URL: &str = "https://spclient.wg.spotify.com/melody/v1/product_state";
-/// Сколько ждать атрибуты аккаунта после входа сессии.
+/// How long to wait for the account attributes after the session signs in.
 const ATTRIBUTE_WAIT: Duration = Duration::from_secs(5);
 const TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Имя и аватар из user-profile-view.
+/// The name and avatar from user-profile-view.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Profile {
     pub name: Option<String>,
     pub image: Option<String>,
 }
 
-/// Профиль аккаунта сессии в виде /v1/me. Профиль spotify не ответил — только id, тип и страна.
+/// The session account's profile as /v1/me. The spotify profile did not answer — only id, type and country.
 pub async fn fetch(session: &sf_player::Session) -> User {
     let username = session.username();
     let started = Instant::now();
@@ -49,8 +49,8 @@ pub async fn fetch(session: &sf_player::Session) -> User {
     user(&username, product, country, profile)
 }
 
-/// Тип аккаунта ("premium" | "free" | …) по токену из браузера — до запуска librespot, который на Free
-/// завершает процесс. None — узнать не удалось.
+/// The account type ("premium" | "free" | …) by a token from the browser — before librespot starts, which on Free
+/// terminates the process. None — it could not be found out.
 pub async fn product_of_token(http: &reqwest::Client, token: &str) -> Option<String> {
     let response = match http.get(PRODUCT_STATE_URL).bearer_auth(token).timeout(TIMEOUT).send().await {
         Ok(response) => response,
@@ -96,7 +96,7 @@ fn user(username: &str, product: Option<String>, country: Option<String>, profil
     }
 }
 
-/// Имя пользователя в пути запроса.
+/// The user name in the request path.
 fn encode(text: &str) -> String {
     text.bytes()
         .map(|byte| match byte {
@@ -117,7 +117,7 @@ mod tests {
             parse_profile(body),
             Profile { name: Some("Spotify".into()), image: Some("https://i.scdn.co/image/ab67".into()) }
         );
-        // без аватара поля нет
+        // no avatar — no field
         let plain = br#"{"uri":"spotify:user:31qn","name":"fatyzzz","is_current_user":true}"#;
         assert_eq!(parse_profile(plain), Profile { name: Some("fatyzzz".into()), image: None });
         assert_eq!(parse_profile(b"not json"), Profile::default());
@@ -132,7 +132,7 @@ mod tests {
         assert!(account.premium);
         assert_eq!((account.country.as_str(), account.avatar.as_str()), ("IN", "face"));
         assert_eq!(account.uri, "spotify:user:31qn");
-        // имени нет — подпись по id, как у Web API
+        // no name — a label by id, as with the Web API
         let bare = sf_api::map::account(&super::user("31qn", None, None, Profile::default()));
         assert_eq!(bare.id, "31qn");
         assert!(!bare.premium);

@@ -1,4 +1,4 @@
-//! Чтение через сессию librespot в форме ответов Web API (перенос spotifast/src/session_reads.rs).
+//! Reading through the librespot session in the shape of Web API answers (port of spotifast/src/session_reads.rs).
 //! Catalogue reads over the streaming session, shaped as the Web API answers
 //! them. The session speaks the protocol Spotify's own clients use, which has
 //! no per-app quota, so a playlist someone else owns opens without waiting on
@@ -602,7 +602,7 @@ fn track(track: SessionTrack) -> Track {
         track_number: Some(u32::try_from(track.number).unwrap_or_default()),
         disc_number: Some(u32::try_from(track.disc_number).unwrap_or_default()),
         popularity: Some(track.popularity.clamp(0, 100) as u8),
-        // ISRC — ключ записи: рыночные дубли одного трека считаются одним лайком
+        // ISRC is the record key: market duplicates of one track count as one like
         external_ids: sf_api::models::ExternalIds {
             isrc: track
                 .external_ids
@@ -676,15 +676,15 @@ fn iso8601(timestamp_ms: i64) -> Option<String> {
         .map(|time| time.to_string())
 }
 
-// --- исполнитель ---
+// --- artist ---
 
-/// Релизов в разделе страницы исполнителя — как одна страница Web API (limit=50).
+/// Releases in the artist page section — like one Web API page (limit=50).
 const ARTIST_RELEASES: usize = 50;
-/// Сколько релизов группы вообще читать: метаданные перечисляют их не по дате, а показать нужно новые.
+/// How many releases of a group to read at all: metadata lists them not by date, but the new ones must be shown.
 const ARTIST_RELEASES_READ: usize = 200;
-/// Релизов в одном пакетном запросе extended-metadata.
+/// Releases in a single batched extended-metadata request.
 const RELEASE_BATCH: usize = 50;
-/// Популярных треков, как у /artists/{id}/top-tracks.
+/// Popular tracks, like /artists/{id}/top-tracks.
 const TOP_TRACKS: usize = 10;
 
 /// An artist's page as the Web API answers its several calls: the artist,
@@ -696,11 +696,11 @@ pub struct ArtistOverview {
     pub artist: Artist,
     /// /artists/{id}/top-tracks
     pub top_tracks: Vec<Track>,
-    /// include_groups=album,single — новые сверху
+    /// include_groups=album,single — newest first
     pub albums: Vec<Album>,
-    /// include_groups=appears_on,compilation — новые сверху
+    /// include_groups=appears_on,compilation — newest first
     pub appears_on: Vec<Album>,
-    /// /artists/{id}/related-artists; Spotify часто оставляет пустым
+    /// /artists/{id}/related-artists; Spotify often leaves it empty
     pub related: Vec<Artist>,
 }
 
@@ -759,7 +759,7 @@ pub async fn artist(session: &Session, id: &str) -> Result<ArtistOverview, Failu
 /// The artist as the Web API describes one. Followers and genres are not in
 /// the record; the page shows none rather than wait on the Web API for them.
 pub(crate) fn web_artist(artist: &SessionArtist) -> Artist {
-    // Свежие записи кладут фото в portrait_group, старые — в portrait.
+    // Fresh records put the photo in portrait_group, old ones — in portrait.
     let portraits = if artist.portrait_group.is_empty() {
         &artist.portraits
     } else {
@@ -820,7 +820,7 @@ async fn releases(session: &Session, groups: &[(&AlbumGroups, &str)]) -> Vec<Alb
 fn arrange(groups: Vec<Vec<Album>>) -> Vec<Album> {
     let mut page = Vec::new();
     for mut group in groups {
-        // устойчивая сортировка: релизы одного дня — в порядке Spotify
+        // stable sort: releases of one day stay in Spotify's order
         group.sort_by(|a, b| b.release_date.cmp(&a.release_date));
         page.extend(group);
     }
@@ -856,7 +856,7 @@ async fn release_details(
             continue;
         }
         for data in array.extension_data {
-            // релиз, которого Spotify не отдаёт (404, 451), просто пропускается
+            // a release Spotify does not return (404, 451) is simply skipped
             if !matches!(data.header.status_code, 0 | 200) {
                 continue;
             }
@@ -870,7 +870,7 @@ async fn release_details(
             }
         }
     }
-    // ответ — в порядке запроса
+    // the answer is in the order of the request
     Ok(uris
         .iter()
         .filter_map(|uri| details.remove(&uri.to_uri()))
@@ -909,9 +909,9 @@ fn release_date(date: &librespot_protocol::metadata::Date) -> Option<String> {
     })
 }
 
-// --- альбом ---
+// --- album ---
 
-/// Треков альбома в одном пакетном запросе extended-metadata.
+/// Album tracks in a single batched extended-metadata request.
 const ALBUM_TRACK_BATCH: usize = 100;
 
 /// An album and its tracks, as /albums/{id} and its track pages give them,
@@ -994,7 +994,7 @@ fn album_track_uris(message: &librespot_protocol::metadata::Album) -> Vec<Spotif
         .collect()
 }
 
-// --- трек ---
+// --- track ---
 
 /// One track, as /tracks/{id} gives it. A song the metadata does not
 /// describe (gone, withheld) is a retry: the Web API may still list it.
@@ -1014,7 +1014,7 @@ pub async fn track_by_id(session: &Session, id: &str) -> Result<Track, Failure> 
     }
 }
 
-// --- контекст ---
+// --- context ---
 
 /// The name and images of what plays, for the "Playing from" card: an
 /// album, playlist, artist or show by its own record, and a radio station
@@ -1825,7 +1825,7 @@ mod tests {
             list.track.push(track);
             message.top_track.push(list);
         }
-        // свежая запись: фото только в portrait_group
+        // fresh record: photo only in portrait_group
         let mut portraits = ImageGroup::new();
         portraits.image.push(cover(0xaa, 640));
         message.portrait_group = Some(portraits).into();
@@ -1861,7 +1861,7 @@ mod tests {
             [id_of(&gid(3))],
             "global list"
         );
-        // ни страны, ни общего списка — первый, какой дал Spotify
+        // neither country nor a common list — the first one Spotify gave
         let only = artist_record(&[("IN", 4)]);
         assert_eq!(id(top_track_uris(&only, "")), [id_of(&gid(4))]);
         assert!(top_track_uris(&artist_record(&[]), "SE").is_empty());
@@ -1968,7 +1968,7 @@ mod tests {
             copyright.set_text(text.into());
             message.copyright.push(copyright);
         }
-        // два диска; трек, указанный дважды, — один раз
+        // two discs; a track listed twice appears once
         for tracks in [[30u8, 31], [32, 30]] {
             let mut disc = Disc::new();
             for n in tracks {

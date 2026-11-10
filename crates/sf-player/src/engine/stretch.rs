@@ -1,4 +1,4 @@
-//! Скорость воспроизведения без смены высоты тона (WSOLA).
+//! Playback speed without changing pitch (WSOLA).
 //!
 //! The music is cut into overlapping 40 ms pieces taken from the input at
 //! `speed` times the rate they are laid down at the output. Each piece is

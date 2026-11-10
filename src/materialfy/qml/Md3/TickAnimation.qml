@@ -1,7 +1,7 @@
 import QtQuick
 
-// Замена FrameAnimation для декоративных бесконечных анимаций: тикает от общих часов Ticker (~30 Гц).
-// Тот же интерфейс: running, frameTime, onTriggered.
+// A FrameAnimation replacement for decorative infinite animations: it ticks off the shared Ticker clock (~30 Hz).
+// The same interface: running, frameTime, onTriggered.
 QtObject {
     id: root
 

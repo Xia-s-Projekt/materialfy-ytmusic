@@ -1,8 +1,8 @@
-//! Запрос к GraphQL-шлюзу клиентов Spotify (pathfinder) по хэшу сохранённого запроса, с токеном сессии
-//! librespot (login5). Spotify со временем отзывает хэши (ответ PersistedQueryNotFound) — тогда хэши
-//! заново читаются из бандла веб-плеера open.spotify.com: основной web-player.*.js и чанки маршрутов
-//! объявляют каждую операцию как `new X("имя","query","sha256",null)`. Найденное хранится на диске
-//! (mf_platform state dir); хэши в коде — семена, с ними всё работает и без чтения бандла.
+//! A request to the Spotify clients' GraphQL gateway (pathfinder) by saved-query hash, with a session token
+//! from librespot (login5). Spotify revokes hashes over time (the PersistedQueryNotFound answer) — then the hashes
+//! are read again from the open.spotify.com web player bundle: the main web-player.*.js and the route chunks
+//! declare each operation as `new X("name","query","sha256",null)`. What is found is stored on disk
+//! (mf_platform state dir); the hashes in the code are seeds, with them everything works without reading the bundle.
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
@@ -18,21 +18,21 @@ use crate::lock;
 
 const URL: &str = "https://api-partner.spotify.com/pathfinder/v1/query";
 const WEB_PLAYER: &str = "https://open.spotify.com/";
-/// pathfinder отвечает 403 «Client/request not allowed» на клиент, не похожий на Spotify (User-Agent
-/// «Materialfy/…», curl), — запросы идут от имени браузера, как у веб-плеера, чьи хэши и используются.
+/// pathfinder answers 403 "Client/request not allowed" to a client that does not look like Spotify (User-Agent
+/// "Materialfy/…", curl), — requests go under the browser's name, like the web player whose hashes are used.
 pub const USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 const TIMEOUT: Duration = Duration::from_secs(10);
 const BUNDLE_TIMEOUT: Duration = Duration::from_secs(30);
-/// Бандл — мегабайты: перечитывать не чаще, даже если отозванные хэши идут подряд.
+/// The bundle is megabytes: do not re-read it more often, even if revoked hashes come one after another.
 const DISCOVERY_PAUSE: Duration = Duration::from_secs(30 * 60);
-/// Сколько запрос ждёт чтения бандла (само чтение продолжается и без него).
+/// How long a request waits for the bundle read (the read itself continues without it).
 const DISCOVERY_WAIT: Duration = Duration::from_secs(15);
-/// Чанков веб-плеера за одно чтение бандла, не больше.
+/// Web player chunks per one bundle read, no more.
 const MAX_CHUNKS: usize = 60;
 const FILE: &str = "pathfinder-hashes.json";
 
-/// Найденные в бандле хэши: операция → sha256.
+/// Hashes found in the bundle: operation → sha256.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 struct Found {
     #[serde(default)]
@@ -41,16 +41,16 @@ struct Found {
 
 #[derive(Default)]
 struct Book {
-    /// None — файл ещё не читали
+    /// None — the file has not been read yet
     found: Option<Found>,
-    /// хэши, на которые шлюз ответил PersistedQueryNotFound в этом запуске
+    /// hashes the gateway answered PersistedQueryNotFound for in this run
     retired: HashSet<String>,
-    /// последнее чтение бандла
+    /// the last bundle read
     discovered_at: Option<Instant>,
 }
 
 static BOOK: LazyLock<Mutex<Book>> = LazyLock::new(Mutex::default);
-/// Одно чтение бандла за раз: остальные ждут его и берут найденное.
+/// One bundle read at a time: the others wait for it and take what was found.
 static DISCOVERY: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 fn file() -> PathBuf {
@@ -68,7 +68,7 @@ fn save(path: &Path, found: &Found) {
     }
 }
 
-/// Хэш с диска (если есть), затем семена; отозванные в этом запуске — мимо.
+/// The hash from disk (if there is one), then the seeds; revoked in this run — skipped.
 fn candidates(book: &mut Book, operation: &str, seeds: &[&str]) -> Vec<String> {
     let found = book.found.get_or_insert_with(|| load(&file()));
     let mut list: Vec<String> = Vec::new();
@@ -80,7 +80,7 @@ fn candidates(book: &mut Book, operation: &str, seeds: &[&str]) -> Vec<String> {
     list
 }
 
-/// Ответ шлюза на операцию `operation` (тело целиком: data и, возможно, errors).
+/// The gateway's answer to the `operation` operation (the whole body: data and, possibly, errors).
 pub async fn query(
     http: &Http,
     session: &sf_player::Session,
@@ -98,7 +98,7 @@ pub async fn query(
         }
         lock(&BOOK).retired.insert(hash.clone());
     }
-    // все известные хэши отозваны — свежий из бандла веб-плеера
+    // every known hash is revoked — a fresh one from the web player bundle
     let discovered = tokio::time::timeout(DISCOVERY_WAIT, discover(&client, operation)).await.ok().flatten();
     if let Some(hash) = discovered.filter(|hash| !hashes.contains(hash))
         && let Some(body) = ask(&client, &token.access_token, operation, &hash, &variables).await?
@@ -108,7 +108,7 @@ pub async fn query(
     Err(anyhow!("{operation}: persisted query hashes retired (PersistedQueryNotFound)"))
 }
 
-/// Один запрос; None — хэш отозван.
+/// One request; None — the hash is revoked.
 async fn ask(
     client: &reqwest::Client,
     token: &str,
@@ -146,9 +146,9 @@ fn retired(body: &Value) -> bool {
         .is_some_and(|errors| errors.iter().any(|e| e.get("message").and_then(Value::as_str) == Some("PersistedQueryNotFound")))
 }
 
-/// Свежий хэш операции из бандла веб-плеера (не чаще DISCOVERY_PAUSE); найденное — на диск. Чтение идёт
-/// отдельной задачей: запрос, который перестал ждать (страница не ждёт шлюз дольше пары секунд), не обрывает
-/// его, и найденное достаётся следующим запросам.
+/// A fresh hash for the operation from the web player bundle (no more often than DISCOVERY_PAUSE); what is found goes to disk. The read runs
+/// as a separate task: a request that stopped waiting (a page does not wait for the gateway longer than a couple of seconds) does not cut it
+/// short, and what is found reaches the next requests.
 async fn discover(client: &reqwest::Client, operation: &str) -> Option<String> {
     let (client, operation) = (client.clone(), operation.to_owned());
     tokio::spawn(async move { discover_now(&client, &operation).await }).await.ok().flatten()
@@ -158,7 +158,7 @@ async fn discover_now(client: &reqwest::Client, operation: &str) -> Option<Strin
     let _one = DISCOVERY.lock().await;
     {
         let mut book = lock(&BOOK);
-        // пока ждали, бандл прочитал другой запрос
+        // while we waited, another request read the bundle
         let fresh = book.found.as_ref().and_then(|found| found.operations.get(operation)).cloned();
         if let Some(hash) = fresh.filter(|hash| !book.retired.contains(hash)) {
             return Some(hash);
@@ -199,8 +199,8 @@ async fn fetch(client: &reqwest::Client, url: &str) -> anyhow::Result<String> {
     Ok(response.text().await?)
 }
 
-/// Все операции основного бандла и чанков — пока не найдётся `wanted` (чанки, чьё имя похоже на
-/// операцию, — первыми).
+/// Every operation of the main bundle and the chunks — until `wanted` is found (chunks whose name resembles
+/// the operation come first).
 async fn read_bundle(client: &reqwest::Client, wanted: &str) -> anyhow::Result<BTreeMap<String, String>> {
     let page = fetch(client, WEB_PLAYER).await?;
     let scripts = main_scripts(&page);
@@ -226,7 +226,7 @@ async fn read_bundle(client: &reqwest::Client, wanted: &str) -> anyhow::Result<B
     Ok(operations)
 }
 
-/// Основные скрипты веб-плеера на странице open.spotify.com (…/web-player/web-player.<хэш>.js).
+/// The web player's main scripts on the open.spotify.com page (…/web-player/web-player.<hash>.js).
 fn main_scripts(page: &str) -> Vec<String> {
     let mut scripts = Vec::new();
     for piece in page.split("src=\"").skip(1) {
@@ -239,7 +239,7 @@ fn main_scripts(page: &str) -> Vec<String> {
     scripts
 }
 
-/// Объявления операций: `"имя","query","sha256"` (и mutation).
+/// Operation declarations: `"name","query","sha256"` (and mutation).
 fn triples(js: &str) -> Vec<(String, String)> {
     let mut found = Vec::new();
     for marker in ["\",\"query\",\"", "\",\"mutation\",\""] {
@@ -260,8 +260,8 @@ fn triples(js: &str) -> Vec<(String, String)> {
     found
 }
 
-/// Файлы JS-чанков из загрузчика webpack: `(({id:"имя",…})[e]||e)+"."+({id:"хэш",…})[e]+".js"`.
-/// Такой же загрузчик CSS (`+".css"`) — мимо.
+/// JS chunk files from the webpack loader: `(({id:"name",…})[e]||e)+"."+({id:"hash",…})[e]+".js"`.
+/// The same loader for CSS (`+".css"`) — skipped.
 fn chunk_files(js: &str) -> Vec<(String, String)> {
     const JOIN: &str = "[e]||e)+\".\"+({";
     let mut files = Vec::new();
@@ -293,7 +293,7 @@ fn pairs(map: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Насколько имя чанка похоже на операцию: «xpui-routes-search» → searchDesktop.
+/// How much a chunk's name resembles an operation: "xpui-routes-search" → searchDesktop.
 fn likeness(chunk: &str, operation: &str) -> usize {
     const GENERIC: [&str; 4] = ["xpui", "routes", "desktop", "page"];
     let operation = operation.to_ascii_lowercase();
@@ -326,7 +326,7 @@ mod tests {
         let files = chunk_files(MAIN);
         assert_eq!(files.len(), 4);
         assert!(files.contains(&("xpui-routes-search".into(), "xpui-routes-search.0e343fae.js".into())));
-        // чанк без имени зовётся своим номером
+        // a chunk without a name is called by its number
         assert!(files.contains(&("1015".into(), "1015.9eee9cf3.js".into())));
         assert!(files.iter().all(|(_, file)| !file.contains("2d152445")), "css is not a script");
     }

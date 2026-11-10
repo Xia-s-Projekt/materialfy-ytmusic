@@ -1,7 +1,7 @@
 import QtQuick
 
-// Слайдер MD3 Expressive: толстый трек, хэндл-полоса с зазорами, stop-точка,
-// всплывающее значение при перетаскивании.
+// MD3 Expressive slider: a thick track, a bar handle with gaps, a stop dot,
+// and a popup value while dragging.
 Item {
     id: root
 
@@ -13,7 +13,7 @@ Item {
     property real handleHeight: 44
     property real gap: 6
     property bool showValue: true
-    // колесо меняет значение; false — колесо прокручивает страницу (слайдеры в длинных списках настроек)
+    // the wheel changes the value; false — the wheel scrolls the page (sliders in long settings lists)
     property bool wheelEnabled: true
     property var valueText: v => Math.round(v * 100) + "%"
     property color activeColor: Theme.primary
@@ -21,10 +21,10 @@ Item {
     property color handleColor: Theme.primary
 
     readonly property alias pressed: area.pressed
-    // Значение во время перетаскивания/колеса: показываем его вместо value, чтобы не
-    // перезаписывать value императивно — иначе биндинг value навсегда отваливается, и
-    // два слайдера на одном Player.volume перестают синхронизироваться (пишут, не читают).
-    // NaN-сентинел: диапазоны бывают отрицательные (-500..500 у Sync), знак не годится
+    // The value while dragging/wheeling: show it instead of value so that value is not
+    // written imperatively — otherwise the value binding is lost forever, and
+    // two sliders on one Player.volume stop synchronizing (they write without reading).
+    // A NaN sentinel: ranges can be negative (-500..500 for Sync), so a sign check will not do
     property real _live: NaN
     property bool _liveActive: false
     readonly property real position: {
@@ -57,7 +57,7 @@ Item {
     readonly property real _outer: trackHeight / 2
     readonly property real _inner: 2
 
-    // Активная часть
+    // Active part
     Rectangle {
         readonly property real w: root._handleX - root._handleW / 2 - root.gap
         visible: w > 0
@@ -72,7 +72,7 @@ Item {
         bottomRightRadius: Math.min(root._inner, width / 2)
     }
 
-    // Неактивная часть
+    // Inactive part
     Rectangle {
         id: inactive
         readonly property real x0: root._handleX + root._handleW / 2 + root.gap
@@ -99,7 +99,7 @@ Item {
         }
     }
 
-    // Хэндл
+    // Handle
     Rectangle {
         id: handle
         width: root._handleW
@@ -110,7 +110,7 @@ Item {
         color: root.handleColor
     }
 
-    // Значение над хэндлом
+    // Value above the handle
     Rectangle {
         visible: opacity > 0
         opacity: root.showValue && area.pressed ? 1 : 0
@@ -148,8 +148,8 @@ Item {
                 return
             }
             const step = root.stepSize > 0 ? root.stepSize : (root.to - root.from) / 50
-            // База — live-значение, не биндинг: при лагающем свойстве (remote volume) быстрые
-            // шаги колеса в окне 150 мс считались бы от одного и того же старого value и терялись
+            // The base is the live value, not a binding: with a lagging property (remote volume), quick
+            // wheel steps within a 150 ms window would all be computed from the same stale value and be lost
             const base = root._liveActive ? root._live : root.value
             const v = Math.max(root.from, Math.min(root.to, base + (wheel.angleDelta.y > 0 ? step : -step)))
             if (root._liveActive === false || v !== root._live) {
@@ -157,7 +157,7 @@ Item {
                 root._liveActive = true
                 root.moved(v)
             }
-            // колесо не шлёт release: live держится, пока биндинг value не догонит
+            // the wheel sends no release: live is held until the value binding catches up
             wheelLive.restart()
         }
     }

@@ -2,8 +2,8 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Вкладка «Устройства» правой панели (как боковая панель Connect в Spotify для компьютера):
-// список DeviceList во всю высоту панели. Список обновляется, когда вкладка становится видна.
+// The "Devices" tab of the right panel (like the Connect side panel in Spotify for desktop):
+// a DeviceList across the full height of the panel. The list refreshes when the tab becomes visible.
 SmoothFlickable {
     id: root
 

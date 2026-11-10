@@ -200,7 +200,7 @@ impl CatalogService {
             .map(|a| a.iter().map(yt_api::map::episode_item).collect::<Vec<EpisodeItem>>())
             .unwrap_or_default();
         let total = episodes.len() as i64;
-        // показ сохранён, если флаг пришёл с данными страницы
+        // the show flag is preserved if it came with the page data
         self.library.note_saved(&info.uri, info.saved);
         Ok(ShowPage { info, episodes, total })
     }
@@ -220,7 +220,7 @@ impl CatalogService {
         let api = self.auth.api();
         let v = api.get_episode(episode_id).await.map_err(ServiceError::from)?;
         let info = yt_api::map::episode_item(&v);
-        // playlistId ответа — идентификатор шоу (с префиксом MPSP)
+        // the response playlistId is the show identifier (with the MPSP prefix)
         let show_id = v
             .get("playlistId")
             .and_then(Value::as_str)

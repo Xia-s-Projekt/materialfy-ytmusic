@@ -1,5 +1,5 @@
-# Иконки из макетов: попадают в подмножество шрифта даже до появления в QML.
-# Остальные имена скрипт находит сам — строковые литералы в QML.
+# Icons from the mockups: they go into the font subset even before appearing in QML.
+# The script finds the other names itself — string literals in QML.
 account_circle
 add
 add_to_queue

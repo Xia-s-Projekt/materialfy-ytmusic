@@ -1,12 +1,13 @@
 import QtQuick
 import Md3
 
-// Фон из обложки играющего трека (CoverBackdrop) с двойным буфером: атмосферная подложка окна и фон
-// полноэкранного плеера. Новая обложка заранее грузится в скрытый слой, а меняется в тот же момент,
-// что и цвета приложения (Theme.schemeApplied): под шторкой — мгновенно, и шторка открывает новый
-// фон вместе с новыми цветами; при плавной смене схемы — проявляясь поверх старого.
-// Если тема от обложки не зависит (followTheme: false) — сразу, как загрузится; если схема
-// не изменилась — сам, чуть погодя.
+// Backdrop from the playing track's cover (CoverBackdrop) with double buffering: the window's
+// atmospheric underlay and the fullscreen player's background. A new cover loads ahead of time into
+// a hidden layer, but swaps at the same moment as the app colors (Theme.schemeApplied): under the
+// shade instantly, and the shade opens the new background together with the new colors; on a smooth
+// scheme change it fades in over the old one.
+// If the theme does not depend on the cover (followTheme: false) — immediately once loaded; if the
+// scheme has not changed — on its own, after a short delay.
 Item {
     id: root
 
@@ -18,20 +19,21 @@ Item {
     property bool followTheme: true
 
     property int _front: 0
-    property bool _waiting: false          // пора меняться, а новая обложка ещё грузится
+    property bool _waiting: false          // time to swap, but the new cover is still loading
     readonly property var _layers: [a, b]
     readonly property var _back: _layers[1 - _front]
 
-    // Полупрозрачный фон (атмосферная подложка окна): opacity в Qt Quick ложится на каждый слой отдельно,
-    // и пока новая обложка проявляется поверх старой, они складываются — фон светлеет, а в конце перехода
-    // резко темнеет. На время перехода — общий слой, прозрачность на двоих одна
+    // Translucent background (the window's atmospheric underlay): in Qt Quick, opacity applies to each
+    // layer separately, so while the new cover fades in over the old one the two add up — the background
+    // brightens and then, at the end of the transition, suddenly darkens. For the duration of the
+    // transition, use one shared layer with a single opacity for both.
     layer.enabled: fade.running && opacity < 1
 
     onSourceChanged: {
         _settle()
         _back.source = source
         _waiting = false
-        if (!followTheme || _layers[_front].source === "")   // ждать нечего / первая обложка
+        if (!followTheme || _layers[_front].source === "")   // nothing to wait for / first cover
             _swapOrWait(true)
         else
             fallback.restart()
@@ -46,7 +48,7 @@ Item {
     function _swapOrWait(animated) {
         const back = _back, front = _layers[_front]
         if (back.source !== source)
-            return                          // нечего менять
+            return                          // nothing to swap
         if (!back.ready) {
             _waiting = true
             return
@@ -57,7 +59,7 @@ Item {
         back.z = 1
         front.z = 0
         _front = 1 - _front
-        if (animated) {                     // новый проявляется поверх старого — без провала в цвет темы
+        if (animated) {                     // the new one fades in over the old one — no dip into the theme color
             front.opacity = 1
             fade.target = back
             fade.start()
@@ -87,7 +89,7 @@ Item {
                 root._swapOrWait(true)
         }
     }
-    // Схема не поменялась — меняем сами
+    // The scheme has not changed — swap ourselves
     Timer {
         id: fallback
         interval: 2500

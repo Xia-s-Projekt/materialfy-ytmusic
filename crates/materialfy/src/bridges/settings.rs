@@ -1,5 +1,5 @@
-// Settings: персистентные свойства (ключи mf_platform::SettingKey) с сигналами <имя>Changed. Значения кэшируются в мосте,
-// запись — сразу в SettingsStore; изменения из других мест (Player.volume, AuthService::apply_proxy) приходят подпиской.
+// Settings: persistent properties (keys mf_platform::SettingKey) with <name>Changed signals. Values are cached in the bridge,
+// writes - straight to SettingsStore; changes from other places (Player.volume, AuthService::apply_proxy) arrive via subscription.
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
@@ -37,27 +37,27 @@ pub mod qobject {
         #[qproperty(bool, cover_spin, cxx_name = "coverSpin", READ, WRITE = set_cover_spin, NOTIFY = cover_spin_changed)]
         #[qproperty(bool, cover_pulse, cxx_name = "coverPulse", READ, WRITE = set_cover_pulse, NOTIFY = cover_pulse_changed)]
         #[qproperty(bool, calm_when_inactive, cxx_name = "calmWhenInactive", READ, WRITE = set_calm_when_inactive, NOTIFY = calm_when_inactive_changed)]
-        /// "normal" | "spicy" | "karaoke" — вид колонки текста
+        /// "normal" | "spicy" | "karaoke" - the look of the text column
         #[qproperty(QString, lyrics_mode, cxx_name = "lyricsMode", READ, WRITE = set_lyrics_mode, NOTIFY = lyrics_mode_changed)]
-        /// множитель размера шрифта текста
+        /// text font size multiplier
         #[qproperty(f64, lyrics_font_scale, cxx_name = "lyricsFontScale", READ, WRITE = set_lyrics_font_scale, NOTIFY = lyrics_font_scale_changed)]
-        /// "none" | "soft" | "strong" — затемняющая подложка
+        /// "none" | "soft" | "strong" - the darkening backdrop
         #[qproperty(QString, lyrics_scrim, cxx_name = "lyricsScrim", READ, WRITE = set_lyrics_scrim, NOTIFY = lyrics_scrim_changed)]
         #[qproperty(QString, lyrics_text_align, cxx_name = "lyricsTextAlign", READ, WRITE = set_lyrics_text_align, NOTIFY = lyrics_text_align_changed)]
         #[qproperty(QString, lyrics_fill_mode, cxx_name = "lyricsFillMode", READ, WRITE = set_lyrics_fill_mode, NOTIFY = lyrics_fill_mode_changed)]
         #[qproperty(QString, lyrics_visible_lines, cxx_name = "lyricsVisibleLines", READ, WRITE = set_lyrics_visible_lines, NOTIFY = lyrics_visible_lines_changed)]
         #[qproperty(f64, lyrics_highlight, cxx_name = "lyricsHighlight", READ, WRITE = set_lyrics_highlight, NOTIFY = lyrics_highlight_changed)]
-        /// масштаб активной строки (0.0 — по стилю, либо 1.0…1.35)
+        /// active line scale (0.0 - by style, or 1.0...1.35)
         #[qproperty(f64, lyrics_active_scale, cxx_name = "lyricsActiveScale", READ, WRITE = set_lyrics_active_scale, NOTIFY = lyrics_active_scale_changed)]
-        /// масштаб неактивных строк (0.0 — по стилю, либо 0.8…1.0)
+        /// inactive line scale (0.0 - by style, or 0.8...1.0)
         #[qproperty(f64, lyrics_idle_scale, cxx_name = "lyricsIdleScale", READ, WRITE = set_lyrics_idle_scale, NOTIFY = lyrics_idle_scale_changed)]
-        /// амплитуда волны слов (0.0…2.0)
+        /// word wave amplitude (0.0...2.0)
         #[qproperty(f64, lyrics_word_bounce, cxx_name = "lyricsWordBounce", READ, WRITE = set_lyrics_word_bounce, NOTIFY = lyrics_word_bounce_changed)]
-        /// непрозрачность неактивных строк (0.15…0.75)
+        /// inactive line opacity (0.15...0.75)
         #[qproperty(f64, lyrics_dim_opacity, cxx_name = "lyricsDimOpacity", READ, WRITE = set_lyrics_dim_opacity, NOTIFY = lyrics_dim_opacity_changed)]
-        /// длительность скролла строки в мс (-1 — по стилю, либо 200…800)
+        /// line scroll duration in ms (-1 - by style, or 200...800)
         #[qproperty(i32, lyrics_scroll_ms, cxx_name = "lyricsScrollMs", READ, WRITE = set_lyrics_scroll_ms, NOTIFY = lyrics_scroll_ms_changed)]
-        /// задержка каскада соседних строк в мс (-1 — по стилю, либо 0…80)
+        /// cascade delay of neighboring lines in ms (-1 - by style, or 0...80)
         #[qproperty(i32, lyrics_stagger_ms, cxx_name = "lyricsStaggerMs", READ, WRITE = set_lyrics_stagger_ms, NOTIFY = lyrics_stagger_ms_changed)]
         #[qproperty(f64, lyrics_blur_amount, cxx_name = "lyricsBlurAmount", READ, WRITE = set_lyrics_blur_amount, NOTIFY = lyrics_blur_amount_changed)]
         #[qproperty(f64, lyrics_line_spacing, cxx_name = "lyricsLineSpacing", READ, WRITE = set_lyrics_line_spacing, NOTIFY = lyrics_line_spacing_changed)]
@@ -65,9 +65,9 @@ pub mod qobject {
         #[qproperty(bool, lyrics_show_source, cxx_name = "lyricsShowSource", READ, WRITE = set_lyrics_show_source, NOTIFY = lyrics_show_source_changed)]
         #[qproperty(i32, lyrics_sync_ms, cxx_name = "lyricsSyncMs", READ, WRITE = set_lyrics_sync_ms, NOTIFY = lyrics_sync_ms_changed)]
         #[qproperty(QString, animations, READ, WRITE = set_animations, NOTIFY = animations_changed)]
-        /// "auto" | "on" | "off" — режим для слабых ПК (Theme.lowPower)
+        /// "auto" | "on" | "off" - mode for weak PCs (Theme.lowPower)
         #[qproperty(QString, low_power_mode, cxx_name = "lowPowerMode", READ, WRITE = set_low_power_mode, NOTIFY = low_power_mode_changed)]
-        /// "auto" | "integrated" | "discrete" — предпочтение графического процессора
+        /// "auto" | "integrated" | "discrete" - GPU preference
         #[qproperty(QString, gpu_preference, cxx_name = "gpuPreference", READ, WRITE = set_gpu_preference, NOTIFY = gpu_preference_changed)]
         /// "system" | "en" | "ru" | "pt"; the applied language and the dictionary — Translations (Md3/I18n.qml)
         #[qproperty(QString, language, READ, WRITE = set_language, NOTIFY = language_changed)]
@@ -84,9 +84,9 @@ pub mod qobject {
         #[qproperty(QString, library_view, cxx_name = "libraryView", READ, WRITE = set_library_view, NOTIFY = library_view_changed)]
         #[qproperty(QString, library_sort, cxx_name = "librarySort", READ, WRITE = set_library_sort, NOTIFY = library_sort_changed)]
         #[qproperty(QString, home_hidden, cxx_name = "homeHidden", READ, WRITE = set_home_hidden, NOTIFY = home_hidden_changed)]
-        /// сцена «Радио» на главной
+        /// the "Radio" scene on the home screen
         #[qproperty(bool, home_radio_hidden, cxx_name = "homeRadioHidden", READ, WRITE = set_home_radio_hidden, NOTIFY = home_radio_hidden_changed)]
-        /// в боковой панели вместо плейлистов — последние добавленные/обновлённые
+        /// in the side panel instead of playlists - the most recently added/updated
         #[qproperty(bool, sidebar_library, cxx_name = "sidebarLibrary", READ, WRITE = set_sidebar_library, NOTIFY = sidebar_library_changed)]
         #[qproperty(i32, bitrate, READ, WRITE = set_bitrate, NOTIFY = bitrate_changed)]
         #[qproperty(bool, normalisation, READ, WRITE = set_normalisation, NOTIFY = normalisation_changed)]
@@ -102,27 +102,27 @@ pub mod qobject {
         #[qproperty(bool, dj_voice, cxx_name = "djVoice", READ, WRITE = set_dj_voice, NOTIFY = dj_voice_changed)]
         #[qproperty(QString, device_name, cxx_name = "deviceName", READ, WRITE = set_device_name, NOTIFY = device_name_changed)]
         #[qproperty(QString, web_client_id, cxx_name = "webClientId", READ, WRITE = set_web_client_id, NOTIFY = web_client_id_changed)]
-        /// окно «Web API ограничен» с инструкцией больше не показывать
+        /// do not show the "Web API limited" window with instructions again
         #[qproperty(bool, api_limit_tip_dismissed, cxx_name = "apiLimitTipDismissed", READ, WRITE = set_api_limit_tip_dismissed, NOTIFY = api_limit_tip_dismissed_changed)]
         #[qproperty(QString, proxy_mode, cxx_name = "proxyMode", READ, NOTIFY = proxy_mode_changed)]
         #[qproperty(QString, proxy_host, cxx_name = "proxyHost", READ, NOTIFY = proxy_host_changed)]
         #[qproperty(QString, proxy_port, cxx_name = "proxyPort", READ, NOTIFY = proxy_port_changed)]
         #[qproperty(QString, proxy_username, cxx_name = "proxyUsername", READ, NOTIFY = proxy_username_changed)]
-        /// обложки мимо прокси (применяется сразу, без «Применить»)
+        /// covers bypassing the proxy (applied immediately, without "Apply")
         #[qproperty(bool, covers_bypass_proxy, cxx_name = "coversBypassProxy", READ, WRITE = set_covers_bypass_proxy, NOTIFY = covers_bypass_proxy_changed)]
         #[qproperty(bool, close_to_tray, cxx_name = "closeToTray", READ, WRITE = set_close_to_tray, NOTIFY = close_to_tray_changed)]
         #[qproperty(i32, wheel_step, cxx_name = "wheelStep", READ, WRITE = set_wheel_step, NOTIFY = wheel_step_changed)]
-        /// "off" | "island" | "taskbar" — плеер вне главного окна (FloatingIsland / TaskbarPlayer)
+        /// "off" | "island" | "taskbar" - the player outside the main window (FloatingIsland / TaskbarPlayer)
         #[qproperty(QString, floating_player, cxx_name = "floatingPlayer", READ, WRITE = set_floating_player, NOTIFY = floating_player_changed)]
-        /// "black" | "color" — вид островка и виджета
+        /// "black" | "color" - the look of the island and the widget
         #[qproperty(QString, floating_player_style, cxx_name = "floatingPlayerStyle", READ, WRITE = set_floating_player_style, NOTIFY = floating_player_style_changed)]
-        /// место виджета в панели задач: "tray" | "left" | "appsLeft" | "appsRight" | доля "0.42"
+        /// widget position in the taskbar: "tray" | "left" | "appsLeft" | "appsRight" | a fraction "0.42"
         #[qproperty(QString, taskbar_widget_pos, cxx_name = "taskbarWidgetPos", READ, WRITE = set_taskbar_widget_pos, NOTIFY = taskbar_widget_pos_changed)]
-        /// сколько раз показана подсказка с клавишами под островком (0..3)
+        /// how many times the keyboard hint under the island has been shown (0..3)
         #[qproperty(i32, floating_key_hints, cxx_name = "floatingKeyHints", READ, WRITE = set_floating_key_hints, NOTIFY = floating_key_hints_changed)]
-        /// островок прячется, когда на его мониторе приложение на весь экран
+        /// the island hides when a fullscreen application is on its monitor
         #[qproperty(bool, floating_hide_fullscreen, cxx_name = "floatingHideFullscreen", READ, WRITE = set_floating_hide_fullscreen, NOTIFY = floating_hide_fullscreen_changed)]
-        /// островок прячется, когда на его мониторе окно развёрнуто
+        /// the island hides when a window is maximized on its monitor
         #[qproperty(QString, floating_edge, cxx_name = "floatingEdge", READ, WRITE = set_floating_edge, NOTIFY = floating_edge_changed)]
         #[qproperty(i32, floating_free_x, cxx_name = "floatingFreeX", READ, WRITE = set_floating_free_x, NOTIFY = floating_free_x_changed)]
         #[qproperty(i32, floating_free_y, cxx_name = "floatingFreeY", READ, WRITE = set_floating_free_y, NOTIFY = floating_free_y_changed)]
@@ -136,10 +136,10 @@ pub mod qobject {
         #[qproperty(bool, engine_restart_pending, cxx_name = "engineRestartPending", READ, NOTIFY = engine_restart_pending_changed)]
         #[qproperty(QString, proxy_state, cxx_name = "proxyState", READ, NOTIFY = proxy_state_changed)]
         #[qproperty(QString, proxy_error, cxx_name = "proxyError", READ, NOTIFY = proxy_state_changed)]
-        /// «Web API ограничен…» (429/QUOTA_EXCEEDED); пусто — ограничений нет.
+        /// "Web API limited..." (429/QUOTA_EXCEEDED); empty - no limits.
         #[qproperty(QString, web_api_limit, cxx_name = "webApiLimit", READ, NOTIFY = web_api_limit_changed)]
         #[qproperty(bool, system_reduced_motion, cxx_name = "systemReducedMotion", READ, CONSTANT)]
-        /// тема панели задач для значка трея: "dark", "light" или "" (неизвестно — QML смотрит на тему Qt)
+        /// taskbar theme for the tray icon: "dark", "light" or "" (unknown - QML looks at the Qt theme)
         #[qproperty(QString, system_taskbar_theme, cxx_name = "systemTaskbarTheme", READ, CONSTANT)]
         type Settings = super::SettingsRust;
 
@@ -494,23 +494,23 @@ pub mod qobject {
         #[cxx_name = "webApiLimitChanged"]
         fn web_api_limit_changed(self: Pin<&mut Settings>);
 
-        /// Перечитать устройства вывода (yt_player::output_devices в spawn_blocking).
+        /// Re-read the output devices (yt_player::output_devices in spawn_blocking).
         #[qinvokable]
         #[cxx_name = "refreshAudioDevices"]
         fn refresh_audio_devices(self: Pin<&mut Settings>);
-        /// Пересчитать занятое место (mf_platform::dirs::cache_usage в spawn_blocking).
+        /// Recalculate the used space (mf_platform::dirs::cache_usage in spawn_blocking).
         #[qinvokable]
         #[cxx_name = "refreshCacheUsage"]
         fn refresh_cache_usage(self: Pin<&mut Settings>);
-        /// Очистить кэш (вход не трогается), затем refreshCacheUsage.
+        /// Clear the cache (the login is not touched), then refreshCacheUsage.
         #[qinvokable]
         #[cxx_name = "clearCache"]
         fn clear_cache(self: Pin<&mut Settings>);
-        /// Открыть каталог кэша в проводнике.
+        /// Open the cache directory in the file explorer.
         #[qinvokable]
         #[cxx_name = "openCacheFolder"]
         fn open_cache_folder(self: &Settings);
-        /// «Применить» в ApplyBar: перезапуск движка с новыми настройками (auth.restart_engine).
+        /// "Apply" in ApplyBar: restart the engine with the new settings (auth.restart_engine).
         #[qinvokable]
         #[cxx_name = "applyEngineSettings"]
         fn apply_engine_settings(self: Pin<&mut Settings>);
@@ -522,7 +522,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "uiScaleAtLaunch"]
         fn ui_scale_at_launch(self: &Settings) -> i32;
-        /// Применить прокси (пароль — в хранилище секретов, не в настройки).
+        /// Apply the proxy (the password goes to the secret store, not to settings).
         #[qinvokable]
         #[cxx_name = "applyProxy"]
         fn apply_proxy(self: Pin<&mut Settings>, mode: &QString, host: &QString, port: &QString, username: &QString, password: &QString);
@@ -532,7 +532,7 @@ pub mod qobject {
     impl cxx_qt::Initialize for Settings {}
 }
 
-/// Тип свойства QML ↔ значение хранилища.
+/// QML property type <-> store value.
 trait Field: Sized + PartialEq + Clone {
     fn load(store: &SettingsStore, key: SettingKey) -> Self;
     fn to_value(&self) -> SettingValue;
@@ -581,8 +581,8 @@ fn store() -> &'static SettingsStore {
     &ctx().services.settings
 }
 
-// (поле, тип, ключ, сеттер, сигнал) — одна строка на свойство
-// readonly — только чтение из QML (пишет сервис, например прокси после проверки в AuthService::apply_proxy)
+// (field, type, key, setter, signal) - one line per property
+// readonly - read-only from QML (the service writes it, for example the proxy after checking in AuthService::apply_proxy)
 macro_rules! settings {
     ($( $field:ident : $ty:ty = $key:ident, $setter:ident, $signal:ident; )*
      @readonly { $( $rfield:ident : $rty:ty = $rkey:ident, $rsignal:ident; )* }) => {
@@ -633,7 +633,7 @@ macro_rules! settings {
                 }
             )*
 
-            /// Значение изменилось в хранилище (не через этот мост) — перечитать и оповестить.
+            /// The value changed in the store (not through this bridge) - re-read and notify.
             fn reload(mut self: Pin<&mut Self>, key: SettingKey) {
                 match key {
                     $(
@@ -654,7 +654,7 @@ macro_rules! settings {
                             }
                         }
                     )*
-                    // служебные ключи без свойства QML (Pins, HiddenTracks)
+                    // service keys without a QML property (Pins, HiddenTracks)
                     _ => {}
                 }
             }
@@ -752,7 +752,7 @@ settings! {
 }
 
 impl qobject::Settings {
-    /// Кнопки окна приложение рисует на всех ОС; настройки больше нет (старое значение читается, но не влияет).
+    /// The application draws window buttons on all OSes; the setting is gone (the old value is read but has no effect).
     fn window_buttons_value(&self) -> bool {
         true
     }
@@ -792,7 +792,7 @@ impl qobject::Settings {
     fn clear_cache(self: Pin<&mut Self>) {
         let thread = self.qt_thread();
         ctx().rt.spawn_blocking(move || {
-            // занятые файлы (аудио играющего трека) пропускаются — остальное уже удалено, пользователю не мешаем
+            // busy files (the audio of the playing track) are skipped - the rest is already deleted, we do not bother the user
             if let Err(error) = mf_platform::dirs::clear_cache() {
                 tracing::info!("cache only partially cleared: {error}");
             }
@@ -879,7 +879,7 @@ impl qobject::Settings {
         });
     }
 
-    /// engineRestartPending и proxyState/proxyError — из AuthSnapshot (флаг ведёт AuthService).
+    /// engineRestartPending and proxyState/proxyError - from AuthSnapshot (the flag is maintained by AuthService).
     fn on_auth(mut self: Pin<&mut Self>, snapshot: yt_services::AuthSnapshot) {
         if self.engine_restart_pending != snapshot.engine_restart_pending {
             self.as_mut().rust_mut().engine_restart_pending = snapshot.engine_restart_pending;
@@ -894,7 +894,7 @@ impl qobject::Settings {
         }
     }
 
-    /// Охлаждение Web API после 429/квоты (yt_api::limits) — строка в «Аккаунте».
+    /// Web API cooldown after 429/quota (yt_api::limits) - a line in "Account".
     fn on_web_api_limits(mut self: Pin<&mut Self>, limits: yt_api::WebApiLimits) {
         let text = QString::from(limits.user_text().as_str());
         if self.web_api_limit != text {
@@ -915,7 +915,7 @@ impl qobject::Settings {
     }
 }
 
-/// {audio, covers, playlists, lyrics, total} в байтах (числа QML — double: размеры больше i32).
+/// {audio, covers, playlists, lyrics, total} in bytes (QML numbers are double: sizes exceed i32).
 fn cache_usage_map(usage: mf_platform::dirs::CacheUsage) -> QVariantMap {
     let total = usage.total();
     let mut map = QVariantMap::default();
@@ -929,7 +929,7 @@ fn cache_usage_map(usage: mf_platform::dirs::CacheUsage) -> QVariantMap {
 
 impl cxx_qt::Initialize for qobject::Settings {
     fn initialize(mut self: Pin<&mut Self>) {
-        // нули до первого подсчёта: QML не видит undefined
+        // zeros before the first count: QML does not see undefined
         self.as_mut().rust_mut().cache_usage = cache_usage_map(Default::default());
         if !ctx().flags.screenshot {
             self.as_mut().refresh_audio_devices();

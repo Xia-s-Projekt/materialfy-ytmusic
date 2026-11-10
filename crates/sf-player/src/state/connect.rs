@@ -1,10 +1,10 @@
-//! Spotify Connect через сессию librespot, без Web API: кластер connect-state (GET /connect-state/v1/cluster
-//! и пуши дилера hm://connect-state/v1/cluster) даёт состояние удалённого плеера, очередь и список устройств;
-//! команды другим устройствам уходят так же, как у настольного клиента:
-//! POST /connect-state/v1/player/command/from/{это}/to/{цель}, громкость — PUT …/connect/volume/from/…/to/…,
-//! перенос — POST …/connect/transfer/from/{активное}/to/{цель}.
-//! Очередь своего устройства (играет этот ПК) берётся прямо из Spirc — без сети, кроме данных треков.
-//! Web API остаётся запасным путём: движок не запущен или сессия не ответила.
+//! Spotify Connect through the librespot session, without the Web API: the connect-state cluster (GET /connect-state/v1/cluster
+//! and the dealer pushes hm://connect-state/v1/cluster) give the remote player's state, the queue, and the device list;
+//! commands to other devices go out the same way as on the desktop client:
+//! POST /connect-state/v1/player/command/from/{this}/to/{target}, volume — PUT …/connect/volume/from/…/to/…,
+//! a transfer — POST …/connect/transfer/from/{active}/to/{target}.
+//! Our own device's queue (this PC is playing) is taken straight from Spirc — no network, except for track data.
+//! The Web API remains the fallback path: the engine is not started, or the session did not answer.
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -34,30 +34,30 @@ use crate::engine::RepeatMode;
 use crate::engine::player::ClusterPushes;
 use crate::{PlayerHandle, Session};
 
-/// Кластер из пуша считается верным столько; дольше — перечитываем (дилер мог тихо отвалиться).
+/// A cluster from a push is trusted for this long; longer — we re-read (the dealer may have dropped off silently).
 const CLUSTER_FRESH: Duration = Duration::from_secs(30);
-/// Сколько следующих строк очереди отдавать (как /me/player/queue — первые строки «Далее»).
+/// How many of the next queue rows to return (like /me/player/queue — the first "Next" rows).
 const QUEUE_LIMIT: usize = 30;
 const TRACK_CACHE_LIMIT: usize = 1000;
-/// Сколько названий контекстов помнить (карточка «Играет из …»).
+/// How many context names to remember (the "Playing from …" card).
 const CONTEXT_CACHE_LIMIT: usize = 200;
 const CLUSTER_URI: &str = "hm://connect-state/v1/cluster";
 const PROTOBUF: &str = "application/x-protobuf";
 
-/// Сессия движка и id его Connect-устройства (отправитель команд).
+/// The engine session and its Connect device id (the sender of commands).
 #[derive(Clone)]
 pub(crate) struct Link {
     pub session: Session,
     pub device_id: String,
-    /// состояние плеера этого устройства из Spirc; None — устройство не активно
+    /// this device's player state from Spirc; None — the device is not active
     pub local: watch::Receiver<Option<Arc<PlayerState>>>,
-    /// пуши кластера, на которые движок подписался до запуска дилера (забирает первый)
+    /// cluster pushes the engine subscribed to before the dealer started (the first one takes it)
     pub pushes: Arc<Mutex<Option<ClusterPushes>>>,
 }
 
-/// Текущая сессия движка; None — движок не запущен.
+/// The engine's current session; None — the engine is not started.
 pub(crate) type LinkSource = Arc<dyn Fn() -> Option<Link> + Send + Sync>;
-/// Что-то изменилось: `remote` — кластер (пуш дилера), `queue` — очередь.
+/// Something changed: `remote` — the cluster (a dealer push), `queue` — the queue.
 pub(crate) type Changed = Arc<dyn Fn(bool, bool) + Send + Sync>;
 
 struct Stamped {
@@ -68,24 +68,24 @@ struct Stamped {
 
 #[derive(Default)]
 struct State {
-    /// сессия, на пуши которой подписаны
+    /// the session whose pushes we are subscribed to
     listening: Option<String>,
     cluster: Option<Stamped>,
     tracks: HashMap<String, TrackItem>,
     track_order: VecDeque<String>,
-    /// сессия, за состоянием Spirc которой следим
+    /// the session whose Spirc state we watch
     watching: Option<String>,
-    /// названия и обложки контекстов по URI; None — у контекста нет названия
+    /// context names and cover art by URI; None — the context has no name
     contexts: HashMap<String, Option<(String, String)>>,
-    /// когда опрос состояния в последний раз ушёл в Web API из-за отказа сессии
+    /// when a state poll last went to the Web API because the session refused
     web_poll_at: Option<Instant>,
 }
 
-/// Опрос состояния и очереди при сбое сессии идёт в Web API не чаще этого: кластер обычно оживает сам,
-/// а каждый такой запрос тратит общую квоту.
+/// When the session fails, a state and queue poll goes to the Web API no more often than this: the cluster usually recovers on its own,
+/// and each such request spends the shared quota.
 const WEB_POLL_FALLBACK_EVERY: Duration = Duration::from_secs(60);
 
-/// WebBackend поверх сессии: чтения и команды Connect идут через librespot, остальное и отказы — в Web API.
+/// A WebBackend over the session: Connect reads and commands go through librespot, everything else and refusals — to the Web API.
 pub struct ConnectBackend {
     web: Arc<dyn WebBackend>,
     link: LinkSource,
@@ -111,12 +111,12 @@ impl ConnectBackend {
         self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// Растёт с каждым пушем кластера (список устройств в меню обновляется сам).
+    /// It grows with every cluster push (the device list in the menu updates itself).
     pub fn changes(&self) -> watch::Receiver<u64> {
         self.generation.subscribe()
     }
 
-    /// Устройства из кластера; None — сессии нет или она не ответила (тогда — Web API).
+    /// Devices from the cluster; None — there is no session, or it did not answer (then — the Web API).
     pub async fn devices(&self) -> Option<Vec<Device>> {
         let link = (self.link)()?;
         match self.cluster(&link).await {
@@ -128,7 +128,7 @@ impl ConnectBackend {
         }
     }
 
-    /// Громкость устройства 0..100 через connect-state; None — сессии нет.
+    /// A device's volume 0..100 via connect-state; None — there is no session.
     pub async fn set_volume(&self, device: &str, percent: u8) -> Option<Result<(), String>> {
         let link = (self.link)()?;
         Some(send_volume(&link, device, percent).await)
@@ -155,7 +155,7 @@ impl ConnectBackend {
             ApiCall::AddMany { request, uris, device } => {
                 return self.add_many(&link, *request, uris, device.clone()).await;
             }
-            // треки альбома — из метаданных сессии (без квоты Web API)
+            // an album's tracks — from the session metadata (without Web API quota)
             ApiCall::AlbumTracks { request, id } => {
                 match crate::engine::session_reads::album_with_tracks(&link.session, id).await {
                     Ok((_, tracks)) => Ok(ApiReply::AlbumTracks {
@@ -165,7 +165,7 @@ impl ConnectBackend {
                     Err(error) => Err(format!("album tracks via the session: {error:?}")),
                 }
             }
-            // метаданные одного трека — Web API: их нет в кластере устройства
+            // a single track's metadata — the Web API: they are not in the device's cluster
             ApiCall::TrackInfo { .. } => return self.web.call(call).await,
         };
         match result {
@@ -189,9 +189,9 @@ impl ConnectBackend {
         }
     }
 
-    // ---- кластер ------------------------------------------------------------------------------------
+    // ---- cluster ------------------------------------------------------------------------------------
 
-    /// Свежий кластер этой сессии (из пуша) или новый GET; второе — оценка серверного «сейчас», мс.
+    /// A fresh cluster for this session (from a push) or a new GET; the second — the server's estimate of "now", ms.
     async fn cluster(&self, link: &Link) -> Result<(Arc<Cluster>, i64), String> {
         let session_id = link.session.session_id();
         self.listen(link, &session_id);
@@ -219,7 +219,7 @@ impl ConnectBackend {
         Ok((cluster.clone(), server_now(&cluster, at)))
     }
 
-    /// Подписаться на пуши кластера этой сессии (один раз на сессию).
+    /// Subscribe to this session's cluster pushes (once per session).
     fn listen(&self, link: &Link, session_id: &str) {
         {
             let mut state = self.lock();
@@ -228,7 +228,7 @@ impl ConnectBackend {
             }
             state.listening = Some(session_id.to_owned());
         }
-        // подписка движка до запуска дилера; позже (её уже забрали) — новая у запущенного дилера
+        // the engine's subscription before the dealer starts; later (it has already been taken) — a new one from the running dealer
         let early = link.pushes.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take();
         let subscribed = match early {
             Some(updates) => Ok(updates),
@@ -284,8 +284,8 @@ impl ConnectBackend {
         (self.changed)(true, queue);
     }
 
-    /// Следить за состоянием Spirc этой сессии (один раз на сессию): смена трека, очереди, перемешивания
-    /// или контекста перечитывает очередь.
+    /// Watch this session's Spirc state (once per session): a track, queue, or shuffle change
+    /// re-reads the queue.
     fn watch_local(&self, link: &Link) {
         let session_id = link.session.session_id();
         {
@@ -308,7 +308,7 @@ impl ConnectBackend {
                 let Some(me) = me.upgrade() else { return };
                 (me.changed)(false, true);
             }
-            // движок остановлен
+            // the engine is stopped
             if let Some(me) = me.upgrade() {
                 let mut state = me.lock();
                 if state.watching.as_deref() == Some(session_id.as_str()) {
@@ -318,7 +318,7 @@ impl ConnectBackend {
         });
     }
 
-    // ---- чтения -------------------------------------------------------------------------------------
+    // ---- reads -------------------------------------------------------------------------------------
 
     async fn playback(&self, link: &Link) -> Result<Option<RemoteState>, String> {
         let (cluster, now) = self.cluster(link).await?;
@@ -331,7 +331,7 @@ impl ConnectBackend {
         Ok(remote_state(&cluster, now, &tracks))
     }
 
-    /// Играет этот ПК — очередь из Spirc (без сети); иначе — из кластера.
+    /// If this PC is playing — the queue from Spirc (no network); otherwise — from the cluster.
     async fn queue(&self, link: &Link) -> Result<FetchedQueue, String> {
         let local = link.local.borrow().clone().filter(|state| !state.track.uri.is_empty());
         if let Some(state) = local {
@@ -344,7 +344,7 @@ impl ConnectBackend {
         Ok(self.fetched(link, &cluster.player_state).await)
     }
 
-    /// Очередь и контекст из состояния плеера; данные треков и название контекста — через сессию (с кэшем).
+    /// The queue and context from the player state; track data and the context name — through the session (cached).
     async fn fetched(&self, link: &Link, state: &PlayerState) -> FetchedQueue {
         let (current, next) = queue_from_state(state, QUEUE_LIMIT);
         let wanted: Vec<String> = current.iter().chain(next.iter()).cloned().collect();
@@ -356,8 +356,8 @@ impl ConnectBackend {
         }
     }
 
-    /// Контекст для карточки «Играет из …»: название и обложка из кэша или через сессию (название из
-    /// метаданных плеера важнее).
+    /// The context for the "Playing from …" card: the name and cover art from the cache or through the session (the name from
+    /// the player's metadata matters more).
     async fn context(&self, link: &Link, state: &PlayerState) -> Option<PlayContext> {
         let uri = context_uri(state)?;
         let mut context = map::context_from_uri(&uri);
@@ -393,7 +393,7 @@ impl ConnectBackend {
         Some(context)
     }
 
-    /// Данные треков по URI: из кэша, недостающее — одним пакетным запросом через сессию.
+    /// Track data by URI: from the cache, whatever is missing — in one batched request through the session.
     async fn tracks(&self, link: &Link, uris: &[String]) -> HashMap<String, TrackItem> {
         let mut found = HashMap::new();
         let mut missing = Vec::new();
@@ -437,7 +437,7 @@ impl ConnectBackend {
         found
     }
 
-    // ---- команды ------------------------------------------------------------------------------------
+    // ---- commands ------------------------------------------------------------------------------------
 
     async fn remote(&self, link: &Link, action: &RemoteAction, device: Option<&str>) -> Result<(), String> {
         let (cluster, _) = self.cluster(link).await?;
@@ -448,11 +448,11 @@ impl ConnectBackend {
         }
         match action {
             RemoteAction::Volume(percent) => send_volume(link, target, *percent).await,
-            // «играть» на неактивном устройстве в Web API — перенос с воспроизведением
+            // "play" on an inactive device in the Web API — a transfer with playback
             RemoteAction::Play if target != active => {
                 send_transfer(link, if active.is_empty() { target } else { active }, target, true).await
             }
-            // только изменившийся флаг: librespot пересобирает «Далее» на каждом repeating_context
+            // only the changed flag: librespot rebuilds "Next" on every repeating_context
             RemoteAction::Repeat(mode) => {
                 send_command(link, target, &repeat_body(*mode, repeat(&cluster.player_state))).await
             }
@@ -472,7 +472,7 @@ impl ConnectBackend {
         send_command(link, &target, &body).await
     }
 
-    /// Перенос; Ok — имя устройства из кластера (если известно).
+    /// A transfer; Ok — the device name from the cluster (if known).
     async fn transfer(&self, link: &Link, device: &str, play: bool) -> Result<Option<String>, String> {
         let (cluster, _) = self.cluster(link).await?;
         let name = cluster.device.get(device).map(|info| info.name.clone()).filter(|name| !name.is_empty());
@@ -481,7 +481,7 @@ impl ConnectBackend {
         Ok(name)
     }
 
-    /// По одному треку, по порядку; на отказе остаток уходит через Web API.
+    /// One track at a time, in order; on a refusal the rest goes through the Web API.
     async fn add_many(&self, link: &Link, request: u64, uris: &[String], device: Option<String>) -> ApiReply {
         let target = match device.as_deref().filter(|device| !device.is_empty()) {
             Some(device) => Ok(device.to_owned()),
@@ -512,7 +512,7 @@ impl ConnectBackend {
     }
 }
 
-/// Обернуть Web API: сессия — из движка хозяина; пуш кластера — внеочередной опрос (и очередь, если сменилась).
+/// Wrapping the Web API: the session — from the host engine; a cluster push — an out-of-turn poll (and the queue, if it changed).
 pub(crate) fn wrap(
     web: Arc<dyn WebBackend>,
     host: &Arc<EngineHost>,
@@ -545,17 +545,17 @@ pub(crate) fn wrap(
 }
 
 impl PlayerHandle {
-    /// Устройства Spotify Connect из кластера сессии; None — движок не запущен или сессия не ответила.
+    /// Spotify Connect devices from the session's cluster; None — the engine is not started, or the session did not answer.
     pub async fn connect_devices(&self) -> Option<Vec<Device>> {
         self.connect().devices().await
     }
 
-    /// Громкость устройства через connect-state; None — движка нет (тогда — Web API).
+    /// A device's volume via connect-state; None — there is no engine (then — the Web API).
     pub async fn connect_volume(&self, device: &str, percent: u8) -> Option<Result<(), String>> {
         self.connect().set_volume(device, percent).await
     }
 
-    /// Счётчик пушей кластера: устройства или их состояние изменились.
+    /// A counter of cluster pushes: the devices or their state have changed.
     pub fn connect_changes(&self) -> watch::Receiver<u64> {
         self.connect().changes()
     }
@@ -574,7 +574,7 @@ impl WebBackend for ConnectBackend {
     }
 }
 
-// ---- запросы spclient ---------------------------------------------------------------------------------
+// ---- spclient requests ---------------------------------------------------------------------------------
 
 async fn send(link: &Link, method: Method, path: String, body: &Value) -> Result<(), String> {
     let mut headers = HeaderMap::new();
@@ -601,9 +601,9 @@ async fn send_transfer(link: &Link, from: &str, to: &str, play: bool) -> Result<
     send(link, Method::POST, format!("/connect-state/v1/connect/transfer/from/{from}/to/{to}"), &transfer_body(play)).await
 }
 
-// ---- чистые преобразования (тестируются без сети) --------------------------------------------------------
+// ---- pure conversions (tested without a network) --------------------------------------------------------
 
-/// Серверное «сейчас» по метке кластера и времени его получения; без метки — часы этого ПК.
+/// The server's "now" from the cluster's timestamp and the time it was received; without a timestamp — this PC's clock.
 fn server_now(cluster: &Cluster, received: Instant) -> i64 {
     if cluster.server_timestamp_ms > 0 {
         cluster.server_timestamp_ms + received.elapsed().as_millis() as i64
@@ -616,7 +616,7 @@ pub(crate) fn is_playing(state: &PlayerState) -> bool {
     state.is_playing && !state.is_paused
 }
 
-/// Позиция сейчас: на паузе — как записано, при игре — плюс прошедшее с отметки (не дальше длительности).
+/// The position now: when paused — as recorded, when playing — plus what has elapsed since the timestamp (no further than the duration).
 pub(crate) fn position_ms(state: &PlayerState, server_now_ms: i64) -> u32 {
     let mut position = state.position_as_of_timestamp.max(0);
     if is_playing(state) && state.timestamp > 0 {
@@ -640,7 +640,7 @@ pub(crate) fn repeat(state: &PlayerState) -> RepeatMode {
     }
 }
 
-/// Названия типов, как их пишет Web API (список устройств показывает иконку по ним).
+/// Type names as the Web API writes them (the device list shows an icon based on them).
 pub(crate) fn kind_name(kind: DeviceType) -> &'static str {
     match kind {
         DeviceType::COMPUTER => "Computer",
@@ -685,7 +685,7 @@ pub(crate) fn device(id: &str, info: &DeviceInfo, active: &str) -> Device {
     }
 }
 
-/// Видимые устройства кластера (скрытые — нет), по имени.
+/// The cluster's visible devices (hidden ones are not), by name.
 pub(crate) fn devices(cluster: &Cluster) -> Vec<Device> {
     let mut list: Vec<Device> = cluster
         .device
@@ -697,7 +697,7 @@ pub(crate) fn devices(cluster: &Cluster) -> Vec<Device> {
     list
 }
 
-/// Строка очереди, которую показывают (не разделитель, не скрытая, не служебная, не недоступная).
+/// A queue row that is shown (not a separator, not hidden, not internal, not unavailable).
 fn visible(track: &ProvidedTrack) -> bool {
     !track.uri.is_empty()
         && track.uri != "spotify:delimiter"
@@ -706,12 +706,12 @@ fn visible(track: &ProvidedTrack) -> bool {
         && track.metadata.get("hidden").map(String::as_str) != Some("true")
 }
 
-/// Поставлена вручную («В очередь»), а не из контекста или автоплея.
+/// Placed manually ("Add to queue"), not from the context or autoplay.
 fn queued(track: &ProvidedTrack) -> bool {
     track.provider == "queue" || track.metadata.get("is_queued").map(String::as_str) == Some("true")
 }
 
-/// URI текущего трека и первых `limit` следующих: ручные строки первыми, затем контекст и автоплей.
+/// The current track's URI and the first `limit` following ones: manual rows first, then the context and autoplay.
 pub(crate) fn queue_from_state(state: &PlayerState, limit: usize) -> (Option<String>, Vec<String>) {
     let current = Some(state.track.uri.clone()).filter(|uri| !uri.is_empty());
     let (manual, rest): (Vec<&ProvidedTrack>, Vec<&ProvidedTrack>) =
@@ -720,7 +720,7 @@ pub(crate) fn queue_from_state(state: &PlayerState, limit: usize) -> (Option<Str
     (current, next)
 }
 
-/// URI текущего трека и первых `limit` следующих у активного устройства кластера.
+/// The current track's URI and the first `limit` following ones for the cluster's active device.
 pub(crate) fn queue_uris(cluster: &Cluster, limit: usize) -> (Option<String>, Vec<String>) {
     if cluster.active_device_id.is_empty() {
         return (None, Vec::new());
@@ -728,13 +728,13 @@ pub(crate) fn queue_uris(cluster: &Cluster, limit: usize) -> (Option<String>, Ve
     queue_from_state(&cluster.player_state, limit)
 }
 
-/// Что сравнивать, чтобы понять, сменилась ли очередь своего устройства.
+/// What to compare to tell whether our own device's queue has changed.
 fn local_queue_key(state: &PlayerState) -> (String, Vec<String>, String) {
     let (current, next) = queue_from_state(state, QUEUE_LIMIT);
     (current.unwrap_or_default(), next, state.context_uri.clone())
 }
 
-/// Название контекста, если плеер его знает (метаданные контекста от Spotify).
+/// The context name, if the player knows it (the context's metadata from Spotify).
 fn context_title(state: &PlayerState) -> Option<String> {
     ["context_description", "title"]
         .iter()
@@ -744,13 +744,13 @@ fn context_title(state: &PlayerState) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Что сравнивать, чтобы понять, сменилась ли очередь.
+/// What to compare to tell whether the queue has changed.
 fn queue_key(cluster: &Cluster) -> (String, String, Vec<String>) {
     let (current, next) = queue_uris(cluster, QUEUE_LIMIT);
     (cluster.active_device_id.clone(), current.unwrap_or_default(), next)
 }
 
-/// Трек из кэша данных или минимальный (URI, id, длительность), пока данных нет.
+/// A track from the data cache, or a minimal one (URI, id, duration) while there is no data.
 fn track_item(uri: &str, tracks: &HashMap<String, TrackItem>, duration_ms: i64) -> TrackItem {
     let mut item = tracks.get(uri).cloned().unwrap_or_else(|| TrackItem {
         track_id: uri_id(uri).unwrap_or_default().to_owned(),
@@ -765,14 +765,14 @@ fn track_item(uri: &str, tracks: &HashMap<String, TrackItem>, duration_ms: i64) 
     item
 }
 
-/// Контекст, который показал бы Web API (у списка без контекста — нет).
+/// The context the Web API would show (a list without a context has none).
 fn context_uri(state: &PlayerState) -> Option<String> {
     let uri = state.context_uri.as_str();
     (uri.starts_with("spotify:") && uri != "spotify:web-api" && !uri.starts_with("spotify:internal:"))
         .then(|| sf_api::link::canonical_context_uri(uri))
 }
 
-/// Состояние в форме /me/player; None — ничего не активно (как 204).
+/// The state in /me/player form; None — nothing is active (like 204).
 pub(crate) fn remote_state(cluster: &Cluster, server_now_ms: i64, tracks: &HashMap<String, TrackItem>) -> Option<RemoteState> {
     let active = cluster.active_device_id.as_str();
     if active.is_empty() {
@@ -803,13 +803,13 @@ fn command(endpoint: &str, fields: Value) -> Value {
     json!({ "command": command })
 }
 
-/// Тело команды плеера (громкость — отдельный путь, см. send_volume).
+/// The player command body (volume — a separate path, see send_volume).
 pub(crate) fn action_body(action: &RemoteAction) -> Value {
     match action {
         RemoteAction::Play => command("resume", json!({})),
         RemoteAction::Pause => command("pause", json!({})),
         RemoteAction::Next => command("skip_next", json!({})),
-        // как Web API: всегда предыдущий трек, а не начало текущего
+        // like the Web API: always the previous track, not the start of the current one
         RemoteAction::Previous => command("skip_prev", json!({ "options": { "allow_seeking": false } })),
         RemoteAction::Seek(position) => command("seek_to", json!({ "value": position, "position": position })),
         RemoteAction::Shuffle(on) => command("set_shuffling_context", json!({ "value": on })),
@@ -824,7 +824,7 @@ pub(crate) fn action_body(action: &RemoteAction) -> Value {
     }
 }
 
-/// set_options только с флагами, которые меняются (ничего не меняется — оба).
+/// set_options only with the flags that change (nothing changes — both).
 pub(crate) fn repeat_body(mode: RepeatMode, current: RepeatMode) -> Value {
     let context = mode == RepeatMode::Context;
     let track = mode == RepeatMode::Track;
@@ -845,14 +845,14 @@ pub(crate) fn queue_body(uri: &str) -> Value {
     command("add_to_queue", json!({ "track": { "uri": uri, "metadata": { "is_queued": "true" }, "provider": "queue" } }))
 }
 
-/// «resume» — играть после переноса, «restore» — как было на прежнем устройстве.
+/// "resume" — play after the transfer, "restore" — as it was on the previous device.
 pub(crate) fn transfer_body(play: bool) -> Value {
     json!({ "transfer_options": { "restore_paused": if play { "resume" } else { "restore" } } })
 }
 
-/// Команда play для запроса Web API: контекст по URI или список треков страницей; None — пустой запрос.
+/// A play command for a Web API request: a context by URI or a list of tracks in pages; None — an empty request.
 pub(crate) fn play_body(request: &PlayRequest, shuffle: bool) -> Option<Value> {
-    // одиночный трек/выпуск играет как список из одного (как в PlayRequest::body)
+    // a single track/episode plays as a list of one (as in PlayRequest::body)
     let single = request
         .context_uri
         .as_deref()
@@ -976,12 +976,12 @@ mod tests {
         assert!(state.is_playing);
         assert!(state.shuffle);
         assert_eq!(state.repeat, RepeatMode::Off);
-        // 10 с на отметке + 5 с с её момента
+        // 10 s on the timestamp + 5 s from its moment
         assert_eq!(state.progress_ms, Some(15_000));
         assert_eq!(state.context_uri.as_deref(), Some("spotify:playlist:37i9dQZF1DXbIbVYph0Zr5"));
         let item = state.item.unwrap();
         assert_eq!(item.title, "Now");
-        // длительность — из кластера, если данные трека её не знают
+        // the duration — from the cluster, if the track data do not know it
         assert_eq!(item.duration_ms, 200_000);
     }
 
@@ -1001,7 +1001,7 @@ mod tests {
         assert_eq!(position_ms(&state, 9_999_999), 10_000);
         state.is_paused = false;
         assert_eq!(position_ms(&state, 9_999_999), 200_000);
-        // часы позади отметки не уводят позицию назад
+        // a clock behind the timestamp does not pull the position back
         assert_eq!(position_ms(&state, 0), 10_000);
     }
 
@@ -1031,7 +1031,7 @@ mod tests {
         ProvidedTrack { uri: uri.into(), provider: provider.into(), ..Default::default() }
     }
 
-    /// Состояние Spirc этого ПК: альбом, две ручные строки (одна — после контекстной), маркеры и автоплей.
+    /// This PC's Spirc state: an album, two manual rows (one after a context one), markers, and autoplay.
     fn local_state() -> PlayerState {
         let mut hidden = from("spotify:track:hidden", "context");
         hidden.metadata.insert("hidden".into(), "true".into());
@@ -1076,7 +1076,7 @@ mod tests {
         after.position_as_of_timestamp = 61_000;
         after.timestamp = 99;
         assert_eq!(local_queue_key(&before), local_queue_key(&after));
-        // перемешивание переставляет контекстные строки
+        // shuffle rearranges the context rows
         after.next_tracks.swap(1, 6);
         assert_ne!(local_queue_key(&before), local_queue_key(&after));
         let mut added = before.clone();
@@ -1101,7 +1101,7 @@ mod tests {
         assert_eq!(context_title(&state).as_deref(), Some("Discovery"));
         state.context_metadata.insert("context_description".into(), "Discovery (Deluxe)".into());
         assert_eq!(context_title(&state).as_deref(), Some("Discovery (Deluxe)"));
-        // список без контекста Web API не называет
+        // the Web API does not name a list without a context
         state.context_uri = "spotify:web-api".into();
         assert_eq!(context_uri(&state), None);
     }

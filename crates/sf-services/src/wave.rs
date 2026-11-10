@@ -1,8 +1,8 @@
-//! Радио Spotify (исполнитель «services-extra»; бывшая «Моя волна»). Станции только через сессию librespot:
-//! session_reads::station("spotify:station:{track|artist|album|playlist}:ID") → ~50 треков, каждый запуск — новый
-//! микс; играются ровно показанные треки списком URI с контекстом-станцией, дальше — autoplay librespot.
-//! «Радио по вашей музыке» (play()) = станция от последнего/любимого трека. Группы-основы вместо групп Яндекса,
-//! закрепления — первыми в группах. Локальный стоп-лист (Library.dislike) фильтрует треки.
+//! Spotify radio (provider "services-extra"; formerly "My Wave"). Stations only through the librespot session:
+//! session_reads::station("spotify:station:{track|artist|album|playlist}:ID") → ~50 tracks, every run is a new
+//! mix; exactly the shown tracks play as a URI list with a station context, then — librespot autoplay.
+//! "Radio by your music" (play()) = a station from the last/liked track. Base groups instead of Yandex's groups,
+//! pins — first in the groups. The local stop-list (Library.dislike) filters tracks.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
@@ -22,14 +22,14 @@ use crate::history::HistoryService;
 use crate::library::{FeedbackKind, LibraryEvent, LibraryService};
 use crate::lock;
 
-/// Ожидание станции от Spotify (reference backend.rs RADIO_TIMEOUT).
+/// Waiting for a station from Spotify (reference backend.rs RADIO_TIMEOUT).
 pub const RADIO_TIMEOUT: Duration = Duration::from_secs(20);
-/// Сколько истории смотреть для сидов.
+/// How much history to look at for the seeds.
 const HISTORY_FOR_SEEDS: usize = 50;
 const LIKED_FOR_SEEDS: usize = 30;
-/// Подпись сида (сессия или запасной Web API).
+/// Seed label (session or fallback Web API).
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(8);
-/// Пачка событий подряд → одна пересборка сидов.
+/// A batch of events in a row → one rebuild of the seeds.
 const SEEDS_DEBOUNCE: Duration = Duration::from_millis(150);
 
 pub const LOCKED_TEXT: &str = "Turn on playback on this computer — radio needs a Spotify session";
@@ -38,34 +38,34 @@ const TIMEOUT_TEXT: &str = "Spotify is taking too long to respond. Try again.";
 const NO_RADIO_TEXT: &str = "There’s no radio for this.";
 const EMPTY_TEXT: &str = "Spotify returned no tracks for this station.";
 
-/// Снимок для моста Radio.
+/// Snapshot for the Radio bridge.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WaveSnapshot {
-    /// играет станция этого сервиса (Player.source == "radio")
+    /// this service's station is playing (Player.source == "radio")
     pub active: bool,
-    /// резолвится станция
+    /// the station is resolving
     pub loading: bool,
-    /// «Радио «…»»
+    /// "Radio …"
     pub station_title: String,
-    /// spotify:station:… текущей/открытой станции
+    /// spotify:station:… of the current/open station
     pub station_uri: String,
-    /// сид выбранный на орбите (spotify:track|artist|album|playlist:ID)
+    /// the seed chosen on the orbit (spotify:track|artist|album|playlist:ID)
     pub selected: String,
-    /// треки открытой станции (список «Список треков»)
+    /// tracks of the open station (the "Track list" list)
     pub tracks: Arc<Vec<TrackItem>>,
-    /// группы сидов орбиты: recent | artists | collections | any
+    /// orbit seed groups: recent | artists | collections | any
     pub seeds: Arc<Vec<RadioSeedGroup>>,
-    /// нет локального воспроизведения/Premium — сиды неактивны
+    /// no local playback/Premium — the seeds are inactive
     pub locked: bool,
     pub error_text: String,
 }
 
-/// Что сделать с треками станции, когда они придут.
+/// What to do with the station's tracks when they arrive.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Then {
     Show,
     Play,
-    /// новый микс; играть его, если эта станция и играет
+    /// a new mix; play it if this station is the one playing
     Refresh,
 }
 
@@ -76,12 +76,12 @@ pub struct WaveService {
     library: Arc<LibraryService>,
     history: Arc<HistoryService>,
     snapshot: watch::Sender<WaveSnapshot>,
-    /// поколение запроса станции: принимается только последний ответ
+    /// station request generation: only the last answer is accepted
     generation: AtomicU64,
-    /// группа «Любой трек»: выбранные через поиск, новые первыми (SettingKey::RadioSeeds)
+    /// the "Any track" group: chosen through search, newest first (SettingKey::RadioSeeds)
     any: Mutex<Vec<RadioSeed>>,
     settings: Arc<SettingsStore>,
-    /// себя — для задач, запущенных из &self
+    /// itself — for tasks started from &self
     me: Weak<WaveService>,
 }
 
@@ -111,7 +111,7 @@ impl WaveService {
         service
     }
 
-    /// Большая кнопка: станция выбранного сида (по умолчанию — последний прослушанный трек) или пауза/продолжение.
+    /// The big button: the chosen seed's station (by default — the last played track) or pause/resume.
     pub fn play(&self) {
         let snap = self.snapshot();
         let player = self.player.snapshot();
@@ -128,14 +128,14 @@ impl WaveService {
         }
     }
 
-    /// Радио от сида: "artist:ID" | "track:ID" | "album:ID" | "playlist:ID" | полный spotify:…-URI.
+    /// Radio from a seed: "artist:ID" | "track:ID" | "album:ID" | "playlist:ID" | a full spotify:…-URI.
     pub fn play_station(&self, seed: String, title: String) {
         let Some((seed, station)) = normalize(&seed) else {
             self.snapshot.send_modify(|s| s.error_text = mf_i18n::t(NO_RADIO_TEXT));
             return;
         };
         let snap = self.snapshot();
-        // открытая станция уже показала треки — играются ровно они
+        // the open station has already shown the tracks — exactly they play
         if snap.station_uri == station && !snap.tracks.is_empty() && !snap.loading {
             let title = if title.is_empty() { snap.station_title.clone() } else { title };
             self.remember_any(&seed);
@@ -150,7 +150,7 @@ impl WaveService {
         self.request(seed, station, title, Then::Play);
     }
 
-    /// Выбрать сид на орбите (без запуска); "any"-сид добавляется в группу «Любой трек».
+    /// Choose a seed on the orbit (without starting); an "any" seed is added to the "Any track" group.
     pub fn select(&self, seed_uri: String) {
         let Some((seed, _)) = normalize(&seed_uri) else { return };
         self.remember_any(&seed);
@@ -160,7 +160,7 @@ impl WaveService {
         });
     }
 
-    /// Открыть станцию (загрузить треки без воспроизведения) — страница радио.
+    /// Open a station (load the tracks without playback) — the radio page.
     pub fn open(&self, seed_uri: String) {
         let Some((seed, station)) = normalize(&seed_uri) else {
             self.snapshot.send_modify(|s| s.error_text = mf_i18n::t(NO_RADIO_TEXT));
@@ -173,7 +173,7 @@ impl WaveService {
         self.request(seed, station, String::new(), Then::Show);
     }
 
-    /// «Пересобрать»: новый микс, старые треки видны до ответа.
+    /// "Rebuild": a new mix, the old tracks stay visible until the answer.
     pub fn refresh(&self) {
         let snap = self.snapshot();
         let seed = station_seed(&snap.station_uri)
@@ -184,7 +184,7 @@ impl WaveService {
         self.request(seed, station, title, Then::Refresh);
     }
 
-    /// «Сохранить как плейлист»: имя «Радио «…»», треки — показанные.
+    /// "Save as playlist": the name "Radio …", the tracks — the shown ones.
     pub fn save(&self) {
         let snap = self.snapshot();
         let uris: Vec<String> = snap.tracks.iter().map(TrackItem::play_uri).collect();
@@ -203,7 +203,7 @@ impl WaveService {
         self.snapshot.subscribe()
     }
 
-    // --- внутреннее ----------------------------------------------------------------------------
+    // --- internal ----------------------------------------------------------------------------
 
     fn next_generation(&self) -> u64 {
         self.generation.fetch_add(1, Ordering::SeqCst) + 1
@@ -213,7 +213,7 @@ impl WaveService {
         self.generation.load(Ordering::SeqCst) == generation
     }
 
-    /// Сид не из групп орбиты попадает в «Любой трек» (подпись — из известного или с Web API).
+    /// A seed not from the orbit groups goes into "Any track" (the label — from the known one or from Web API).
     fn remember_any(&self, seed: &str) {
         let snap = self.snapshot();
         if seeds::find(&snap.seeds, seed).is_some() {
@@ -300,7 +300,7 @@ impl WaveService {
         });
     }
 
-    /// active/locked/станция по снимку плеера.
+    /// active/locked/station by the player snapshot.
     fn follow_player(&self) {
         let player = self.player.snapshot();
         let active = player.source() == contexts::RADIO;
@@ -316,7 +316,7 @@ impl WaveService {
                 s.locked = locked;
                 changed = true;
             }
-            // станцию, запущенную не отсюда (восстановленная сессия), показываем, пока своей нет
+            // a station started not from here (a restored session) is shown while there is none of our own
             if active && s.station_uri.is_empty() && !s.loading && context_uri.starts_with("spotify:station:") {
                 s.station_uri = context_uri.clone();
                 s.station_title = player.context.title.clone();
@@ -395,7 +395,7 @@ impl WaveService {
                 }
                 Err(text) => me.snapshot.send_modify(|s| {
                     s.loading = false;
-                    // неудачное обновление оставляет прежний микс на экране
+                    // a failed refresh leaves the previous mix on screen
                     s.error_text = text;
                 }),
             }
@@ -406,7 +406,7 @@ impl WaveService {
         let uris: Vec<String> = tracks.iter().map(TrackItem::play_uri).collect();
         let cover = tracks.first().map(|t| t.cover.clone()).unwrap_or_default();
         let context = PlayContext::with_uri(contexts::RADIO, station).titled(title).with_cover(cover);
-        // первая строка — сразу: экран переключается на неё, пока грузится звук
+        // the first row — immediately: the screen switches to it while the audio loads
         if let Some(first) = tracks.first() {
             self.player.remember(first.clone());
         }
@@ -431,7 +431,7 @@ impl WaveService {
     }
 }
 
-/// Подписки: история/библиотека/вход/плеер → сиды и состояние.
+/// Subscriptions: history/library/login/player → seeds and state.
 async fn listen(weak: Weak<WaveService>) {
     let Some(me) = weak.upgrade() else { return };
     let mut history = me.history.subscribe();
@@ -503,7 +503,7 @@ async fn listen(weak: Weak<WaveService>) {
     }
 }
 
-/// Сид и станция: принимает "track:ID", spotify:-URI сида или саму станцию.
+/// Seed and station: accepts "track:ID", a spotify:-URI of the seed or the station itself.
 fn normalize(seed: &str) -> Option<(String, String)> {
     let seed = seed.trim();
     let seed = station_seed(seed).or_else(|| seed_uri(seed))?;
@@ -511,7 +511,7 @@ fn normalize(seed: &str) -> Option<(String, String)> {
     Some((seed, station))
 }
 
-/// Подпись-заглушка сида (English source; в UI — mf_i18n::t).
+/// Placeholder label of a seed (English source; in the UI — mf_i18n::t).
 fn kind_label(seed: &str) -> &'static str {
     match uri_kind(seed) {
         Some("artist") => "Artist",
@@ -521,7 +521,7 @@ fn kind_label(seed: &str) -> &'static str {
     }
 }
 
-/// Подпись — заглушка kind_label на любом языке (заглушка сохраняется в настройках «Любой трек», язык мог смениться).
+/// The label is a kind_label placeholder in any language (the placeholder is kept in the "Any track" settings, the language may have changed).
 fn is_kind_placeholder(label: &str, seed: &str) -> bool {
     let en = kind_label(seed);
     label == en || mf_i18n::translated_in_any(en, label)
@@ -531,7 +531,7 @@ fn playable(track: &TrackItem, hidden: &dyn Fn(&str) -> bool) -> bool {
     track.available && !track.is_episode && !track.track_id.is_empty() && !hidden(&track.play_uri())
 }
 
-/// Треки станции через сессию librespot (у Web API станций нет).
+/// Station tracks through the librespot session (Web API has no stations).
 async fn resolve(player: &PlayerHandle, station: &str) -> Result<Vec<TrackItem>, String> {
     let Some(session) = player.session() else {
         return Err(mf_i18n::t(LOCKED_TEXT));
@@ -546,8 +546,8 @@ async fn resolve(player: &PlayerHandle, station: &str) -> Result<Vec<TrackItem>,
     }
 }
 
-/// Подпись и обложка сида (для «любого трека» из поиска/меню): через сессию (подписи GraphQL, без квоты
-/// Web API), без неё — Web API с таймаутом (подпись не должна держать станцию).
+/// Label and cover of a seed (for "any track" from search/menu): through the session (GraphQL labels, without the
+/// Web API quota), without it — Web API with a timeout (the label must not hold up the station).
 async fn lookup(auth: &AuthService, player: &PlayerHandle, seed: &str) -> Option<RadioSeed> {
     let api = auth.api();
     let id = uri_id(seed)?.to_owned();
@@ -599,7 +599,7 @@ async fn web_lookup(api: &sf_api::ApiGateway, seed: &str, id: &str) -> Option<Ra
     (!found.label.is_empty()).then_some(found)
 }
 
-/// Группа «Любой трек» из настроек (битая запись — пустая группа).
+/// The "Any track" group from settings (a broken record is an empty group).
 fn load_any(settings: &SettingsStore) -> Vec<RadioSeed> {
     let mut any: Vec<RadioSeed> = serde_json::from_str(&settings.get_str(SettingKey::RadioSeeds)).unwrap_or_default();
     any.retain(|seed| !seed.uri.is_empty());

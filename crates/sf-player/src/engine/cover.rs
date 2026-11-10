@@ -1,19 +1,19 @@
-//! Скачивание обложки текущего трека в файл для темы (mf-theme) и SMTC/MPRIS:
-//! <cover_dir>/<sha1(url)>.jpg; уже скачанный файл не качается снова. Запись атомарная (`.part` → rename).
+//! Downloading the current track's cover to a file for the theme (mf-theme) and SMTC/MPRIS:
+//! <cover_dir>/<sha1(url)>.jpg; an already downloaded file is not downloaded again. The write is atomic (`.part` → rename).
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use sha1::{Digest, Sha1};
 
-/// Обложка больше этого — отказ (как в spotifast).
+/// A cover larger than this is refused (as in spotifast).
 const MAX_COVER_BYTES: usize = 8 * 1024 * 1024;
 
-/// Путь файла для URL (без скачивания).
+/// File path for a URL (without downloading).
 pub fn cover_path(cover_dir: &Path, url: &str) -> PathBuf {
     cover_dir.join(format!("{}.jpg", hex::encode(Sha1::digest(url.as_bytes()))))
 }
 
-/// Скачать (через общий HTTP-клиент с прокси) и вернуть путь; ошибка — текст.
+/// Download (through the shared HTTP client with proxy) and return the path; an error is text.
 pub async fn fetch_cover(http: &sf_api::Http, cover_dir: &Path, url: &str) -> Result<PathBuf, String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err(format!("cover: unsupported address {url:?}"));
@@ -22,7 +22,7 @@ pub async fn fetch_cover(http: &sf_api::Http, cover_dir: &Path, url: &str) -> Re
     if tokio::fs::metadata(&path).await.is_ok_and(|meta| meta.is_file() && meta.len() > 0) {
         return Ok(path);
     }
-    // картинка Spotify — по очереди с каждого его CDN (i.scdn.co в части сетей не открывается)
+    // Spotify's picture — in turn from each of its CDNs (i.scdn.co does not open on some networks)
     let client = http.client()?;
     let mut failure = String::from("cover: no address");
     let mut fetched = None;
@@ -60,7 +60,7 @@ pub async fn fetch_cover(http: &sf_api::Http, cover_dir: &Path, url: &str) -> Re
     tokio::fs::create_dir_all(cover_dir)
         .await
         .map_err(|error| format!("cover: {error}"))?;
-    // Свой временный файл на каждую загрузку: два одновременных запроса одного URL не мешают друг другу.
+    // A temporary file of its own for each download: two simultaneous requests for one URL do not interfere.
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let temporary = path.with_extension(format!(
         "{}-{}.part",
@@ -73,7 +73,7 @@ pub async fn fetch_cover(http: &sf_api::Http, cover_dir: &Path, url: &str) -> Re
     }
     if let Err(error) = tokio::fs::rename(&temporary, &path).await {
         let _ = tokio::fs::remove_file(&temporary).await;
-        // Другой загрузчик успел положить тот же файл — это успех.
+        // Another downloader managed to put the same file — that is a success.
         if tokio::fs::metadata(&path).await.is_ok_and(|meta| meta.len() > 0) {
             return Ok(path);
         }
@@ -136,7 +136,7 @@ mod tests {
         let dir = scratch("roundtrip");
         let _ = std::fs::remove_dir_all(&dir);
         let expected: Vec<u8> = (0..64 * 1024).map(|i| (i % 251) as u8).collect();
-        // Сервер отвечает один раз: второй вызов обязан взять файл.
+        // The server answers once: the second call must take the file.
         let url = serve("200 OK", expected.clone(), 1).await;
         let first = fetch_cover(&http(), &dir, &url).await.unwrap();
         assert_eq!(std::fs::read(&first).unwrap(), expected);

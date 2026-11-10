@@ -1,5 +1,5 @@
-//! PlayerHandle — фасад плеера для сервисов и мостов (форма PlayerHandle из yamusic-md3 с поправками под Spotify).
-//! Команды не блокируют: уходят в актор на tokio (mpsc), результат — в снимке/событиях.
+//! PlayerHandle — the player facade for services and bridges (the PlayerHandle shape from yamusic-md3, adjusted for Spotify).
+//! Commands do not block: they go to the actor on tokio (mpsc), and the result arrives in the snapshot/events.
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +21,7 @@ use crate::{
     PlayerSubscription, Repeat, Session,
 };
 
-/// Clone — дешёвый.
+/// Clone — cheap.
 #[derive(Clone)]
 pub struct PlayerHandle {
     inner: Arc<Inner>,
@@ -37,24 +37,24 @@ struct Inner {
     connect: Arc<ConnectBackend>,
 }
 
-/// Английский ключ перевода; наружу — `mf_i18n::t(NOT_READY)`.
+/// An English translation key; outward it is `mf_i18n::t(NOT_READY)`.
 const NOT_READY: &str = "Playback on this computer is off";
 
 impl PlayerHandle {
-    /// Запустить актор на `rt`. Web API (опрос /me/player, удалённые команды, очередь) — через `api`.
+    /// Start the actor on `rt`. The Web API (polling /me/player, remote commands, the queue) — through `api`.
     pub fn start(rt: &Handle, config: PlayerConfig, api: Arc<ApiGateway>) -> Result<Self, PlayerError> {
         let backend = Arc::new(SpotifyBackend::new(api, config.http.clone(), config.cover_dir.clone()));
         Ok(Self::with_backend(rt, config, backend))
     }
 
-    /// Запуск с любым Web API (тесты подставляют фейковый).
+    /// Startup with any Web API (tests substitute a fake one).
     pub(crate) fn with_backend(rt: &Handle, config: PlayerConfig, backend: Arc<dyn WebBackend>) -> Self {
         let initial = PlayerSnapshot { volume: config.volume, direction: 1, current_index: -1, ..Default::default() };
         let snapshot = Arc::new(watch::channel(initial).0);
         let (events, _) = broadcast::channel(1024);
         let (tx, rx) = mpsc::unbounded_channel();
         let host = Arc::new(EngineHost::new(tx.clone()));
-        // Connect (состояние, очередь, команды) — через сессию движка; Web API — запасной путь
+        // Connect (state, queue, commands) — through the engine session; the Web API is the fallback path
         let connect = connect::wrap(backend, &host, &tx);
         let backend: Arc<dyn WebBackend> = connect.clone();
         let reconnect: Reconnect = {
@@ -108,21 +108,21 @@ impl PlayerHandle {
         PlayerSubscription { snapshot: self.inner.snapshot.subscribe(), events: self.inner.events.subscribe() }
     }
 
-    // --- локальный движок (librespot) ---------------------------------------------------------
+    // --- local engine (librespot) ---------------------------------------------------------
 
-    /// Поднять Engine (Session + Spirc) с кредами; вызывает AuthService после проверки Premium.
-    /// Ok — устройство готово; reusable — сохранить в слот Playback.
+    /// Bring up the Engine (Session + Spirc) with credentials; called by AuthService after the Premium check.
+    /// Ok — the device is ready; reusable — save it in the Playback slot.
     pub async fn connect_local(&self, credentials: Credentials, config: EngineConfig) -> Result<EngineStarted, String> {
         self.inner.host.connect(credentials, config, None).await
     }
 
-    /// Перезапуск с новыми настройками (битрейт, нормализация, gapless, устройство вывода, кэш, имя)
-    /// с подхватом контекста, трека, позиции, режимов и ручной очереди.
+    /// Restart with new settings (bitrate, normalization, gapless, output device, cache, name)
+    /// carrying over the context, track, position, modes, and the manual queue.
     pub fn restart_engine(&self, config: EngineConfig) {
         self.send(Command::RestartEngine(Box::new(config)));
     }
 
-    /// Остановить локальный движок (выход, «Отключить воспроизведение»).
+    /// Stop the local engine (sign-out, "Disconnect playback").
     pub fn disconnect_local(&self) {
         self.inner.host.disconnect();
     }
@@ -131,17 +131,17 @@ impl PlayerHandle {
         self.inner.snapshot.borrow().local.clone()
     }
 
-    /// Сессия librespot (Clone, Arc внутри) — для session_reads, станций, rootlist; None — движок не готов.
+    /// The librespot session (Clone, Arc inside) — for session_reads, stations, rootlist; None — the engine is not ready.
     pub fn session(&self) -> Option<Session> {
         self.inner.host.engine().map(|link| link.engine.session().clone())
     }
 
-    /// id Connect-устройства этого ПК (hex(sha1(device_name))), если движок готов.
+    /// The Connect device id of this PC (hex(sha1(device_name))), if the engine is ready.
     pub fn this_device_id(&self) -> Option<String> {
         self.inner.host.engine().map(|link| link.engine.device_id().to_owned())
     }
 
-    /// Текст Spotify (color-lyrics) через сессию; Ok(None) — нет текста.
+    /// Spotify lyrics (color-lyrics) through the session; Ok(None) — no lyrics.
     pub async fn lyrics_json(&self, track_uri: &str) -> Result<Option<serde_json::Value>, String> {
         let link = self.inner.host.engine().ok_or_else(|| mf_i18n::t(NOT_READY))?;
         link.engine.lyrics_json(track_uri).await.map_err(|error| format!("{error:#}"))
@@ -152,83 +152,83 @@ impl PlayerHandle {
         link.engine.rootlist().await.map_err(|error| format!("{error:#}"))
     }
 
-    // --- запуск ------------------------------------------------------------------------------
+    // --- playback start ------------------------------------------------------------------------------
 
-    /// Список из модели QML, начиная с row: context.context_uri есть — Load{context_uri, offset_uri};
-    /// нет (поиск/фильтр/радио-список) — Load{uris (≤500 от row), offset}. Ручная очередь сохраняется.
+    /// A list from the QML model, starting at row: if context.context_uri is present — Load{context_uri, offset_uri};
+    /// if not (search/filter/radio list) — Load{uris (≤500 from row), offset}. The manual queue is preserved.
     pub fn play_items(&self, items: Vec<TrackItem>, row: usize, context: PlayContext) {
         self.send(Command::PlayItems { items, row, context });
     }
 
-    /// «Перемешать»: shuffle on и старт со случайного доступного трека.
+    /// "Shuffle": shuffle on and start from a random available track.
     pub fn shuffle_from(&self, items: Vec<TrackItem>, context: PlayContext) {
         self.send(Command::ShuffleFrom { items, context });
     }
 
-    /// Контекст по URI (плейлист/альбом/артист/шоу/станция), с трека offset_uri или с начала.
+    /// A context by URI (playlist/album/artist/show/station), from the offset_uri track or from the beginning.
     pub fn play_context(&self, context: PlayContext, offset_uri: Option<String>, shuffle: Option<bool>) {
         self.send(Command::PlayContext { context, offset: offset_uri, shuffle });
     }
 
-    /// Список URI с индекса (радио «играет показанные песни», история).
+    /// A list of URIs from an index (radio "plays the shown songs", history).
     pub fn play_uris(&self, uris: Vec<String>, index: usize, context: PlayContext) {
         self.send(Command::PlayUris { uris, index, context });
     }
 
-    /// Запомнить строку: выбранный трек показывается сразу, даже когда список знает только его URI.
+    /// Remember a row: the selected track is shown immediately, even when the list only knows its URI.
     pub fn remember(&self, track: TrackItem) {
         self.send(Command::Remember(Box::new(track)));
     }
 
-    /// Выпуск подкаста с позиции (resume_ms).
+    /// A podcast episode from a position (resume_ms).
     pub fn play_episode(&self, uri: String, position_ms: i64) {
         self.send(Command::PlayEpisode { uri, position_ms });
     }
 
-    // --- очередь (queue.md) -----------------------------------------------------------------
+    // --- queue (queue.md) -----------------------------------------------------------------
 
-    /// Совместимость: строка Player.queue по индексу = play_queue_row(uid этой строки).
+    /// Compatibility: a Player.queue row by index = play_queue_row(uid of that row).
     pub fn play_index(&self, index: usize) {
         self.send(Command::PlayIndex(index));
     }
 
-    /// Клик по строке очереди = N×Next: строки выше снимаются, контекст продолжается (п. 5).
+    /// A click on a queue row = N×Next: the rows above are removed, the context continues (§5).
     pub fn play_queue_row(&self, uid: u64) {
         self.send(Command::PlayQueueRow(uid));
     }
 
-    /// «В очередь»: после ручных, до контекста; двойной клик < 1,5 с — одна строка (п. 2).
+    /// "Add to queue": after the manual rows, before the context; a double click < 1.5 s — one row (§2).
     pub fn add_to_queue(&self, items: Vec<TrackItem>) {
         self.send(Command::AddToQueue(items));
     }
 
-    /// «В очередь» по URI: трек/выпуск — одна строка; альбом — все треки по порядку целиком или никак.
+    /// "Add to queue" by URI: a track/episode — one row; an album — all tracks in order, all or nothing.
     pub fn add_uri_to_queue(&self, uri: String) {
         self.send(Command::AddUriToQueue(uri));
     }
 
-    /// Вставка в позицию «Далее в очереди» (только локально; иначе — в конец).
+    /// Insert at the "Next in queue" position (local only; otherwise — at the end).
     pub fn insert_manual(&self, item: TrackItem, at: usize) {
         self.send(Command::InsertManual { item: Box::new(item), at });
     }
 
-    /// Перестановка внутри «Далее в очереди» (только локально): `from`, `to` — индексы внутри секции,
-    /// `to` — итоговое место строки (как ListChange::Move: remove(from), insert(to)).
+    /// Reordering within "Next in queue" (local only): `from`, `to` — indices within the section,
+    /// `to` — the row's final place (like ListChange::Move: remove(from), insert(to)).
     pub fn move_manual(&self, from: usize, to: usize) {
         self.send(Command::MoveManual { from, to });
     }
 
-    /// «Очистить» — только ручные строки (п. 7).
+    /// "Clear" — manual rows only (§7).
     pub fn clear_manual_queue(&self) {
         self.send(Command::ClearManualQueue);
     }
 
-    /// Перезапросить очередь (/me/player/queue).
+    /// Re-request the queue (/me/player/queue).
     pub fn refresh_queue(&self) {
         self.send(Command::RefreshQueue);
     }
 
-    // --- транспорт ---------------------------------------------------------------------------
+    // --- transport ---------------------------------------------------------------------------
 
     pub fn toggle_play(&self) {
         self.send(Command::TogglePlay);
@@ -242,17 +242,17 @@ impl PlayerHandle {
         self.send(Command::Pause);
     }
 
-    /// У Spotify нет «стоп» — пауза.
+    /// Spotify has no "stop" — pause.
     pub fn stop(&self) {
         self.send(Command::Stop);
     }
 
-    /// Next сразу снимает верхнюю строку очереди (п. 4).
+    /// Next immediately removes the top queue row (§4).
     pub fn next(&self) {
         self.send(Command::Next);
     }
 
-    /// После 3 с — в начало трека (делает librespot / Web API), иначе предыдущий.
+    /// After 3 s — to the start of the track (done by librespot / the Web API), otherwise the previous one.
     pub fn previous(&self) {
         self.send(Command::Previous);
     }
@@ -265,7 +265,7 @@ impl PlayerHandle {
         self.send(Command::SeekMs(ms));
     }
 
-    /// ±мс от текущей позиции (выпуски: −10 с / +30 с).
+    /// ±ms from the current position (episodes: −10 s / +30 s).
     pub fn seek_relative(&self, delta_ms: i64) {
         self.send(Command::SeekRelative(delta_ms));
     }
@@ -282,7 +282,7 @@ impl PlayerHandle {
         self.send(Command::SetShuffle(value));
     }
 
-    /// 0..1; при перетаскивании — VolumePreview, через ~150 мс тишины — Volume (удалённо — PUT volume).
+    /// 0..1; while dragging — VolumePreview, after ~150 ms of silence — Volume (remotely — PUT volume).
     pub fn set_volume(&self, value: f64) {
         self.send(Command::SetVolume(value.clamp(0.0, 1.0)));
     }
@@ -291,53 +291,53 @@ impl PlayerHandle {
         self.send(Command::SetLevelsWanted(value));
     }
 
-    /// Автоплей по окончании списка (autoplay_seed) — сразу, без перезапуска движка (зовёт glue).
+    /// Autoplay when the list ends (autoplay_seed) — immediately, without restarting the engine (calls glue).
     pub fn set_autoplay(&self, value: bool) {
         self.send(Command::SetAutoplay(value));
     }
 
     // --- Connect ---------------------------------------------------------------------------
 
-    /// Перенести воспроизведение на этот ПК (librespot Transfer); устройство пропало — продолжить здесь
-    /// с последнего удалённого снимка.
+    /// Move playback to this PC (librespot Transfer); the device disappeared — continue here
+    /// from the last remote snapshot.
     pub fn transfer_here(&self, play: bool) {
         self.send(Command::TransferHere(play));
     }
 
-    /// Перенести на устройство Connect (PUT /me/player).
+    /// Move to a Connect device (PUT /me/player).
     pub fn transfer_to(&self, device_id: String, play: bool) {
         self.send(Command::TransferTo(device_id, play));
     }
 
-    /// Опросить /me/player сейчас.
+    /// Poll /me/player now.
     pub fn refresh_remote(&self) {
         self.send(Command::RefreshRemote);
     }
 
-    /// Окно видно — опрос в обычном темпе; скрыто и ничего не играет — реже.
+    /// The window is visible — polling at the normal pace; hidden and nothing playing — less often.
     pub fn set_app_active(&self, active: bool) {
         self.send(Command::SetAppActive(active));
     }
 
-    // --- жизненный цикл ---------------------------------------------------------------------
+    // --- lifecycle ---------------------------------------------------------------------
 
-    /// Старт: подхватить текущее воспроизведение аккаунта и сохранённую ручную очередь.
+    /// Startup: pick up the account's current playback and the saved manual queue.
     pub fn restore_session(&self) {
         self.load_session();
     }
 
-    /// Выход из аккаунта: забыть очередь, удалённое состояние и точку возобновления этого аккаунта.
+    /// Sign-out: forget the queue, the remote state, and this account's resume point.
     pub fn reset_account(&self) {
         self.send(Command::ResetAccount);
     }
 
-    /// Вход скоро поднимет движок (true) или передумал (false): «Играть» до подключения ждёт движок,
-    /// а не просит выбрать устройство (как playback_authorized в spotifast).
+    /// Sign-in will bring up the engine soon (true) or changed its mind (false): "Play" before connecting waits for the engine,
+    /// instead of asking to choose a device (like playback_authorized in spotifast).
     pub fn expect_local(&self, expected: bool) {
         self.send(Command::ExpectLocal(expected));
     }
 
-    /// Выход: сохранить сессию, остановить движок. Блокирует ≤ 2 с.
+    /// Exit: save the session, stop the engine. Blocks for ≤ 2 s.
     pub fn shutdown(&self) {
         let (done, wait) = std::sync::mpsc::channel();
         if self.inner.tx.send(Msg::Shutdown(done)).is_ok() {

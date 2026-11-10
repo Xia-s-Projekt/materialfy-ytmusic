@@ -1,6 +1,6 @@
-//! Связки без QML (исполнитель «services-extra»): настройки → плеер (autoplay), сборка EngineConfig из настроек,
-//! медиаклавиши и системная панель «Сейчас играет» через fastframe-now-playing: Windows — SMTC (свой поток и
-//! скрытое окно, HWND Qt не нужен), macOS — Now Playing, Linux — MPRIS org.mpris.MediaPlayer2.materialfy.
+//! Glue without QML (provider "services-extra"): settings → player (autoplay), building EngineConfig from settings,
+//! media keys and the "Now playing" system panel through fastframe-now-playing: Windows — SMTC (its own thread and
+//! a hidden window, no Qt HWND needed), macOS — Now Playing, Linux — MPRIS org.mpris.MediaPlayer2.materialfy.
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,9 +12,9 @@ use mf_platform::{SettingKey, SettingsStore};
 
 use crate::AppRequest;
 
-/// «Живое» из настроек → плеер: Autoplay, скорость и кроссфейд (последние два вывод звука читает сам на каждом
-/// пакете). Громкость в плеер передаёт только мост Player (начальная — PlayerConfig.volume); параметры движка
-/// не трогает (флаг перезапуска ведёт AuthService).
+/// "Live" from settings → player: Autoplay, speed and crossfade (the audio output reads the last two itself on every
+/// packet). Volume is passed to the player only by the Player bridge (the initial one — PlayerConfig.volume); it does not touch the engine
+/// parameters (the restart flag is kept by AuthService).
 pub fn spawn_settings_glue(rt: &Handle, settings: Arc<SettingsStore>, player: PlayerHandle) {
     apply_audio_fx(&settings);
     let mut changes = settings.subscribe();
@@ -34,7 +34,7 @@ pub fn spawn_settings_glue(rt: &Handle, settings: Arc<SettingsStore>, player: Pl
     });
 }
 
-/// Скорость и кроссфейд из настроек → вывод звука.
+/// Speed and crossfade from settings → audio output.
 fn apply_audio_fx(settings: &SettingsStore) {
     use sf_player::engine::fx;
     fx::set_speed(settings.get_f64(SettingKey::PlaybackSpeed) as f32);
@@ -43,9 +43,9 @@ fn apply_audio_fx(settings: &SettingsStore) {
     fx::set_dj_voice(settings.get_bool(SettingKey::DjVoice));
 }
 
-/// EngineConfig из настроек: имя устройства (DeviceName или DevicesService::default_device_name), битрейт,
-/// нормализация, autoplay, gapless, устройство вывода, кэш (AudioCache/AudioCacheMb → dirs::audio_cache_dir),
-/// громкость, прокси. tap — новый AudioTap (PlayerHandle подменяет своим), eq — по умолчанию (EQ-UI нет).
+/// EngineConfig from settings: device name (DeviceName or DevicesService::default_device_name), bitrate,
+/// normalization, autoplay, gapless, output device, cache (AudioCache/AudioCacheMb → dirs::audio_cache_dir),
+/// volume, proxy. tap — a new AudioTap (PlayerHandle replaces it with its own), eq — by default (there is no EQ UI).
 pub fn engine_config(settings: &SettingsStore, proxy: ProxyConfig) -> EngineConfig {
     let volume = settings.get_f64(SettingKey::Volume).clamp(0.0, 1.0);
     let name = settings.get_str(SettingKey::DeviceName);
@@ -75,14 +75,14 @@ pub fn engine_config(settings: &SettingsStore, proxy: ProxyConfig) -> EngineConf
     }
 }
 
-/// Остановка медиаинтеграции при выходе.
+/// Stopping the media integration on exit.
 pub struct MediaStop {
     #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
     media: crate::extra::media::Media,
 }
 
 impl MediaStop {
-    /// Снять панель/шину и подождать поток не дольше `timeout`.
+    /// Take down the panel/bus and wait for the thread no longer than `timeout`.
     pub fn stop(self, timeout: Duration) {
         #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
         self.media.stop(timeout);
@@ -91,15 +91,15 @@ impl MediaStop {
     }
 }
 
-/// Медиаклавиши/SMTC (Windows), MPRIS (Linux), Now Playing (macOS): состояние из PlayerSnapshot,
-/// команды → PlayerHandle; Raise/Quit → AppRequest. None — не поддерживается/не запустилось.
+/// Media keys/SMTC (Windows), MPRIS (Linux), Now Playing (macOS): state from PlayerSnapshot,
+/// commands → PlayerHandle; Raise/Quit → AppRequest. None — not supported/did not start.
 pub fn start_media_controls(
     rt: &Handle,
     settings: Arc<SettingsStore>,
     player: PlayerHandle,
     requests: broadcast::Sender<AppRequest>,
 ) -> Option<MediaStop> {
-    // громкость из панели идёт в плеер; в настройки её пишет мост Player по volumeChanged
+    // the volume from the panel goes to the player; the Player bridge writes it to settings on volumeChanged
     let _ = settings;
     #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
     {

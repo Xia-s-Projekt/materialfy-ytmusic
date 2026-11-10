@@ -3,11 +3,11 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Правая выдвижная панель: очередь / текст песни / устройства Connect.
+// The right slide-out panel: queue / song lyrics / Connect devices.
 Surface {
     id: root
 
-    // Вкладки (Settings.rightPanelTab). Подпись — только у выбранной: три подписи в 340 px не помещаются.
+    // Tabs (Settings.rightPanelTab). Only the selected one has a label: three labels do not fit in 340 px.
     readonly property var tabs: [
         { key: "queue", text: I18n.t("Queue"), icon: "queue_music" },
         { key: "lyrics", text: I18n.t("Song lyrics"), icon: "title" },
@@ -52,7 +52,7 @@ Surface {
                 baseFontSize: 22
                 anchorPos: 0.3
             }
-            // загружается при первом открытии вкладки
+            // loaded when the tab is first opened
             Loader {
                 anchors.fill: parent
                 active: root.tab === "devices" || item !== null

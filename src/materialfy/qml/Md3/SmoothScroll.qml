@@ -1,18 +1,18 @@
 import QtQuick
 
-// Плавная прокрутка для любого Flickable/ListView: SmoothScroll { flickable: list }.
-// Колесо мыши: щелчок сдвигает цель на wheelStep, contentY догоняет её экспоненциально
-// (независимо от частоты кадров — одинаково на 60 и 144 Гц); быстрые щелчки накапливаются.
-// Тачпад: пиксели 1:1 без задержки. Плюс тонкий индикатор прокрутки.
-// Перетаскивание контента мышью стоит выключить у самого Flickable: acceptedButtons: Qt.NoButton.
+// Smooth scrolling for any Flickable/ListView: SmoothScroll { flickable: list }.
+// Mouse wheel: a click moves the target by wheelStep, contentY catches up to it exponentially
+// (regardless of frame rate — the same at 60 and 144 Hz); quick clicks accumulate.
+// Touchpad: pixels 1:1 without delay. Plus a thin scroll indicator.
+// Dragging the content with the mouse is best disabled on the Flickable itself: acceptedButtons: Qt.NoButton.
 Item {
     id: root
 
     required property Flickable flickable
-    property real wheelStep: 150          // px за щелчок колеса
-    property real smoothing: 14           // 1/с: больше — быстрее доводка
-    property real maxBoost: 2             // быстрое вращение колеса разгоняет шаг до wheelStep × maxBoost
-    property real _recent: 0              // «щелчков» за последние ~0,25 с (с затуханием)
+    property real wheelStep: 150          // px per wheel click
+    property real smoothing: 14           // 1/s: higher — faster catch-up
+    property real maxBoost: 2             // fast wheel spinning boosts the step up to wheelStep x maxBoost
+    property real _recent: 0              // "clicks" in the last ~0.25 s (with decay)
     property real _lastWheel: 0
     property bool showScrollBar: true
 
@@ -20,30 +20,30 @@ Item {
     readonly property real maxY: flickable.originY + Math.max(0, flickable.contentHeight - flickable.height)
     property real _target: 0
 
-    // --debug-wheel: печатать сырые события колеса
+    // --debug-wheel: print raw wheel events
     readonly property bool debugWheel: typeof materialfyDebugWheel !== "undefined" && materialfyDebugWheel
 
-    signal userScrolled()   // колесо, тачпад или индикатор — не программная прокрутка
+    signal userScrolled()   // wheel, touchpad or indicator — not a programmatic scroll
 
     function clampY(y) { return Math.max(minY, Math.min(maxY, y)) }
 
-    // Тачпад: сдвиг сразу, без сглаживания
-    property real _fineUntil: 0           // до этого момента поток событий без фаз — тачпад Windows
-    property bool _momentum: false        // в этом жесте система сама шлёт инерцию
-    property var _samples: []             // [{ t, d }] — сдвиги пальца за последние ~0,1 с
+    // Touchpad: move immediately, without smoothing
+    property real _fineUntil: 0           // until this moment the event stream has no phases — a Windows touchpad
+    property bool _momentum: false        // in this gesture the system sends the momentum itself
+    property var _samples: []             // [{ t, d }] — finger movements over the last ~0.1 s
     function _direct(dy) {
         smooth.running = false
         flickable.contentY = clampY(flickable.contentY + dy)
         _target = flickable.contentY
         directPulse.restart()
     }
-    Timer { id: directPulse; interval: 500 }   // индикатор прокрутки виден и при сдвигах тачпадом
+    Timer { id: directPulse; interval: 500 }   // the scroll indicator is also visible during touchpad moves
     function _sample(now, d) {
         _samples.push({ t: now, d: d })
         while (_samples.length > 0 && now - _samples[0].t > 100)
             _samples.shift()
     }
-    // px/с по знаку pixelDelta (flick(0, v) с v > 0 едет к началу, как палец вниз)
+    // px/s by the sign of pixelDelta (flick(0, v) with v > 0 goes to the start, like a finger moving down)
     function _speed(now) {
         const s = _samples.filter(p => now - p.t <= 100)
         if (s.length < 2 || now - s[s.length - 1].t > 50)
@@ -75,9 +75,9 @@ Item {
             if (root.debugWheel)
                 console.log(`wheel: type=${event.device.type} name="${event.device.name}" phase=${event.phase}`
                             + ` angle=${event.angleDelta.y} pixel=${event.pixelDelta.y} inverted=${event.inverted}`)
-            // Тачпад узнаём по фазе жеста (Begin/Update/End есть только у пальцевой прокрутки).
-            // Ни тип устройства, ни pixelDelta не надёжны: на Wayland колесо мыши тоже присылает
-            // pixelDelta (~15 px за щелчок), а часть мышей приходит с типом «TouchPad».
+            // A touchpad is recognized by the gesture phase (Begin/Update/End exist only for finger scrolling).
+            // Neither the device type nor pixelDelta is reliable: on Wayland the mouse wheel also sends
+            // pixelDelta (~15 px per click), and some mice arrive with the "TouchPad" type.
             const now = Date.now()
             const touchpad = event.phase !== Qt.NoScrollPhase
             if (touchpad) {
@@ -87,15 +87,15 @@ Item {
                     root._samples = []
                     root._momentum = false
                 } else if (event.phase === Qt.ScrollMomentum) {
-                    root._momentum = true   // инерцию даёт сама система (macOS)
+                    root._momentum = true   // the momentum comes from the system itself (macOS)
                 }
                 const dy = event.pixelDelta.y
                 if (dy !== 0) {
                     root._sample(now, dy)
                     root._direct(-dy)
                 }
-                // Палец отпущен, а система инерции не даёт (Wayland, X11): докручиваем сами — flick
-                // со скоростью последних ~0,1 с, как у пальца на сенсорном экране
+                // The finger is released but the system gives no momentum (Wayland, X11): we finish the scroll ourselves — flick
+                // at the speed of the last ~0.1 s, like a finger on a touch screen
                 if (event.phase === Qt.ScrollEnd && !root._momentum && ["osx", "macos"].indexOf(Qt.platform.os) < 0) {
                     const v = root._speed(now)
                     root._samples = []
@@ -106,11 +106,11 @@ Item {
             }
             if (root.flickable.flicking)
                 root.flickable.cancelFlick()
-            // Тачпад Windows приходит без фаз, как колесо (WM_MOUSEWHEEL), но долями щелчка произвольной
-            // величины и десятками событий в секунду (инерцию после отпускания система досылает такими же
-            // событиями). Сглаживание и разгон для него — запаздывание за пальцем и «тугая» прокрутка, поэтому
-            // любая доля щелчка двигает список сразу, пропорционально (hi-res колесу так тоже лучше: его
-            // доли и есть плавность), и ещё 0,4 с после неё — весь поток. Сглаживание — целым щелчкам.
+            // A Windows touchpad arrives without phases, like a wheel (WM_MOUSEWHEEL), but in fractions of a click of arbitrary
+            // size, dozens of events per second (the system sends the post-release momentum the same
+            // way). For it, smoothing and boost mean lagging behind the finger and a "stiff" scroll, so
+            // any fraction of a click moves the list at once, proportionally (hi-res wheels are better off this way too: their
+            // fractions are the smoothness), and for another 0.4 s after it — the whole stream. Smoothing — whole clicks only.
             const a = Math.abs(event.angleDelta.y)
             if (a % 120 !== 0)
                 root._fineUntil = now + 400
@@ -118,11 +118,11 @@ Item {
                 root._direct(-event.angleDelta.y / 120 * root.wheelStep)
                 return
             }
-            // Целые щелчки: цель сдвигается на wheelStep за щелчок, contentY догоняет её плавно.
-            // Нет angleDelta — пересчитываем пиксели: Wayland отдаёт 15 px на щелчок.
+            // Whole clicks: the target moves by wheelStep per click, contentY catches up smoothly.
+            // No angleDelta — recompute from pixels: Wayland gives 15 px per click.
             const notches = event.angleDelta.y !== 0 ? event.angleDelta.y / 120 : event.pixelDelta.y / 15
-            // Разгон — по числу щелчков за последние ~0,25 с, а не по интервалу между событиями,
-            // иначе hi-res колесо разгонялось бы уже внутри одного щелчка.
+            // The boost is by the number of clicks in the last ~0.25 s, not by the interval between events,
+            // otherwise a hi-res wheel would boost within a single click.
             root._recent = root._recent * Math.exp(-(now - root._lastWheel) / 250) + Math.abs(notches)
             root._lastWheel = now
             const boost = Math.max(1, Math.min(root.maxBoost, 1 + (root._recent - 2) * 0.25))
@@ -143,14 +143,14 @@ Item {
                 running = false
                 return
             }
-            // Целые пиксели: иконки (нативный растеризатор) привязаны к пиксельной сетке, а текст и
-            // картинки — нет; при дробном contentY они «дрожат» друг относительно друга.
+            // Whole pixels: icons (the native rasterizer) are snapped to the pixel grid, while text and
+            // images are not; with a fractional contentY they "shimmer" relative to each other.
             const step = d * (1 - Math.exp(-frameTime * root.smoothing))
             root.flickable.contentY = Math.round(root.flickable.contentY + (Math.abs(step) < 1 ? Math.sign(d) : step))
         }
     }
 
-    // Тонкий индикатор прокрутки: проявляется при движении и наведении, тянется мышью.
+    // Thin scroll indicator: appears on movement and hover, dragged with the mouse.
     Item {
         id: bar
         parent: root.flickable

@@ -1,6 +1,6 @@
-//! Нейтральные типы для QML: плоские элементы (serde camelCase → QVariantMap в оболочке), изменения списков,
-//! контекст воспроизведения, строковые id. Ни Spotify, ни Qt здесь нет — маппинг из Web API живёт в sf-api.
-//! Ключи сериализации — нормативный контракт с QML.
+//! Neutral types for QML: flat items (serde camelCase → QVariantMap in the shell), list changes,
+//! playback context, string ids. Neither Spotify nor Qt is here — the mapping from the Web API lives in sf-api.
+//! The serialization keys are a binding contract with QML.
 #![allow(clippy::new_without_default)]
 
 pub mod context;

@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Поповер «Радио по любому треку»: поиск по трекам Spotify (Catalog.search(text, "tracks")), 6 результатов;
-// выбор → picked(uri) (сид попадает в группу «Любой трек»). Кладётся поверх страницы: anchors.fill;
-// open(item) — рядом с элементом (кружок «+» на орбите). Клик мимо или Esc — закрыть.
+// The "Radio from any track" popover: search Spotify tracks (Catalog.search(text, "tracks")), 6 results;
+// a choice -> picked(uri) (the seed goes into the "Any track" group). It is placed over the page: anchors.fill;
+// open(item) — next to the element (the "+" circle on the orbit). A click outside or Esc — close.
 Item {
     id: root
 
@@ -85,7 +85,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 model: root.query.trim() !== "" ? Catalog.searchTracks : null
-                // только первые 6
+                // only the first 6
                 delegate: Item {
                     id: row
                     required property int index

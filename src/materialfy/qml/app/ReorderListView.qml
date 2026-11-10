@@ -1,11 +1,11 @@
 import QtQuick
 import Md3
 
-// ListView с перестановкой строк за ручку (режим правки плейлиста). Делегат зовёт beginDrag(index),
-// updateDrag(dy, sceneY), endDrag() и сдвигается на shiftFor(index); поднятая строка едет на dragOffset.
-// Соседи расступаются на высоту строки (Behavior у делегата), у краёв список сам прокручивается.
-// Отпускание → moveRequested(from, to) (to — итоговый индекс строки). До ответа модели строки стоят на новых
-// местах; модель переставила строки (или ничего не изменилось за 1,5 с) — сдвиги снимаются без анимации.
+// ListView with row reordering by a drag handle (playlist edit mode). The delegate calls beginDrag(index),
+// updateDrag(dy, sceneY), endDrag() and shifts by shiftFor(index); the lifted row travels by dragOffset.
+// Neighbors make room for the row height (a Behavior in the delegate), and near the edges the list scrolls itself.
+// Release → moveRequested(from, to) (to is the resulting row index). Until the model answers, the rows stay in their
+// new places; once the model has moved the rows (or nothing changed for 1.5 s) the shifts drop without animation.
 ListView {
     id: view
 
@@ -16,9 +16,9 @@ ListView {
     property int dragTo: -1
     property real _dy: 0
     property real _scrollStart: 0
-    property real _pointerY: 0             // в координатах списка
-    property bool _settling: false         // отпустили: ждём, пока модель переставит строки
-    property bool shiftAnimated: true      // соседи сдвигаются плавно (false — на время снятия сдвигов)
+    property real _pointerY: 0             // in list coordinates
+    property bool _settling: false         // released: waiting for the model to move the rows
+    property bool shiftAnimated: true      // neighbors shift smoothly (false — while the shifts drop)
 
     signal moveRequested(int from, int to)
 
@@ -79,7 +79,7 @@ ListView {
         id: settleTimeout
         interval: 1500
         onTriggered: {
-            // ответа модели нет — строки плавно возвращаются (откат делает сервис)
+            // no answer from the model — the rows smoothly return (the service does the rollback)
             view._settling = false
             view.dragFrom = -1
             view.dragTo = -1
@@ -97,7 +97,7 @@ ListView {
         function onLayoutChanged() { view._settle() }
     }
 
-    // Автопрокрутка у верхнего и нижнего края, только пока строка поднята
+    // Auto-scroll near the top and bottom edge, only while the row is lifted
     Timer {
         interval: 16
         repeat: true

@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Настройки → «Обновления»: текущая версия и итог проверки, «Проверить сейчас» (с индикатором прямо
-// в кнопке), автоматическая проверка, канал (стабильные / бета). Само обновление — в UpdateSheet.
+// Settings → "Updates": current version and the result of the last check, "Check now" (with a spinner right
+// inside the button), automatic checks, channel (stable / beta). The update itself lives in UpdateSheet.
 SettingsCard {
     id: root
 

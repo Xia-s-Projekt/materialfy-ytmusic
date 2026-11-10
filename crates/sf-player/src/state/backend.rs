@@ -1,5 +1,5 @@
-//! Ввод-вывод ядра: Web API (через ApiGateway) и локальный движок. Трейты нужны, чтобы тесты подставляли
-//! фейковый движок и фейковый Web API.
+//! Core I/O: the Web API (through ApiGateway) and the local engine. The traits exist so that tests can substitute
+//! a fake engine and a fake Web API.
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -17,22 +17,22 @@ use crate::engine::{Engine, PlayerCommand};
 
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 
-/// Web API и загрузка обложек.
+/// The Web API and cover art loading.
 pub trait WebBackend: Send + Sync {
     fn call(&self, call: ApiCall) -> BoxFuture<ApiReply>;
     fn fetch_cover(&self, url: String) -> BoxFuture<Result<PathBuf, String>>;
 }
 
-/// Локальный движок librespot с точки зрения ядра.
+/// The local librespot engine from the core's point of view.
 pub trait LocalEngine: Send + Sync {
     fn command(&self, command: PlayerCommand) -> Result<(), String>;
-    /// уровень звука 0..1 для «дыхания» обложки
+    /// the audio level 0..1 for the cover art's "breathing"
     fn level(&self) -> f64;
-    /// Гейт уровня: пока false, движок не наполняет tap (AudioTap::set_wanted).
+    /// The level gate: while false, the engine does not fill the tap (AudioTap::set_wanted).
     fn set_levels_wanted(&self, _wanted: bool) {}
 }
 
-/// Engine + его tap уровня.
+/// The Engine and its level tap.
 pub struct EngineLink {
     pub engine: Engine,
     pub tap: Arc<AudioTap>,
@@ -52,7 +52,7 @@ impl LocalEngine for EngineLink {
     }
 }
 
-/// Настоящий Web API Spotify.
+/// The real Spotify Web API.
 pub struct SpotifyBackend {
     api: Arc<ApiGateway>,
     http: sf_api::Http,
@@ -122,7 +122,7 @@ async fn run(api: Arc<ApiGateway>, call: ApiCall) -> ApiReply {
             let result = match client {
                 Ok(client) => {
                     let device = device.as_deref();
-                    // перемешивание и запуск — одним упорядоченным обменом, иначе shuffle иногда проигрывает
+                    // shuffle and start in a single ordered exchange, otherwise shuffle sometimes loses
                     let shuffled = if shuffle { client.set_shuffle(true, device).await } else { Ok(()) };
                     match shuffled {
                         Ok(()) => client.play(device, Some(&request)).await,
@@ -179,7 +179,7 @@ async fn run(api: Arc<ApiGateway>, call: ApiCall) -> ApiReply {
                         client.track(&id).await.map(|track| sf_api::map::track_item(&track))
                     };
                     fetched.map(|mut item| {
-                        // ответ мог прийти с другим URI (рынок/точная версия) — оставляем тот, что играет
+                        // the answer may have come back with a different URI (market/exact version) — we keep the one that is playing
                         item.uri = uri.clone();
                         item.track_id = id.clone();
                         item
@@ -196,7 +196,7 @@ fn out_of_order() -> ApiError {
     ApiError::Decode("album tracks arrived out of order, try again".into())
 }
 
-/// Все страницы альбома по порядку — целиком или ошибка (частичный альбом в очередь не попадает).
+/// All album pages in order — all or an error (a partial album never reaches the queue).
 pub async fn album_tracks<F, Fut>(mut fetch: F) -> Result<Vec<TrackItem>, ApiError>
 where
     F: FnMut(u32) -> Fut,

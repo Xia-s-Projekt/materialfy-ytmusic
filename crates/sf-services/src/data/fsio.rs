@@ -1,8 +1,8 @@
-//! Запись через временный файл: обрыв на середине не оставляет половину файла.
+//! Writing through a temporary file: a break halfway through does not leave half a file.
 use std::io::Write;
 use std::path::Path;
 
-/// Записать `bytes` в `path` атомарно (tmp + fsync + rename).
+/// Write `bytes` to `path` atomically (tmp + fsync + rename).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)?;

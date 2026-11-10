@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Диалог «Новый плейлист»: название → Library.createPlaylist(title, track). Без трека — пустой плейлист.
+// "New playlist" dialog: title → Library.createPlaylist(title, track). Without a track — an empty playlist.
 Item {
     id: root
 
@@ -61,7 +61,7 @@ Item {
 
         Elevation { target: card; level: 3 }
 
-        // клики по карточке не закрывают диалог
+        // clicks on the card do not close the dialog
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
 
         ColumnLayout {

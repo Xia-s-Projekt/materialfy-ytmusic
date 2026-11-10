@@ -3,8 +3,8 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Полоса «Новые настройки применятся после перезапуска… · Применить» (secondaryContainer).
-// Показывается по Settings.engineRestartPending; появляется и уходит схлопыванием высоты.
+// Bar "New settings will apply after a restart… · Apply" (secondaryContainer).
+// Shown by Settings.engineRestartPending; it appears and leaves by collapsing its height.
 Item {
     id: root
 

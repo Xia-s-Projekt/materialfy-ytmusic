@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Md3
 
-// Пустое состояние: иконка в перетекающих фигурах MD3E, заголовок, пояснение, необязательная кнопка.
+// Empty state: an icon in morphing MD3E shapes, a title, an explanation, an optional button.
 ColumnLayout {
     id: root
 
@@ -18,8 +18,8 @@ ColumnLayout {
 
     spacing: 12
 
-    // Фигуры медленно перетекают одна в другую: морф раз в несколько секунд, между морфами
-    // окно не перерисовывается. За основной фигурой — бледная побольше, со сдвигом по фазе.
+    // The shapes slowly morph into one another: a morph every few seconds, and between morphs
+    // the window is not redrawn. Behind the main shape — a pale larger one, phase-shifted.
     Item {
         id: art
         Layout.alignment: Qt.AlignHCenter

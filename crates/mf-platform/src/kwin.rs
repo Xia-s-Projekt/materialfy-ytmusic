@@ -1,7 +1,7 @@
-//! KDE Plasma (Wayland): окно не может встать у края экрана само, а layer-shell (LayerShellQt) делает слоями
-//! все окна процесса, и главное перестаёт двигаться. Поэтому островок остаётся обычным окном, а на место его ставит
-//! скрипт KWin, который мы загружаем по D-Bus: позиция, поверх всех, вне панели задач и переключателя окон.
-//! Вне Linux и вне KDE — ничего не делает.
+//! KDE Plasma (Wayland): a window cannot place itself at the screen edge, and layer-shell (LayerShellQt) makes every
+//! window in the process a layer, and the main one stops moving. So the island stays a normal window, and it is put in place by
+//! a KWin script, which we load over D-Bus: position, above everything, outside the taskbar and the window switcher.
+//! Outside Linux and outside KDE it does nothing.
 #[cfg(target_os = "linux")]
 mod imp {
     use crate::PlatformError;
@@ -14,26 +14,26 @@ mod imp {
         let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
         desktop.split(':').any(|part| part.eq_ignore_ascii_case("KDE"))
             && std::env::var_os("WAYLAND_DISPLAY").is_some_and(|value| !value.is_empty())
-            // скрипт на API KWin 6 (windowList, output, desktops): Plasma 5 его не выполнит
+            // a script on the KWin 6 API (windowList, output, desktops): Plasma 5 will not run it
             && std::env::var("KDE_SESSION_VERSION").as_deref() == Ok("6")
     }
 
-    // имя скрипта и заголовок окна — только буквы, цифры и пробелы: идут в имя файла и в текст скрипта
+    // the script name and the window title — letters, digits and spaces only: they go into a file name and into the script text
     fn script_name(title: &str) -> String {
         title.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
     }
 
     fn script_text(title: &str, spot: &super::Spot, report: &str) -> String {
-        // заголовок идёт в текст скрипта: оставляем только буквы, цифры и пробелы
+        // the title goes into the script text: keep only letters, digits and spaces
         let title: String = title.chars().filter(|c| c.is_ascii_alphanumeric() || *c == ' ').collect();
         let title = title.as_str();
         let super::Spot { x, y, width, height, hide_fullscreen, hide_maximized, move_x, move_y } = spot;
-        // Прячем островок (minimized), пока на его мониторе и рабочем столе есть окно на весь экран или развёрнутое.
-        // Окно самого приложения (тот же pid) тоже прячет островок: на Wayland клиент не знает, что его окно свернули.
-        // Развёрнутым считаем окно, занявшее всю рабочую область (без панелей): у KWin нет одного свойства на это.
-        // Тащат мышью (startSystemMove) — двигает сам KWin; мы держим окно на своей оси и в пределах монитора,
-        // а куда отпустили — сообщаем приложению по D-Bus (REPORT_PATH). Держим и по frameGeometryChanged: пока окно
-        // перерисовывается, KWin на каждом кадре клиента возвращает ему своё место без оси
+        // Hide the island (minimized) while its monitor and desktop have a fullscreen or maximized window.
+        // The app's own window (same pid) hides the island too: on Wayland the client does not know its window was minimized.
+        // A window is maximized when it fills the whole work area (excluding panels): KWin has no single property for that.
+        // Dragging with the mouse (startSystemMove) — KWin moves it itself; we keep the window on its axis and inside the monitor,
+        // and report where it was released to the app over D-Bus (REPORT_PATH). The same on frameGeometryChanged: while the window
+        // is redrawing, KWin puts it back in its own place on every client frame, ignoring the axis
         format!(
             "const title = \"{title}\";\n\
              const hideFullscreen = {hide_fullscreen};\n\
@@ -120,7 +120,7 @@ mod imp {
         let _ = ON_MOVED.set(callback);
     }
 
-    // сюда скрипт KWin сообщает, куда окно отпустили после перетаскивания
+    // where the KWin script reports where the window was released after dragging
     struct Reports;
 
     #[zbus::interface(name = "org.materialfy.Island")]
@@ -132,7 +132,7 @@ mod imp {
         }
     }
 
-    // одно соединение на весь запуск: на нём же объект для отчётов скрипта, его уникальное имя — в тексте скрипта
+    // one connection for the whole run: it also carries the object for the script's reports, whose unique name is in the script text
     async fn connection() -> Result<&'static zbus::Connection, PlatformError> {
         CONNECTION
             .get_or_try_init(|| async {
@@ -147,7 +147,7 @@ mod imp {
             .await
     }
 
-    // place и release одного окна не должны идти вперемешку: выгрузка одного залпа гасит загрузку другого
+    // place and release for one window must not interleave: unloading one kills the other's loading
     static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     pub async fn place(title: &str, spot: &super::Spot) -> Result<(), PlatformError> {
@@ -158,7 +158,7 @@ mod imp {
         let dir = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
         let path = dir.join(format!("materialfy-{name}.js"));
         std::fs::write(&path, script_text(title, spot, &report))?;
-        // тот же заголовок мог остаться от прошлого запуска или прошлого размера
+        // the same title may have been left over from a previous run or a previous size
         let _ = conn.call_method(Some(SERVICE), SCRIPTING, Some(SCRIPTING_IFACE), "unloadScript", &(name.as_str(),)).await;
         let reply = conn
             .call_method(Some(SERVICE), SCRIPTING, Some(SCRIPTING_IFACE), "loadScript", &(path.to_string_lossy().as_ref(), name.as_str()))
@@ -191,7 +191,7 @@ mod imp {
             let spot = super::super::Spot { x: 10, y: 0, width: 400, height: 200, hide_fullscreen: true, hide_maximized: false, move_x: true, move_y: false };
             let text = script_text("Materialfy Island 0", &spot, ":1.42");
             assert!(text.contains("const moveX = true;\nconst moveY = false;"));
-            // поперёк края окно стоит там, куда его поставили
+            // across an edge the window sits where it was put
             assert!(text.contains("moveY ? clamp(g.y, area.y, area.y + area.height - g.height) : 0;"));
             assert!(text.contains("callDBus(\":1.42\", \"/MaterialfyIsland\", \"org.materialfy.Island\", \"Moved\""));
         }
@@ -215,38 +215,38 @@ mod imp {
     pub fn on_moved(_callback: Box<dyn Fn(String, i32, i32) + Send + Sync>) {}
 }
 
-/// Сеанс KDE Plasma на Wayland: островок можно поставить скриптом KWin
+/// A KDE Plasma session on Wayland: the island can be placed by a KWin script
 pub fn available() -> bool {
     imp::available()
 }
 
-/// Где окно и когда его прятать: (x, y, width, height) — логические пиксели рабочего стола
+/// Where the window is and when to hide it: (x, y, width, height) — logical desktop pixels
 pub struct Spot {
     pub x: i32,
     pub y: i32,
     pub width: i32,
     pub height: i32,
-    /// спрятать под приложением на весь экран на том же мониторе
+    /// hide under a fullscreen app on the same monitor
     pub hide_fullscreen: bool,
-    /// спрятать под развёрнутым окном на том же мониторе
+    /// hide under a maximized window on the same monitor
     pub hide_maximized: bool,
-    /// куда окно можно тащить мышью: у края — только вдоль него, свободное — по обеим осям
+    /// where the window can be dragged with the mouse: at an edge — only along it, free — on both axes
     pub move_x: bool,
     pub move_y: bool,
 }
 
-/// Загрузить (или перезагрузить) скрипт, который ставит окно с заголовком title на место spot
+/// Load (or reload) the script that puts the window titled title at the position spot
 pub async fn place(title: &str, spot: Spot) -> Result<(), crate::PlatformError> {
     imp::place(title, &spot).await
 }
 
-/// Окно с заголовком (title) перетащили мышью и отпустили в (x, y) логических px рабочего стола.
-/// Вызывается из потока D-Bus; задаётся один раз
+/// The window titled (title) was dragged with the mouse and released at (x, y) in logical desktop px.
+/// Called from the D-Bus thread; set once
 pub fn on_moved(callback: Box<dyn Fn(String, i32, i32) + Send + Sync>) {
     imp::on_moved(callback)
 }
 
-/// Выгрузить скрипт окна (при закрытии островка и выходе)
+/// Unload the window's script (when the island closes and on exit)
 pub async fn release(title: &str) {
     imp::release(title).await
 }

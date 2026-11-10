@@ -1,8 +1,8 @@
 import QtQuick
 
-// Линейный прогресс MD3 Expressive: проигранная часть — бегущая волна, остаток — прямой трек
-// с зазором и stop-точкой. На паузе (`wavy: false`) волна плавно выпрямляется.
-// interactive: true превращает его в перемотку (сигналы moved/committed).
+// MD3 Expressive linear progress: the played part is a running wave, the rest a straight track
+// with a gap and a stop dot. On pause (`wavy: false`) the wave smoothly straightens out.
+// interactive: true turns it into a seek bar (moved/committed signals).
 Item {
     id: root
 
@@ -12,7 +12,7 @@ Item {
     property real thickness: 4
     property real amplitude: 3
     property real wavelength: 40
-    property real speed: 1              // периодов волны в секунду
+    property real speed: 1              // wave periods per second
     property real gap: 4
     property color activeColor: Theme.primary
     property color trackColor: Theme.secondaryContainer
@@ -28,7 +28,7 @@ Item {
     implicitWidth: 240
     implicitHeight: Math.max(thickness + 2 * amplitude, 24) + 4
 
-    // reduced motion: прямая линия, волна не бежит
+    // reduced motion: a straight line, the wave does not run
     property real _amp: wavy && !Theme.reducedMotion ? amplitude : 0
     Behavior on _amp { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
     property real _phase: 0
@@ -44,8 +44,8 @@ Item {
     readonly property real _x1: width - _cap
     readonly property real _activeEnd: _x0 + (_x1 - _x0) * Math.max(0, Math.min(1, shownValue))
 
-    // Отрисовка — шейдер (shaders/wavy.frag): смена фазы и значения — только uniform'ы, без пересборки
-    // контура на CPU (Shape с сотнями точек пересобирался каждый кадр бегущей волны).
+    // Rendering is a shader (shaders/wavy.frag): phase and value changes are uniforms only, with no CPU
+    // path rebuild (a Shape with hundreds of points was rebuilt every frame of the running wave).
     ShaderEffect {
         anchors.fill: parent
         property size size: Qt.size(width, height)

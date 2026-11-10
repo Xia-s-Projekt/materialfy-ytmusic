@@ -1,16 +1,16 @@
-//! Плеер Spotify без Qt. Верхний слой (исполнитель «queue-state»): PlayerHandle в форме yamusic-md3 — команды,
-//! снимок PlayerSnapshot (watch) + события PlayerEvent (broadcast), слияние локального librespot и удалённого
-//! Connect-устройства (Target), очередь по правилам spotifast/docs/_reference/queue.md, оптимистичные
-//! удержания. Нижний слой — модуль [`engine`] (исполнитель «engine»).
+//! The Spotify player without Qt. Upper layer (provider "queue-state"): PlayerHandle in the yamusic-md3 shape — commands,
+//! the PlayerSnapshot snapshot (watch) + PlayerEvent events (broadcast), merging local librespot and a remote
+//! Connect device (Target), the queue by the rules of spotifast/docs/_reference/queue.md, optimistic
+//! holds. The lower layer is the [`engine`] module (provider "engine").
 //!
-//! Потоки: всё на общем tokio-рантайме приложения (Handle из оболочки); librespot сам заводит поток плеера,
-//! fastframe-audio — поток устройства. Наружу — только watch/broadcast; Qt будят мосты (CxxQtThread::queue).
+//! Threads: everything on the application's shared tokio runtime (Handle from the shell); librespot starts its own player thread,
+//! fastframe-audio — the device thread. Outward — only watch/broadcast; the bridges wake Qt (CxxQtThread::queue).
 
 pub mod engine;
 pub mod handle;
 /// JSON pushes of the dealer (social-connect) for sf-services
 pub mod pushes;
-/// внутреннее «queue-state»
+/// internal "queue-state"
 pub mod state;
 
 use std::path::PathBuf;
@@ -26,14 +26,14 @@ pub use librespot_core::Session;
 pub use librespot_core::spclient::SpClient;
 pub use librespot_core::authentication::Credentials;
 
-/// Интервалы опроса /me/player (spotifast app.rs: REMOTE_POLL_*), с.
+/// /me/player poll intervals (spotifast app.rs: REMOTE_POLL_*), s.
 pub const REMOTE_POLL_ACTIVE_S: u64 = 4;
 pub const REMOTE_POLL_IDLE_S: u64 = 20;
 pub const REMOTE_POLL_UNSEEN_S: u64 = 30;
-/// Удержания оптимистичного состояния (AGENTS.md), мс.
+/// Optimistic state holds (AGENTS.md), ms.
 pub const OPTIMISTIC_HOLD_MS: u64 = 2500;
 pub const PLAYBACK_HOLD_MS: u64 = 6000;
-/// Сколько выбранный трек держится на экране, пока движок его грузит (холодный старт бывает дольше 6 с).
+/// How long the selected track stays on screen while the engine loads it (a cold start can take longer than 6 s).
 pub const INTENT_CEILING_MS: u64 = 20_000;
 pub const ASSUMED_CONTEXT_HOLD_MS: u64 = 8000;
 pub const REMOTE_RECHECK_MS: u64 = 1200;
@@ -46,14 +46,14 @@ pub const RESTART_BEFORE_PREVIOUS_MS: i64 = 3000;
 pub enum Repeat {
     #[default]
     Off,
-    /// повтор контекста (Spotify "context")
+    /// repeat the context (Spotify "context")
     All,
-    /// повтор трека (Spotify "track")
+    /// repeat the track (Spotify "track")
     One,
 }
 
 impl Repeat {
-    /// "off" | "all" | "one" (значение Player.repeat в QML)
+    /// "off" | "all" | "one" (the value of Player.repeat in QML)
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Off => "off",
@@ -94,7 +94,7 @@ impl Repeat {
     }
 }
 
-/// Куда идут команды: локальный librespot или устройство Connect (Web API; None — активное/неизвестно).
+/// Where commands go: local librespot or a Connect device (Web API; None — active/unknown).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Target {
     #[default]
@@ -102,10 +102,10 @@ pub enum Target {
     Remote(Option<String>),
 }
 
-/// Состояние локального воспроизведения (librespot на этом ПК).
+/// State of local playback (librespot on this PC).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum LocalPlayback {
-    /// движок не запущен (нет разрешения/Premium или выключено)
+    /// the engine is not started (no permission/Premium or disabled)
     #[default]
     Unavailable,
     Connecting,
@@ -119,7 +119,7 @@ impl LocalPlayback {
     }
 }
 
-/// Итог connect_local: id устройства и переиспользуемые креды librespot (сохранить в слот Playback).
+/// Result of connect_local: device id and reusable librespot credentials (save to the Playback slot).
 pub struct EngineStarted {
     pub device_id: String,
     pub reusable: Option<Credentials>,
@@ -127,71 +127,71 @@ pub struct EngineStarted {
 
 #[derive(Clone)]
 pub struct PlayerConfig {
-    /// mf_platform::dirs::cache_subdir("covers"): обложка текущего трека → cover_file
+    /// mf_platform::dirs::cache_subdir("covers"): the current track's cover → cover_file
     pub cover_dir: PathBuf,
-    /// очередь «Далее в очереди» и точка возобновления (queue.md п. 9); None — не сохранять (режим снимков)
+    /// the "Up next" queue and the resume point (queue.md item 9); None — do not save (snapshot mode)
     pub session_file: Option<PathBuf>,
-    /// громкость 0..1 из настроек
+    /// volume 0..1 from settings
     pub volume: f64,
-    /// общий HTTP-клиент (обложки)
+    /// shared HTTP client (covers)
     pub http: sf_api::Http,
 }
 
-/// Снимок всех свойств Player для QML (обновляется актором до рассылки событий).
+/// Snapshot of all Player properties for QML (the actor updates it before dispatching events).
 #[derive(Clone, Debug, Default)]
 pub struct PlayerSnapshot {
-    /// текущий трек/выпуск (None — нет); hasTrack/trackId/title/artist/album/cover/coverLarge/uri/track
+    /// current track/episode (None — none); hasTrack/trackId/title/artist/album/cover/coverLarge/uri/track
     pub track: Option<TrackItem>,
-    /// "OGG 320" у локального воспроизведения, "" у удалённого
+    /// "OGG 320" for local playback, "" for remote
     pub codec: String,
-    /// путь скачанной обложки (тема из обложки, SMTC); "" — нет
+    /// path of the downloaded cover (theme from the cover, SMTC); "" — none
     pub cover_file: String,
     pub playing: bool,
     pub buffering: bool,
     /// The DJ is talking between tracks on this computer (Player.narrating).
     pub narrating: bool,
-    /// с экстраполяцией между событиями/опросами
+    /// with extrapolation between events/polls
     pub position_ms: i64,
     pub duration_ms: i64,
     /// 0..1
     pub volume: f64,
     pub shuffle: bool,
     pub repeat: Repeat,
-    /// индекс строки section=current в queue, -1 — нет
+    /// index of the section=current row in the queue, -1 — none
     pub current_index: i32,
     pub error_text: String,
-    /// +1 — вперёд, -1 — назад (анимация смены трека)
+    /// +1 — forward, -1 — back (track change animation)
     pub direction: i32,
-    /// «дыхание» обложки 0..1 (только локально и пока levels_wanted)
+    /// cover "breathing" 0..1 (local only and while levels_wanted)
     pub level: f64,
     pub levels_wanted: bool,
     pub context: PlayContext,
-    /// Сейчас + Далее в очереди + Далее из контекста; изменения по месту — PlayerEvent::Queue
+    /// Now + Up next + Next from context; changes in place — PlayerEvent::Queue
     pub queue: Arc<Vec<QueueRow>>,
-    /// сколько секунд текущего трека реально проиграно (история)
+    /// how many seconds of the current track have actually played (history)
     pub played_seconds: f64,
 
     // --- Spotify Connect ---
     pub target: Target,
-    /// активное устройство (None — ничего не играет нигде)
+    /// active device (None — nothing is playing anywhere)
     pub device: Option<DeviceItem>,
-    /// играет этот ПК (librespot)
+    /// this PC is playing (librespot)
     pub is_local: bool,
     pub local: LocalPlayback,
-    /// разрешено ли управлять (!device.is_restricted)
+    /// whether control is allowed (!device.is_restricted)
     pub can_control: bool,
     pub can_set_volume: bool,
-    /// идёт перенос воспроизведения (сюда или туда)
+    /// a playback transfer is in progress (here or there)
     pub transferring: bool,
-    /// удалённое устройство пропало (2 опроса без него или 404)
+    /// the remote device disappeared (2 polls without it or 404)
     pub device_lost: bool,
-    /// «Ещё N треков» в секции контекста
+    /// "N more tracks" in the context section
     pub context_remaining: i32,
-    /// число строк section=manual
+    /// number of section=manual rows
     pub manual_count: i32,
-    /// «Очистить» доступно (только локально и есть ручные строки)
+    /// "Clear" is available (local only and there are manual rows)
     pub can_clear_queue: bool,
-    /// перетаскивание внутри «Далее в очереди» (только локально)
+    /// dragging inside "Up next" (local only)
     pub queue_reorderable: bool,
 }
 
@@ -214,7 +214,7 @@ impl PlayerSnapshot {
     }
 }
 
-/// Изменение очереди — мост повторяет его в модели, чтобы список не терял прокрутку.
+/// A queue change — the bridge repeats it in the model so the list does not lose its scroll.
 #[derive(Clone, Debug)]
 pub enum QueueChange {
     Reset(Arc<Vec<QueueRow>>),
@@ -234,15 +234,15 @@ pub struct TrackStarted {
 pub struct TrackEnded {
     pub track: TrackItem,
     pub context: PlayContext,
-    /// секунды
+    /// seconds
     pub played: f64,
     pub end: f64,
-    /// доигран сам, а не пропущен
+    /// played out by itself, not skipped
     pub natural: bool,
     pub local: bool,
 }
 
-/// События — по одному на каждый Qt-сигнал Player + служебные.
+/// Events — one per Qt Player signal + service ones.
 #[derive(Clone, Debug)]
 pub enum PlayerEvent {
     TrackChanged,
@@ -254,14 +254,14 @@ pub enum PlayerEvent {
     CoverFileChanged,
     ErrorChanged,
     LevelChanged,
-    /// устройство/цель/перенос/remote изменились
+    /// device/target/transfer/remote changed
     DeviceChanged,
-    /// локальный движок: подключение/готов/ошибка
+    /// local engine: connecting/ready/error
     LocalChanged,
     Queue(QueueChange),
     TrackStarted(TrackStarted),
     TrackEnded(TrackEnded),
-    /// короткое сообщение пользователю («Очередь очищена», «Pixel 9 не ответил»)
+    /// a short message to the user ("Queue cleared", "Pixel 9 did not answer")
     Notice(String),
 }
 
@@ -280,12 +280,12 @@ pub enum PlayerError {
     NoDevice,
 }
 
-/// Подпись кодека: Ogg Vorbis с битрейтом librespot.
+/// Codec signature: Ogg Vorbis at librespot's bitrate.
 pub fn codec_label(bitrate_kbps: u16) -> String {
     format!("OGG {bitrate_kbps}")
 }
 
-/// Громкость librespot (0..=65535) ↔ 0..1 и ↔ проценты (spotifast app.rs volume_to_percent/percent_to_volume).
+/// librespot volume (0..=65535) ↔ 0..1 and ↔ percent (spotifast app.rs volume_to_percent/percent_to_volume).
 pub fn volume_to_u16(volume: f64) -> u16 {
     (volume.clamp(0.0, 1.0) * f64::from(u16::MAX)).round() as u16
 }

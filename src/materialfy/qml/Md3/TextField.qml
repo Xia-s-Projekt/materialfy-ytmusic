@@ -1,7 +1,7 @@
 import QtQuick
 
-// Поле ввода MD3: подпись сверху, поле 48 px с r = 16, в фокусе — обводка primary 2 px.
-// trailingIcon "visibility" у поля пароля переключает показ символов.
+// MD3 text field: a label on top, a 48 px field with r = 16, and a 2 px primary outline when focused.
+// trailingIcon "visibility" on a password field toggles showing the characters.
 Item {
     id: root
 
@@ -93,7 +93,7 @@ Item {
                 font.letterSpacing: Theme.type.bodyLarge.tracking
                 font.variableAxes: Theme.fontAxes(Theme.type.bodyLarge.size, 400)
                 clip: true
-                // без фокуса длинный текст виден с начала, а не прокручен к курсору в конце
+                // without focus a long text is shown from the start, not scrolled to the cursor at the end
                 autoScroll: activeFocus
                 onAccepted: root.accepted()
                 onTextEdited: root.edited()

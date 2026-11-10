@@ -4,9 +4,9 @@
 
 namespace mf {
 
-// Windows: кнопки «Предыдущий / Пауза-Играть / Следующий» под эскизом окна на панели задач
-// (ITaskbarList3::ThumbBarAddButtons), как у Spotify. window — QWindow* корня (после load, синглтоны
-// Materialfy.Core уже есть). false — не Windows, нет HWND, движка QML или Player.
+// Windows: "Previous / Pause-Play / Next" buttons under the window thumbnail on the taskbar
+// (ITaskbarList3::ThumbBarAddButtons), like Spotify's. window — the root's QWindow* (after load, the singletons
+// of Materialfy.Core already exist). false — not Windows, or there is no HWND, no QML engine, or no Player.
 bool taskbar_install(QObject* window);
 
 } // namespace mf

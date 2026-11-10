@@ -3,25 +3,25 @@ import QtQuick.Layouts
 import Md3
 import Materialfy.Core
 
-// Верхняя панель контента: назад, заголовок прокрученной страницы, кнопки страницы, кнопки окна.
-// Пустое место тянет окно (startSystemMove), двойной клик — развернуть.
+// Top content bar: back, scrolled page title, page buttons, window buttons.
+// Empty space drags the window (startSystemMove), double click — maximize.
 Item {
     id: root
 
     required property var router
     required property Window window
-    // узкое окно: боковая панель спрятана в шторку, открывается этой кнопкой
+    // narrow window: the side panel is hidden in a sheet, this button opens it
     property bool showMenuButton: false
     signal menuClicked()
 
     implicitHeight: 64
 
     readonly property var page: router.currentItem
-    // заголовок страницы с собственной шапкой (heroTitle: true) появляется только после прокрутки
+    // the title of a page with its own header (heroTitle: true) appears only after scrolling
     readonly property bool showTitle: page && (page.scrolled || !(page.showHeader || page.heroTitle === true)) && (page.title ?? "") !== ""
 
-    // Перетаскивание окна. Windows: startSystemMove работает, когда у окна есть системное меню
-    // (его возвращает нативная рамка оболочки). Если система отказала — двигаем окно сами.
+    // Window dragging. Windows: startSystemMove works when the window has a system menu
+    // (the shell's native frame restores it). If the system refuses, we move the window ourselves.
     DragHandler {
         property bool manual: false
         target: null
@@ -43,7 +43,7 @@ Item {
         anchors.rightMargin: 16
         spacing: 8
 
-        // кнопка шторки въезжает и раздвигает заголовок, а не появляется рывком
+        // the sheet button slides in and pushes the title aside instead of popping in
         Item {
             Layout.preferredWidth: root.showMenuButton ? menuButton.implicitWidth : 0
             Layout.rightMargin: root.showMenuButton ? 0 : -8
@@ -63,10 +63,10 @@ Item {
             }
         }
 
-        // Без «назад» кнопка схлопывается, и заголовок стоит у левого края
+        // Without "back" the button collapses and the title sits at the left edge
         Item {
             Layout.preferredWidth: back.enabled ? back.implicitWidth : 0
-            // заголовок встаёт по левому краю содержимого страницы (отступ 32)
+            // the title aligns to the left edge of the page content (32 px margin)
             Layout.rightMargin: back.enabled || root.showMenuButton ? 0 : 8
             Layout.preferredHeight: back.implicitHeight
             Behavior on Layout.preferredWidth { NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutCubic } }
@@ -91,7 +91,7 @@ Item {
             Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsDefault } }
         }
 
-        // Кнопки страницы (поиск по библиотеке, сортировка, вид) — page.toolbar: Component
+        // Page buttons (library search, sort, view) — page.toolbar: Component
         Loader {
             Layout.alignment: Qt.AlignVCenter
             active: !!root.page && !!root.page.toolbar

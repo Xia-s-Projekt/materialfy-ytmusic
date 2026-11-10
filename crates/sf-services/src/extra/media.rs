@@ -1,6 +1,6 @@
-//! Системная панель «Сейчас играет» и медиаклавиши через fastframe-now-playing: SMTC на Windows, Now Playing на macOS,
-//! MPRIS на Linux (org.mpris.MediaPlayer2.materialfy). Свой поток: туда приходят снимки плеера (из задачи tokio)
-//! и пробуждения «есть команды»; команды уходят в PlayerHandle, Raise/Quit — в AppRequest.
+//! The "Now playing" system panel and media keys through fastframe-now-playing: SMTC on Windows, Now Playing on macOS,
+//! MPRIS on Linux (org.mpris.MediaPlayer2.materialfy). Its own thread: player snapshots arrive there (from a tokio task)
+//! and "there are commands" wakeups; commands go to PlayerHandle, Raise/Quit — to AppRequest.
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -15,7 +15,7 @@ use crate::AppRequest;
 pub const BUS_NAME: &str = "materialfy";
 pub const IDENTITY: &str = "Materialfy";
 pub const DESKTOP_ENTRY: &str = "materialfy";
-/// расхождение позиции, которое считается перемоткой, а не игрой
+/// the position divergence counted as a seek rather than playback
 const SEEK_JUMP_MS: i64 = 2000;
 
 pub enum Msg {
@@ -24,7 +24,7 @@ pub enum Msg {
     Stop,
 }
 
-/// Ручка потока медиаклавиш.
+/// Handle of the media key thread.
 pub struct Media {
     tx: mpsc::Sender<Msg>,
     done: mpsc::Receiver<()>,
@@ -53,7 +53,7 @@ fn repeat_from(repeat: NpRepeat) -> Repeat {
     }
 }
 
-/// Что показать системе по снимку плеера.
+/// What to show the system from the player snapshot.
 pub fn state_from(s: &PlayerSnapshot) -> State {
     let track = s.track.as_ref().map(|t| {
         let artists = if t.artist_refs.is_empty() {
@@ -100,7 +100,7 @@ fn track_id(s: &PlayerSnapshot) -> Option<String> {
     s.track.as_ref().map(|t| t.play_uri())
 }
 
-/// Позиция прыгнула не из-за игры (перемотка) — системе нужно сказать об этом отдельно.
+/// The position jumped not because of playback (a seek) — the system needs to be told separately.
 pub fn jumped(prev: &PlayerSnapshot, elapsed: Duration, now: &PlayerSnapshot) -> bool {
     if track_id(prev) != track_id(now) || now.track.is_none() {
         return false;
@@ -109,7 +109,7 @@ pub fn jumped(prev: &PlayerSnapshot, elapsed: Duration, now: &PlayerSnapshot) ->
     (now.position_ms - expected).abs() > SEEK_JUMP_MS
 }
 
-/// Команда системы → плеер / оболочка.
+/// A system command → player / shell.
 pub fn apply(command: Command, current: Option<&PlayerSnapshot>, player: &PlayerHandle, requests: &broadcast::Sender<AppRequest>) {
     match command {
         Command::Play => player.play(),
@@ -132,7 +132,7 @@ pub fn apply(command: Command, current: Option<&PlayerSnapshot>, player: &Player
     }
 }
 
-/// Запустить поток медиаклавиш. None — поток не создался.
+/// Start the media key thread. None — the thread was not created.
 pub fn start(rt: &Handle, player: PlayerHandle, requests: broadcast::Sender<AppRequest>) -> Option<Media> {
     let (tx, rx) = mpsc::channel::<Msg>();
     let (done_tx, done_rx) = mpsc::channel();
@@ -201,10 +201,10 @@ mod tests {
             track: Some(TrackItem {
                 track_id: "1".into(),
                 uri: "spotify:track:1".into(),
-                title: "Песня".into(),
-                artists: "А, Б".into(),
-                artist_refs: vec![ArtistRef { id: "a".into(), name: "А".into() }, ArtistRef { id: "b".into(), name: "Б".into() }],
-                album: "Альбом".into(),
+                title: "Song".into(),
+                artists: "A, B".into(),
+                artist_refs: vec![ArtistRef { id: "a".into(), name: "A".into() }, ArtistRef { id: "b".into(), name: "B".into() }],
+                album: "Album".into(),
                 cover: "https://i/300".into(),
                 cover_large: "https://i/640".into(),
                 ..Default::default()
@@ -224,12 +224,12 @@ mod tests {
         assert_eq!(state.playback, Playback::Playing);
         let track = state.track.as_ref().unwrap();
         assert_eq!(track.id, "spotify:track:1");
-        assert_eq!(track.artists, ["А", "Б"]);
+        assert_eq!(track.artists, ["A", "B"]);
         assert_eq!(track.art_url.as_deref(), Some("https://i/640"));
         assert_eq!(track.art_file, None);
         assert_eq!(track.duration, Some(Duration::from_secs(200)));
         assert_eq!(state.position, Duration::from_secs(10));
-        // громкость удалённого устройства без поддержки — не предлагать
+        // a remote device's volume without support — do not offer it
         assert_eq!(state.volume, None);
         s.can_set_volume = true;
         s.cover_file = "C:/cache/c.jpg".into();

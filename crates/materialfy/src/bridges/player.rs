@@ -1,11 +1,11 @@
-// Player — зеркало yt_player::PlayerHandle (локальный librespot или устройство Connect). Свойства сверяются со снимком
-// на каждом событии; структурные события (трек, состояние, очередь, устройство) проходят полный sync(), а «дешёвые»
-// (уровень ~30 Гц, позиция ~5 Гц, громкость, режимы, обложка, ошибка) обновляют только свою группу свойств.
-// Сигнал — только по изменившейся группе; TrackChanged — всегда. Модель очереди приводится
-// к очереди снимка по uid изменениями по месту (вставка/удаление/перестановка), поэтому порядок и пропуски событий
-// QueueChange ей не страшны. Сеттеры (volume, shuffle, repeat, levelsWanted) меняют значение сразу; «эхо» из плеера,
-// которое старше записи, какое-то время не принимается. Громкость в плеер передаёт только этот мост, он же пишет
-// Settings.volume (с задержкой: при перетаскивании ползунка — одна запись в конце).
+// Player - a mirror of yt_player::PlayerHandle (local librespot or a Connect device). Properties are checked against the snapshot
+// on every event; structural events (track, state, queue, device) go through a full sync(), while the "cheap" ones
+// (level ~30 Hz, position ~5 Hz, volume, modes, cover, error) update only their own group of properties.
+// A signal - only for the changed group; TrackChanged - always. The queue model is brought
+// in line with the snapshot queue by uid with in-place changes (insert/delete/reorder), so the order and gaps in events
+// are no trouble for it. The setters (volume, shuffle, repeat, levelsWanted) change the value immediately; "echo" from the player
+// that is older than the write is not accepted for a while. Only this bridge passes volume to the player, and it also writes
+// Settings.volume (with a delay: when dragging the slider - one write at the end).
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -117,15 +117,15 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "deviceChanged"]
         fn device_changed(self: Pin<&mut Player>);
-        /// короткое сообщение («Очередь очищена», «Pixel 9 не отвечает»)
+        /// a short message ("Queue cleared", "Pixel 9 is not responding")
         #[qsignal]
         fn notice(self: Pin<&mut Player>, text: QString);
 
-        /// Поставить в очередь всю модель (DictListModel или TrackFilter) и начать с row.
+        /// Put the whole model (DictListModel or TrackFilter) into the queue and start from row.
         #[qinvokable]
         #[cxx_name = "playFrom"]
         unsafe fn play_from(self: Pin<&mut Player>, model: *mut QObject, row: i32);
-        /// «Перемешать»: включить shuffle и начать со случайного трека модели.
+        /// "Shuffle": enable shuffle and start from a random track of the model.
         #[qinvokable]
         #[cxx_name = "shuffleFrom"]
         unsafe fn shuffle_from(self: Pin<&mut Player>, model: *mut QObject);
@@ -153,55 +153,55 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "cycleRepeat"]
         fn cycle_repeat(self: Pin<&mut Player>);
-        /// ±мс от текущей позиции (выпуски: −10000 / +30000).
+        /// +/- ms from the current position (episodes: -10000 / +30000).
         #[qinvokable]
         #[cxx_name = "seekRelative"]
         fn seek_relative(self: Pin<&mut Player>, delta_ms: i32);
 
-        /// Клик по строке очереди по её uid (строки выше снимаются, контекст продолжается).
+        /// Click on a queue row by its uid (the rows above are removed, the context continues).
         #[qinvokable]
         #[cxx_name = "playQueueRow"]
         fn play_queue_row(self: &Player, uid: f64);
-        /// Контекст по URI (плейлист/альбом/исполнитель/шоу/станция) с трека offsetUri ("" — с начала).
+        /// Context by URI (playlist/album/artist/show/station) from the track offsetUri ("" - from the beginning).
         #[qinvokable]
         #[cxx_name = "playContext"]
         fn play_context(self: &Player, uri: &QString, offset_uri: &QString);
-        /// Контекст по URI вперемешку («Перемешать» в меню плитки).
+        /// Context by URI shuffled ("Shuffle" in the tile menu).
         #[qinvokable]
         #[cxx_name = "shuffleContext"]
         fn shuffle_context(self: &Player, uri: &QString);
-        /// Список URI с индекса (радио, история).
+        /// A list of URIs from an index (radio, history).
         #[qinvokable]
         #[cxx_name = "playUris"]
         fn play_uris(self: &Player, uris: &QStringList, index: i32);
-        /// Выпуск с позиции (resumeMs).
+        /// An episode from a position (resumeMs).
         #[qinvokable]
         #[cxx_name = "playEpisode"]
         fn play_episode(self: &Player, uri: &QString, position_ms: i32);
-        /// «В очередь» (словарь трека/выпуска).
+        /// "To the queue" (a track/episode dict).
         #[qinvokable]
         #[cxx_name = "addToQueue"]
         fn add_to_queue(self: &Player, track: &QMap_QString_QVariant);
-        /// «В очередь» по URI (альбом раскрывается целиком).
+        /// "To the queue" by URI (an album is expanded whole).
         #[qinvokable]
         #[cxx_name = "addUriToQueue"]
         fn add_uri_to_queue(self: &Player, uri: &QString);
-        /// Запомнить строку до запуска списка по URI: экран переключается на неё сразу, без круга в Web API.
+        /// Remember the row before starting a list by URI: the screen switches to it immediately, without a spinner in the Web API.
         #[qinvokable]
         #[cxx_name = "rememberTrack"]
         fn remember_track(self: &Player, track: &QMap_QString_QVariant);
-        /// Вставка в «Далее в очереди» (только isLocal; иначе — в конец).
+        /// Insertion into "Next in queue" (isLocal only; otherwise - at the end).
         #[qinvokable]
         #[cxx_name = "insertManual"]
         fn insert_manual(self: &Player, track: &QMap_QString_QVariant, at: i32);
-        /// Перестановка внутри «Далее в очереди» (индексы в секции manual).
+        /// Reordering inside "Next in queue" (indices in the manual section).
         #[qinvokable]
         #[cxx_name = "moveManual"]
         fn move_manual(self: &Player, from: i32, to: i32);
         #[qinvokable]
         #[cxx_name = "clearManualQueue"]
         fn clear_manual_queue(self: &Player);
-        /// «Слушать здесь».
+        /// "Listen here".
         #[qinvokable]
         #[cxx_name = "transferHere"]
         fn transfer_here(self: &Player);
@@ -256,19 +256,19 @@ pub struct PlayerRust {
     can_clear_queue: bool,
     queue_reorderable: bool,
 
-    /// трек снимка, по которому заполнены свойства группы trackChanged
+    /// the snapshot track by which the trackChanged group's properties are filled
     track_item: Option<TrackItem>,
     repeat_mode: Repeat,
     volume_set_at: Option<Instant>,
     mode_set_at: Option<Instant>,
     position_set_at: Option<Instant>,
-    /// поколение отложенной записи Settings.volume
+    /// the generation of the deferred Settings.volume write
     volume_save: u64,
-    /// очередь снимка, к которой приведена модель
+    /// the snapshot queue that the model is brought in line with
     queue_rows: Arc<Vec<QueueRow>>,
-    /// типизированное значение устройства из снимка: чтобы не перестраивать QMap на каждую сверку
+    /// the typed device value from the snapshot: so as not to rebuild a QMap for every check
     device_item: Option<DeviceItem>,
-    /// эхо отклонено удержанием: по истечении ECHO_HOLD перепроверить громкость и режимы
+    /// echo rejected by the hold: after ECHO_HOLD expires, re-check the volume and modes
     stale: Option<()>,
 }
 
@@ -331,18 +331,18 @@ impl Default for PlayerRust {
     }
 }
 
-/// Пауза перед записью громкости в настройки.
+/// A pause before writing the volume to settings.
 const VOLUME_SAVE_DELAY: Duration = Duration::from_millis(400);
 
-/// Списки присылают только URI, а выбранный трек нужен ядру, чтобы показать его сразу — до ответа движка.
-/// Метаданные уже лежат в общем кэше каталога (его наполняют те же списки).
+/// Lists send only URIs, but the selected track is needed by the core to show it immediately - before the engine responds.
+/// The metadata already sits in the shared catalog cache (the same lists fill it).
 fn remember_track(uri: &str) {
     if let Some(track) = yt_services::data::known::get(uri) {
         ctx().services.player.remember(track);
     }
 }
 
-/// {type, uri, title, cover} — карточка «Играет из …»; {} — контекста нет.
+/// {type, uri, title, cover} - the "Playing from ..." card; {} - no context.
 fn context_map(context: &PlayContext) -> QVariantMap {
     let mut map = QVariantMap::default();
     if context.kind.is_empty() && context.context_uri.is_none() {
@@ -368,7 +368,7 @@ impl qobject::Player {
         model_ptr(&self.queue)
     }
 
-    // --- сеттеры -----------------------------------------------------------
+    // --- setters ------------------------------------------------------------
 
     fn set_volume(mut self: Pin<&mut Self>, value: f64) {
         let value = if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 };
@@ -377,7 +377,7 @@ impl qobject::Player {
         }
         let mut this = self.as_mut().rust_mut();
         this.volume = value;
-        // Новое решение пользователя отменяет ожидаемое эхо-перепроверку
+        // A new user decision cancels the pending echo re-check
         this.stale = None;
         this.volume_set_at = Some(Instant::now());
         this.volume_save += 1;
@@ -387,7 +387,7 @@ impl qobject::Player {
         self.schedule_volume_save(generation);
     }
 
-    /// Снимок был отклонён эхо-удержанием: перепроверить громкость и режимы, когда удержание истечёт.
+    /// The snapshot was rejected by the echo hold: re-check the volume and modes when the hold expires.
     fn schedule_resync(self: Pin<&mut Self>) {
         let thread = self.qt_thread();
         ctx().rt.spawn(async move {
@@ -397,8 +397,8 @@ impl qobject::Player {
     }
 
     fn resync(mut self: Pin<&mut Self>) {
-        // stale — только флаг «перепроверить»: за 600 мс трек или устройство могли смениться,
-        // применение старого снимка целиком откатывало бы свежее состояние. Берём текущий.
+        // stale - only a "re-check" flag: in 600 ms the track or device could have changed,
+        // applying the old snapshot in full would roll back the newer state. We take the current one.
         if self.stale.is_none() {
             return;
         }
@@ -416,7 +416,7 @@ impl qobject::Player {
     }
 
     fn save_volume(&self, generation: u64) {
-        // громкость чужого устройства Connect — не громкость этого ПК
+        // the volume of someone else's Connect device is not this PC's volume
         if generation == self.volume_save && !self.remote {
             ctx().services.settings.set(SettingKey::Volume, SettingValue::Float(self.volume));
         }
@@ -466,7 +466,7 @@ impl qobject::Player {
         ctx().services.player.set_levels_wanted(value);
     }
 
-    // --- управление --------------------------------------------------------
+    // --- control -------------------------------------------------------------
 
     unsafe fn play_from(self: Pin<&mut Self>, model: *mut cxx_qt::QObject, row: i32) {
         let Some((items, context)) = (unsafe { crate::models::tracks_from_model(model) }) else { return };
@@ -516,7 +516,7 @@ impl qobject::Player {
         ctx().services.player.next();
     }
 
-    /// После 3 с — в начало трека, иначе предыдущий.
+    /// After 3 s - to the start of the track, otherwise the previous one.
     fn previous(&self) {
         ctx().services.player.previous();
     }
@@ -642,10 +642,10 @@ impl qobject::Player {
         ctx().services.player.transfer_here();
     }
 
-    // --- снимок плеера → свойства -------------------------------------------
+    // --- player snapshot -> properties ---------------------------------------
 
     fn on_event(mut self: Pin<&mut Self>, delivery: Delivery<PlayerEvent>) {
-        // Смена устройства/переподключение: отклонённые эхо-снимки прошлого соединения неактуальны
+        // Device change/reconnect: rejected echo snapshots from the past connection are stale
         if matches!(delivery, Delivery::Event(PlayerEvent::DeviceChanged)) {
             self.as_mut().rust_mut().stale = None;
         }
@@ -653,10 +653,10 @@ impl qobject::Player {
             tracing::debug!("Player.notice: {text}");
             self.as_mut().notice(QString::from(text.as_str()));
         }
-        // Кадры «дыхания» приходят ~30 Гц, позиция ~5 Гц: для «дешёвых» событий сверяем
-        // только свою группу свойств — snapshot() клонируется как раньше, зато не
-        // перестраиваются QString'ы и QMap'ы. Структурные события (трек, состояние,
-        // очередь, устройство) редки — им остаётся полный sync().
+        // "Breathing" frames arrive at ~30 Hz, position at ~5 Hz: for "cheap" events we check
+        // only their own group of properties - snapshot() is cloned as before, but
+        // QStrings and QMaps are not rebuilt. Structural events (track, state,
+        // queue, device) are rare - a full sync() is left for them.
         let snapshot = ctx().services.player.snapshot();
         match delivery {
             Delivery::Event(PlayerEvent::LevelChanged) => self.as_mut().sync_level(&snapshot),
@@ -672,7 +672,7 @@ impl qobject::Player {
         }
     }
 
-    /// Полная сверка со снимком — для структурных (редких) событий и после пропуска событий.
+    /// A full check against the snapshot - for structural (rare) events and after a gap in events.
     fn sync(mut self: Pin<&mut Self>, s: &PlayerSnapshot, force_track: bool) {
         self.as_mut().sync_queue(s);
         self.as_mut().sync_track(s, force_track);
@@ -688,7 +688,7 @@ impl qobject::Player {
         self.as_mut().sync_level(s);
     }
 
-    /// Модель очереди ← очередь снимка (по uid, изменения по месту).
+    /// Queue model <- snapshot queue (by uid, in-place changes).
     fn sync_queue(mut self: Pin<&mut Self>, snapshot: &PlayerSnapshot) {
         if Arc::ptr_eq(&self.queue_rows, &snapshot.queue) {
             return;
@@ -699,7 +699,7 @@ impl qobject::Player {
     }
 
     fn sync_track(mut self: Pin<&mut Self>, s: &PlayerSnapshot, force_track: bool) {
-        // трек
+        // track
         let track_changed = self.track_item != s.track || self.codec != QString::from(s.codec.as_str())
             || self.direction != s.direction;
         if track_changed {
@@ -728,7 +728,7 @@ impl qobject::Player {
     }
 
     fn sync_playback(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // воспроизведение
+        // playback
         if self.playing != s.playing || self.buffering != s.buffering || self.narrating != s.narrating {
             let mut this = self.as_mut().rust_mut();
             this.playing = s.playing;
@@ -739,7 +739,7 @@ impl qobject::Player {
     }
 
     fn sync_position(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // позиция
+        // position
         let duration_ms = clamp_ms(s.duration_ms);
         let position_ms = if held(self.position_set_at) { self.position_ms } else { clamp_ms(s.position_ms) };
         if self.position_ms != position_ms || self.duration_ms != duration_ms {
@@ -752,9 +752,9 @@ impl qobject::Player {
     }
 
     fn sync_volume(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // громкость; изменение из системной панели (SMTC/MPRIS) тоже сохраняется в Settings.volume
-        // Отклонённое из-за удержания эхо запоминаем: иначе на паузе (позиция не тикает) оно
-        // никогда не перепроверится, и UI застрянет на запрошенном значении.
+        // volume; a change from the system panel (SMTC/MPRIS) is also saved to Settings.volume
+        // We remember an echo rejected by the hold: otherwise on pause (the position does not tick) it
+        // would never be re-checked, and the UI would be stuck on the requested value.
         if held(self.volume_set_at) && self.volume != s.volume {
             let mut this = self.as_mut().rust_mut();
             this.stale = Some(());
@@ -774,7 +774,7 @@ impl qobject::Player {
     }
 
     fn sync_mode(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // режимы
+        // modes
         if held(self.mode_set_at) && (self.shuffle != s.shuffle || self.repeat_mode != s.repeat) {
             let mut this = self.as_mut().rust_mut();
             this.stale = Some(());
@@ -790,7 +790,7 @@ impl qobject::Player {
     }
 
     fn sync_queue_index(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // очередь
+        // queue
         let source = QString::from(s.source());
         let context_changed = self.queue.as_ref().is_some_and(|q| q.context() != &s.context);
         if self.current_index != s.current_index || self.source != source || context_changed {
@@ -803,7 +803,7 @@ impl qobject::Player {
     }
 
     fn sync_queue_sections(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // контекст и секции очереди
+        // context and queue sections
         let queue_context = context_map(&s.context);
         if self.queue_context != queue_context
             || self.context_remaining != s.context_remaining
@@ -824,9 +824,9 @@ impl qobject::Player {
     }
 
     fn sync_device(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // устройство Connect. QMap из снимка строится только когда типизированное значение
-        // устройства изменилось: сериализация дороже сравнения, а DeviceChanged приходит и от
-        // полей, до QMap не доходящих (canControl и т.п.).
+        // Connect device. The QMap from the snapshot is built only when the typed device
+        // value has changed: serialization is more expensive than comparison, and DeviceChanged also comes from
+        // fields that never reach the QMap (canControl and the like).
         let device_changed = self.device_item != s.device;
         let local_state = QString::from(match &s.local {
             LocalPlayback::Unavailable => "unavailable",
@@ -861,7 +861,7 @@ impl qobject::Player {
     }
 
     fn sync_cover(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // обложка
+        // cover
         let cover_file = QString::from(s.cover_file.as_str());
         if self.cover_file != cover_file {
             self.as_mut().rust_mut().cover_file = cover_file;
@@ -870,7 +870,7 @@ impl qobject::Player {
     }
 
     fn sync_error(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // ошибка
+        // error
         let error_text = QString::from(s.error_text.as_str());
         if self.error_text != error_text {
             self.as_mut().rust_mut().error_text = error_text;
@@ -879,7 +879,7 @@ impl qobject::Player {
     }
 
     fn sync_level(mut self: Pin<&mut Self>, s: &PlayerSnapshot) {
-        // уровень — только пока он нужен QML
+        // level - only while QML needs it
         let level = if self.levels_wanted { s.level } else { 0.0 };
         if self.level != level {
             self.as_mut().rust_mut().level = level;

@@ -1,14 +1,15 @@
-//! «Новинки» через сессию librespot: личный «Радар новинок», подписки на исполнителей и их релизы с датами.
-//! Web API тут только запасной путь: общий ключ упирается в 429, а нужное есть у клиентов Spotify.
+//! "New releases" through the librespot session: the personal "Release Radar", artist subscriptions and their releases with dates.
+//! Web API here is only a fallback path: the shared key runs into 429, and what is needed is available to Spotify clients.
 //!
-//! «Радар» (Release Radar): с ноября 2024 Web API не отдаёт приложениям в режиме разработки алгоритмические
-//! плейлисты Spotify (404), а id у каждого аккаунта свой. Здесь он ищется на главной мобильного клиента
-//! (spclient homeview); страницу «Для тебя» (GraphQL) спрашивает sf-services. Сам плейлист потом читается
-//! через spclient, как любой другой (session_reads).
+//! "Radar" (Release Radar): since November 2024 Web API does not give algorithmic
+//! Spotify playlists to applications in development mode (404), and each account has its own id.
+//! Here it is looked up on the home of the mobile client (spclient homeview); sf-services asks
+//! for the "For You" page (GraphQL). The playlist itself is then read through spclient,
+//! like any other (session_reads).
 //!
-//! Подписки — набор «artist» коллекции (spclient /collection/v2/paging, protobuf collection2v2: librespot его
-//! не собирает, поля PageRequest/PageResponse пишутся и читаются здесь вручную). Релизы — запись исполнителя
-//! (альбомы и синглы, без дат) и пачки ALBUM_V4 extended-metadata с датами, как в session_reads::artist.
+//! Subscriptions — the "artist" set of the collection (spclient /collection/v2/paging, protobuf collection2v2: librespot does not
+//! build it, the PageRequest/PageResponse fields are written and read here by hand). Releases — the artist record
+//! (albums and singles, without dates) and ALBUM_V4 extended-metadata batches with dates, as in session_reads::artist.
 use std::collections::HashMap;
 
 use librespot_core::{Session, SpotifyUri, spotify_id::SpotifyId};
@@ -20,24 +21,24 @@ use librespot_protocol::extension_kind::ExtensionKind;
 use protobuf::{EnumOrUnknown, Message as _};
 use sf_api::models::{Album, ArtistRef, CategoryPlaylists, Image, Page, Playlist};
 
-/// Категория browse «Made For You»: личные Discover Weekly, Release Radar, Daily Mix, daylist.
+/// Browse category "Made For You": personal Discover Weekly, Release Radar, Daily Mix, daylist.
 pub const MADE_FOR_YOU_CATEGORY: &str = "0JQ5DAt0tbjZptfcdMSKl3";
-/// Плейлистов в одном ответе категории (больше Web API не даёт; личных обычно 10–20).
+/// Playlists in one category answer (Web API gives no more; personal ones are usually 10–20).
 pub const CATEGORY_LIMIT: u32 = 50;
-/// Релизов в одном пакетном запросе extended-metadata.
+/// Releases in one batched extended-metadata request.
 pub const RELEASE_BATCH: usize = 50;
 
 const IMAGE_HOST: &str = "https://i.scdn.co/image/";
-/// Релизов группы, которые вообще читаем (как session_reads: записи перечисляют их не по дате).
+/// Releases of a group that are read at all (as in session_reads: records list them not by date).
 const RELEASES_PER_GROUP: usize = 200;
 const COLLECTION_PAGE: i32 = 300;
-/// Тип тела коллекции: на application/x-protobuf сервис отвечает 400 (проверено на живом аккаунте).
+/// Collection body type: on application/x-protobuf the service answers 400 (verified on a live account).
 const COLLECTION_TYPE: &str = "application/vnd.collection-v2.spotify.proto";
 const COLLECTION_PAGES: usize = 10;
 
-// --- «Радар новинок» ---------------------------------------------------------------------------------
+// --- Release Radar ---------------------------------------------------------------------------------
 
-/// Названия «Радара» в локализациях Spotify (без регистра). Остальные языки узнаются по слову «radar».
+/// "Radar" names in Spotify localizations (case-insensitive); anything else is recognized by the word "radar".
 const RADAR_NAMES: &[&str] = &[
     "release radar",
     "радар новинок",
@@ -47,13 +48,13 @@ const RADAR_NAMES: &[&str] = &[
     "radar premier",
 ];
 
-/// id плейлистов Spotify («37i9dQZ…»): личные алгоритмические и чарты — «37i9dQZEVXb…» (у Discover Weekly —
-/// «…EVXc…»), редакционные — «37i9dQZF1…» (среди них есть «RADAR India» — это не «Радар новинок»).
+/// Spotify playlist ids ("37i9dQZ…"): personal algorithmic and charts — "37i9dQZEVXb…" (Discover Weekly has
+/// "…EVXc…"), editorial — "37i9dQZF1…" (among them is "RADAR India" — that is not the "Release Radar").
 const SPOTIFY_MADE: &str = "37i9dQZ";
 const PERSONAL: &str = "37i9dQZEVXb";
 
-/// Плейлист — личный «Радар новинок»: его ведёт Spotify (владелец неизвестен — судим по id), а название —
-/// одно из локализованных; на другом языке — слово «radar» у личного плейлиста.
+/// A playlist is the personal "Release Radar": Spotify keeps it (the owner is unknown — judged by id), and the name is
+/// one of the localized ones; in another language — the word "radar" on a personal playlist.
 pub fn is_release_radar(id: &str, name: &str, owner_id: &str) -> bool {
     let by_spotify = owner_id == "spotify" || (owner_id.is_empty() && id.starts_with(SPOTIFY_MADE));
     if !by_spotify {
@@ -64,7 +65,7 @@ pub fn is_release_radar(id: &str, name: &str, owner_id: &str) -> bool {
         || (id.starts_with(PERSONAL) && (name.contains("radar") || name.contains("радар")))
 }
 
-/// «Радар» среди плейлистов: сначала точное название, потом личный со словом «radar».
+/// "Radar" among playlists: first the exact name, then a personal one with the word "radar".
 pub fn pick_release_radar(playlists: &[Playlist]) -> Option<&Playlist> {
     let owner = |p: &Playlist| p.owner.id.clone().unwrap_or_default();
     let fits = |p: &&Playlist| !p.id.is_empty() && is_release_radar(&p.id, &p.name, &owner(p));
@@ -75,8 +76,8 @@ pub fn pick_release_radar(playlists: &[Playlist]) -> Option<&Playlist> {
     exact.or_else(|| playlists.iter().find(fits))
 }
 
-/// Плейлисты главной клиента Spotify (spclient /homeview/v1/home — JSON hubs): у карточки target.uri,
-/// text.title/subtitle, images.main.uri. Владельца в карточке нет — Spotify, если id его.
+/// Playlists of the Spotify client's home (spclient /homeview/v1/home — JSON hubs): a card has target.uri,
+/// text.title/subtitle, images.main.uri. The card has no owner — Spotify, if the id is its own.
 pub fn parse_home(bytes: &[u8]) -> anyhow::Result<Vec<Playlist>> {
     fn text(map: &serde_json::Map<String, serde_json::Value>, key: &str) -> String {
         map.get("text")
@@ -136,7 +137,7 @@ pub fn parse_home(bytes: &[u8]) -> anyhow::Result<Vec<Playlist>> {
     Ok(out)
 }
 
-/// Плейлисты главной аккаунта сессии — как её видит мобильный клиент Spotify (полка «Только для тебя»).
+/// Playlists of the session account's home — as the mobile Spotify client sees it (the "Only For You" shelf).
 pub async fn home_playlists(session: &Session) -> anyhow::Result<Vec<Playlist>> {
     let bytes = session
         .spclient()
@@ -150,23 +151,23 @@ pub async fn home_playlists(session: &Session) -> anyhow::Result<Vec<Playlist>> 
     parse_home(&bytes)
 }
 
-/// Ответ /browse/categories/{id}/playlists → плейлисты (пустые места Spotify — null — пропускаются).
+/// /browse/categories/{id}/playlists answer → playlists (Spotify's empty spots — null — are skipped).
 pub fn parse_category(bytes: &[u8]) -> anyhow::Result<Vec<Playlist>> {
     let category: CategoryPlaylists = serde_json::from_slice(bytes)?;
     let Page { items, .. } = category.playlists;
     Ok(items.into_iter().filter(|p| !p.id.is_empty()).collect())
 }
 
-/// Личный «Радар новинок» аккаунта сессии с главной мобильного клиента Spotify (spclient homeview, без квоты
-/// Web API). Ok(None) — главная ответила, а «Радара» на ней нет. Страницу «Для тебя» (GraphQL browsePage)
-/// спрашивает sf-services (data/home_feed); категория api.spotify.com токеном сессии больше не нужна — она
-/// тратила квоту Web API клиента Spotify и часто отвечала 429 QUOTA_EXCEEDED.
+/// The session account's personal "Release Radar" from the mobile Spotify client's home (spclient homeview, without the
+/// Web API quota). Ok(None) — the home answered, but there is no "Radar" on it. sf-services asks for the "For You" page (GraphQL
+/// browsePage) (data/home_feed); the api.spotify.com category with the session token is no longer needed — it
+/// spent the Spotify client's Web API quota and often answered 429 QUOTA_EXCEEDED.
 pub async fn release_radar(session: &Session) -> anyhow::Result<Option<Playlist>> {
     let home = home_playlists(session).await?;
     Ok(pick_release_radar(&home).cloned())
 }
 
-// --- подписки (collection2v2) ------------------------------------------------------------------------
+// --- subscriptions (collection2v2) ------------------------------------------------------------------------
 
 fn put_varint(buf: &mut Vec<u8>, mut value: u64) {
     while value >= 0x80 {
@@ -196,7 +197,7 @@ fn page_request(username: &str, set: &str, token: &str, limit: i32) -> Vec<u8> {
     buf
 }
 
-/// Поле protobuf: номер и значение (varint или байты; fixed32/64 пропускаются как байты).
+/// Protobuf field: number and value (varint or bytes; fixed32/64 are skipped as bytes).
 enum Value<'a> {
     Varint(u64),
     Bytes(&'a [u8]),
@@ -229,7 +230,7 @@ impl<'a> Reader<'a> {
         Some(head)
     }
 
-    /// Следующее поле; None — конец (или битые данные: дальше не читаем).
+    /// Next field; None — end (or corrupt data: nothing further is read).
     fn field(&mut self) -> Option<(u32, Value<'a>)> {
         if self.bytes.is_empty() {
             return None;
@@ -250,7 +251,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// Страница коллекции: живые URI (is_removed = false) и токен следующей страницы ("" — последняя).
+/// Collection page: live URIs (is_removed = false) and the next page token ("" — last).
 /// PageResponse { repeated CollectionItem items = 1; next_page_token = 2 },
 /// CollectionItem { uri = 1; added_at = 2; is_removed = 3 }.
 pub fn parse_collection_page(bytes: &[u8]) -> (Vec<String>, String) {
@@ -281,7 +282,7 @@ pub fn parse_collection_page(bytes: &[u8]) -> (Vec<String>, String) {
     (uris, next)
 }
 
-/// id исполнителей, на которых подписан аккаунт сессии, в порядке коллекции.
+/// ids of the artists the session account is subscribed to, in collection order.
 pub async fn followed_artists(session: &Session) -> anyhow::Result<Vec<String>> {
     use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue};
     let username = session.username();
@@ -315,16 +316,16 @@ pub async fn followed_artists(session: &Session) -> anyhow::Result<Vec<String>> 
     Ok(ids)
 }
 
-// --- релизы исполнителя ----------------------------------------------------------------------------
+// --- artist releases ----------------------------------------------------------------------------
 
-/// Релиз из записи исполнителя: id альбома и группа (album | single), ещё без даты.
+/// Release from the artist record: album id and group (album | single), still without a date.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReleaseRef {
     pub album_id: String,
     pub group: &'static str,
 }
 
-/// Альбомы и синглы исполнителя по его записи (текущее издание каждого, ≤ 200 в группе).
+/// The artist's albums and singles by their record (the current edition of each, ≤ 200 per group).
 pub async fn artist_releases(
     session: &Session,
     artist_id: &str,
@@ -350,8 +351,8 @@ pub async fn artist_releases(
     Ok(refs)
 }
 
-/// Подробности релизов одной пачкой (≤ RELEASE_BATCH): Album как его отдаёт /artists/{id}/albums — с
-/// release_date, album_type и album_group. Релиз, который Spotify не отдаёт (404, 451), пропускается.
+/// Release details in one batch (≤ RELEASE_BATCH): Album as /artists/{id}/albums returns it — with
+/// release_date, album_type and album_group. A release Spotify does not return (404, 451) is skipped.
 pub async fn release_details(session: &Session, refs: &[ReleaseRef]) -> anyhow::Result<Vec<Album>> {
     let mut request = BatchedEntityRequest::new();
     let mut groups = HashMap::new();
@@ -413,7 +414,7 @@ fn images(images: &Images) -> Vec<Image> {
         .collect()
 }
 
-/// Релиз как его перечисляет /artists/{id}/albums.
+/// Release as /artists/{id}/albums lists it.
 fn release(message: &librespot_protocol::metadata::Album, group: &str) -> Option<Album> {
     use librespot_protocol::metadata::album::Type;
     let typed = SessionAlbum::try_from(message).ok()?;
@@ -451,7 +452,7 @@ fn release(message: &librespot_protocol::metadata::Album, group: &str) -> Option
     })
 }
 
-/// Дата с точностью, известной Spotify, как release_date Web API: «2021», «2021-11» или «2021-11-05».
+/// Date with the precision Spotify knows, as Web API's release_date: "2021", "2021-11" or "2021-11-05".
 fn release_date(date: &librespot_protocol::metadata::Date) -> Option<String> {
     if date.year() <= 0 {
         return None;
@@ -477,8 +478,8 @@ mod tests {
                 null,
                 {"id": "37i9dQZF1E39vTG3GurFPW", "name": "Daily Mix 1", "uri": "spotify:playlist:37i9dQZF1E39vTG3GurFPW",
                  "owner": {"id": "spotify", "display_name": "Spotify"}, "images": []},
-                {"id": "37i9dQZEVXbsGPw6v9FjFR", "name": "Радар новинок", "uri": "spotify:playlist:37i9dQZEVXbsGPw6v9FjFR",
-                 "description": "Новинки от исполнителей, которых вы слушаете", "owner": {"id": "spotify", "display_name": "Spotify"},
+                {"id": "37i9dQZEVXbsGPw6v9FjFR", "name": "Release Radar", "uri": "spotify:playlist:37i9dQZEVXbsGPw6v9FjFR",
+                 "description": "New releases from artists you listen to", "owner": {"id": "spotify", "display_name": "Spotify"},
                  "images": [{"url": "https://i.scdn.co/rr", "width": 640, "height": 640}], "tracks": {"total": 30}}
             ],
             "limit": 50, "offset": 0, "total": 4, "next": null
@@ -569,7 +570,7 @@ mod tests {
         );
     }
 
-    /// Сокращённый живой ответ /homeview/v1/home (полный — 130 КБ той же формы) + карточка «Радара».
+    /// Shortened live /homeview/v1/home answer (the full one is 130 KB of the same shape) + the "Radar" card.
     const HOME: &str = r#"{"id":"legacy-home-page","body":[
         {"id":"spotify:section:0JQ5DAUnp4wcj0bCb3wh3S-header","component":{"id":"glue:sectionHeader"},
          "text":{"title":"Made For fatyzzz"}},
@@ -611,7 +612,7 @@ mod tests {
             radar.description.as_deref(),
             Some("Catch all the latest music")
         );
-        // главная без «Радара» (как у живого аккаунта сейчас): Discover Weekly и редакционный RADAR India
+        // a home without the "Radar" (as a live account has now): Discover Weekly and the editorial RADAR India
         let without: Vec<Playlist> = playlists
             .into_iter()
             .filter(|p| p.name != "Release Radar")
@@ -623,7 +624,7 @@ mod tests {
     #[test]
     fn a_page_request_is_written_as_collection2v2_expects() {
         let bytes = page_request("alice", "artist", "", 300);
-        // 1: "alice", 2: "artist", 4: 300 (varint 0xac 0x02); пустой токен не пишется
+        // 1: "alice", 2: "artist", 4: 300 (varint 0xac 0x02); an empty token is not written
         let expected = [
             &[0x0a, 5][..],
             b"alice",
@@ -687,7 +688,7 @@ mod tests {
         assert_eq!(parse_collection_page(&[]), (Vec::new(), String::new()));
         let mut page = Vec::new();
         put_text(&mut page, 2, "t");
-        page.extend([0x0a, 50, 1, 2]); // поле 1 обещает 50 байт, а их 2
+        page.extend([0x0a, 50, 1, 2]); // field 1 promises 50 bytes, but there are 2
         let (uris, next) = parse_collection_page(&page);
         assert!(uris.is_empty());
         assert_eq!(next, "t");

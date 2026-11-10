@@ -1,5 +1,5 @@
-//! Хозяин локального движка: подключение, перезапуск с подхватом воспроизведения, восстановление
-//! после обрыва сессии, остановка. Сообщает актору о состоянии через Msg::Local.
+//! The host of the local engine: connecting, restarting while carrying over playback, recovery
+//! after a session drop, and stopping. It reports the state to the actor via Msg::Local.
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -11,12 +11,12 @@ use super::backend::{EngineLink, LocalEngine};
 use crate::engine::{Engine, EngineConfig, EngineEvent, LoadSpec, Notify, PlaybackResume};
 use crate::{Credentials, EngineStarted};
 
-/// Сколько обрывов сессии подряд терпим за десять минут.
+/// How many consecutive session drops we tolerate within ten minutes.
 const RECONNECT_LIMIT: usize = 5;
 const RECONNECT_WINDOW: Duration = Duration::from_secs(600);
 
-/// Английский ключ перевода; наружу — `mf_i18n::t(PREMIUM_REQUIRED)` (в обоих языках есть «Premium»: по нему
-/// sf-services узнаёт отказ).
+/// An English translation key; outward it is `mf_i18n::t(PREMIUM_REQUIRED)` (both languages contain "Premium": by it
+/// sf-services recognizes the refusal).
 pub(crate) const PREMIUM_REQUIRED: &str = "Spotify Premium required";
 
 pub(crate) struct Slot {
@@ -29,7 +29,7 @@ pub(crate) struct EngineHost {
     slot: Mutex<Option<Slot>>,
     tx: mpsc::UnboundedSender<Msg>,
     reconnects: Mutex<Vec<Instant>>,
-    /// поколение подключения: устаревший connect не занимает слот
+    /// connection generation: a stale connect does not take the slot
     generation: Mutex<u64>,
 }
 
@@ -56,7 +56,7 @@ impl EngineHost {
         *self.generation.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// Подключить движок; предыдущий останавливается.
+    /// Connect the engine; the previous one is stopped.
     pub async fn connect(
         self: &Arc<Self>,
         credentials: Credentials,
@@ -84,7 +84,7 @@ impl EngineHost {
         let engine = match result {
             Ok(engine) => engine,
             Err(error) => {
-                // ошибки движка уже переведены (friendly_connect_error), а «Premium» есть в обоих языках
+                // the engine errors are already translated (friendly_connect_error), and "Premium" exists in both languages
                 let text = if error.to_lowercase().contains("premium") { mf_i18n::t(PREMIUM_REQUIRED) } else { error };
                 tracing::warn!("local playback didn't start: {text}");
                 if generation == self.current_generation() {
@@ -121,9 +121,9 @@ impl EngineHost {
         Ok(EngineStarted { device_id, reusable })
     }
 
-    /// Перезапуск с новыми настройками (или прежними) и подхватом трека и позиции.
-    /// `load` — что загрузить в новый движок вместо одного трека (контекст, список, режимы — из ядра);
-    /// оборвавшаяся сессия librespot всё равно восстанавливается своим снимком.
+    /// Restart with new settings (or the previous ones), carrying over the track and position.
+    /// `load` — what to load into the new engine instead of a single track (context, list, modes — from the core);
+    /// a dropped librespot session is still restored from its own snapshot.
     pub fn restart(self: &Arc<Self>, rt: &Handle, config: Option<EngineConfig>, volume: u16, load: Option<LoadSpec>) {
         let Some(old) = self.take() else {
             return;
@@ -134,7 +134,7 @@ impl EngineHost {
         };
         old.engine.engine.shutdown();
         let mut config = config.unwrap_or(old.config);
-        // новый движок звучит на той же громкости, что и прежний
+        // the new engine plays at the same volume as the previous one
         config.initial_volume = volume;
         let host = self.clone();
         let credentials = old.credentials;
@@ -143,7 +143,7 @@ impl EngineHost {
         });
     }
 
-    /// Сессия librespot оборвалась сама — переподключиться (не чаще RECONNECT_LIMIT за 10 минут).
+    /// The librespot session dropped on its own — reconnect (no more often than RECONNECT_LIMIT per 10 minutes).
     pub fn reconnect(self: &Arc<Self>, rt: &Handle, volume: u16) {
         let exhausted = {
             let mut reconnects = self.reconnects.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -173,7 +173,7 @@ impl EngineHost {
         let _ = self.tx.send(Msg::Local(LocalMsg::Unavailable));
     }
 
-    /// Выход: остановить без сообщений актору.
+    /// Exit: stop without notifying the actor.
     pub fn shutdown(&self) {
         self.next_generation();
         if let Some(old) = self.take() {
@@ -182,7 +182,7 @@ impl EngineHost {
     }
 }
 
-/// Подхватить воспроизведение на новой сессии; Spirc может отклонять загрузку, пока регистрируется.
+/// Pick up playback on a new session; Spirc may reject loading while it is registering.
 fn resume_playback(link: Arc<EngineLink>, resume: PlaybackResume) {
     tokio::spawn(async move {
         for attempt in 0..3 {

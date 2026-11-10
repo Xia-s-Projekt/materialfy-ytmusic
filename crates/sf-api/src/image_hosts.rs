@@ -1,14 +1,14 @@
-//! Картинки Spotify: один и тот же путь /image/<id> отдают несколько CDN. Основной i.scdn.co в РФ не открывается
-//! или отвечает по 8+ с, поэтому качаем только с зеркал (Fastly, Akamai, image-cdn, i2o — последний пережимает
-//! JPEG, картинка та же); адреса i.scdn.co из данных Spotify переписываем. Тот же список — в cpp/mf_shell.cpp.
+//! Spotify images: several CDNs serve the same /image/<id> path. The main one, i.scdn.co, does not open in Russia
+//! or answers in 8+ s, so we download only from mirrors (Fastly, Akamai, image-cdn, i2o — the last one recompresses
+//! JPEG, same picture); i.scdn.co addresses from Spotify data are rewritten. The same list is in cpp/mf_shell.cpp.
 pub const SPOTIFY_IMAGE_HOSTS: [&str; 4] =
     ["image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com", "image-cdn.spotifycdn.com", "i2o.scdn.co"];
-/// Хосты, чьи адреса /image/<id> переписываются на зеркала.
+/// Hosts whose /image/<id> addresses are rewritten to mirrors.
 const KNOWN_HOSTS: [&str; 5] =
     ["i.scdn.co", "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com", "image-cdn.spotifycdn.com", "i2o.scdn.co"];
 
-/// Адреса, по которым стоит пробовать картинку: для картинки Spotify — каждое зеркало по порядку,
-/// для любой другой — она сама.
+/// Addresses worth trying for a picture: for a Spotify image — each mirror in order,
+/// for any other — the address itself.
 pub fn mirrors(url: &str) -> Vec<String> {
     for host in KNOWN_HOSTS {
         for scheme in ["https://", "http://"] {

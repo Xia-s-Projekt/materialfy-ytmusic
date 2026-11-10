@@ -1,7 +1,7 @@
 import QtQuick
 
-// Play/Pause в «печеньке» MD3 Expressive. Во время воспроизведения фигура медленно вращается,
-// при нажатии сжимается в более круглую, при смене состояния морфится.
+// Play/Pause in an MD3 Expressive "cookie". During playback the shape slowly rotates,
+// on press it squeezes into a rounder one, and morphs when the state changes.
 Item {
     id: root
 
@@ -12,7 +12,7 @@ Item {
     property var playingShape: "softSquare"
     property var pausedShape: "softSquare"
     property bool spin: true
-    // выбранный трек ещё грузится: вместо значка — индикатор MD3, кнопка при этом остаётся нажимаемой
+    // the selected track is still loading: an MD3 indicator instead of the icon, the button stays clickable
     property bool loading: false
 
     signal clicked()
@@ -27,12 +27,12 @@ Item {
         Behavior on anchors.margins { NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutBack } }
         shape: area.pressed ? "circle" : root.playing ? root.playingShape : root.pausedShape
         duration: Theme.motion.spatialDefault
-        // недоступна (ничего не играет) — приглушённый контейнер MD3
+        // disabled (nothing is playing) — a dimmed MD3 container
         color: root.enabled ? root.containerColor : Qt.alpha(Theme.fgSurface, Theme.stateLayer.disabledContainer)
 
         TickAnimation {
             running: root.spin && root.playing && root.visible && !Theme.quiet && !Theme.reducedMotion
-            // поворот элемента, а не контура (angle) — без пересборки пути каждый кадр
+            // rotate the item, not the outline (angle) — no path rebuild every frame
             onTriggered: shape.rotation = (shape.rotation + frameTime * 30) % 360
         }
     }

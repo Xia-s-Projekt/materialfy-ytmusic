@@ -2,11 +2,11 @@ import QtQuick
 import Md3
 import Materialfy.Core
 
-// Меню трека (ПКМ или «⋯»): радио, очередь, плейлисты, ссылки, переходы.
-// Один экземпляр на окно: show(track, point); действия разбирает владелец через triggered(id, track, item).
-// playlistId — свой плейлист, открытый на странице (пункт «Убрать из этого плейлиста», нужен track.pos).
-// В мини-плеере сверху — то, чего в нём нет (перемешивание, повтор, поверх окон, развернуть);
-// эти пункты меню выполняет само, как и «О треке» (окно TrackInfoDialog живёт здесь же).
+// Track menu (right-click or "⋯"): radio, queue, playlists, links, navigation.
+// One instance per window: show(track, point); the owner handles the actions via triggered(id, track, item).
+// playlistId — own playlist open on the page (the "Remove from this playlist" item, needs track.pos).
+// In the mini player, on top is what it lacks (shuffle, repeat, always on top, expand);
+// the menu executes those items itself, as well as "About this track" (the TrackInfoDialog window lives here too).
 Item {
     id: root
 
@@ -23,7 +23,7 @@ Item {
     readonly property var _win: root.Window.window
     readonly property bool _mini: !!_win && _win.layoutMode === "mini"
 
-    // size — размер кнопки «⋯» с левым верхним углом в point (меню встаёт у неё); без него — у точки
+    // size — size of the "⋯" button whose top-left corner sits at point (the menu attaches to it); without it — at the point
     function show(t, point, size) {
         track = t ?? ({})
         if (_id === "" && (track.uri ?? "") === "" && !_mini)
@@ -108,7 +108,7 @@ Item {
         if (items.length > mini.length)
             items.push({ separator: true })
         items.push({ id: "addqueue", text: I18n.t("Add to queue"), icon: "add_to_queue", enabled: (track.uri ?? "") !== "" })
-        // в мини-режиме повтор уже в верхней группе
+        // in mini mode repeat is already in the top group
         if (_isCurrent && !_mini)
             items.push({ id: "repeat", text: I18n.t("Repeat this"), icon: Player.repeat === "one" ? "repeat_one" : "repeat",
                          checked: Player.repeat !== "off" })
