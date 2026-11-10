@@ -56,7 +56,7 @@ Item {
                     Layout.preferredWidth: 72
                     Layout.preferredHeight: 72
                     source: root.info.cover ?? ""
-                    shape: cardHover.hovered ? "cookie12" : "circle"
+                    shape: cardHover.hovered ? "softSquare" : "circle"
                 }
                 ColumnLayout {
                     Layout.fillWidth: true

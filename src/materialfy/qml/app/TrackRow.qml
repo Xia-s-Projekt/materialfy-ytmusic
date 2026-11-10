@@ -48,7 +48,7 @@ Item {
     // иначе каждая новая строка полсекунды анимировала бы колонку и перекладывалась в каждом кадре
     property bool _sized: false
     Component.onCompleted: _sized = width > 0
-    Behavior on _albumT { enabled: root._sized; NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
+    Behavior on _albumT { enabled: root._sized; NumberAnimation { duration: 0; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
     property var track: null           // полный словарь трека для меню; без него — собирается из полей
     // позиция в плейлисте (для «Убрать из этого плейлиста»); -1 — неизвестна (например, в поиске)
     // и в словарь для меню тогда не попадает: Main.qml различает «нет» и число
@@ -216,7 +216,7 @@ Item {
                 fallbackKind: root.album !== "" ? "album" : "track"
                 fallbackArtist: root.artists.split(", ")[0]
                 fallbackTitle: root.album !== "" ? root.album : root.title
-                shape: root.current && !root.editable ? "cookie9" : "softSquare"
+                shape: "softSquare"
             }
             LoadingIndicator {
                 anchors.centerIn: parent

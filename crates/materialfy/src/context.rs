@@ -39,7 +39,3 @@ pub fn init(context: AppContext) {
 pub fn ctx() -> &'static AppContext {
     CONTEXT.get().expect("AppContext not created: call context::init() before registering QML types")
 }
-
-pub fn try_ctx() -> Option<&'static AppContext> {
-    CONTEXT.get()
-}

@@ -13,7 +13,6 @@ pub mod home;
 pub mod library;
 pub mod lyrics;
 pub mod releases;
-pub mod social;
 pub mod update;
 pub mod wave;
 
@@ -38,7 +37,6 @@ pub use home::{HomeService, HomeSnapshot};
 pub use library::{FeedbackKind, LibraryEvent, LibraryKind, LibraryService, PlaylistInfo};
 pub use lyrics::{LyricsService, LyricsSnapshot, LyricsStatus};
 pub use releases::{NewRelease, ReleasesService, ReleasesSnapshot};
-pub use social::{FriendActivity, Jam, JamMember, SocialService, SocialSnapshot};
 pub use update::{UpdateService, UpdateSnapshot, UpdateState};
 pub use wave::{WaveService, WaveSnapshot};
 
@@ -102,24 +100,10 @@ pub struct Services {
     pub lyrics: Arc<LyricsService>,
     pub history: Arc<HistoryService>,
     pub devices: Arc<DevicesService>,
-    pub social: Arc<SocialService>,
     pub update: Arc<update::UpdateService>,
     pub player: PlayerHandle,
     app_requests: broadcast::Sender<AppRequest>,
     media: Arc<Mutex<Option<glue::MediaStop>>>,
-}
-
-// Gateway shim: bridges call services.auth.api().http() / .web_api_limits()
-pub struct GatewayShim {
-    client: Arc<YtClient>,
-}
-impl GatewayShim {
-    pub fn http(&self) -> reqwest::Client {
-        reqwest::Client::new()
-    }
-    pub fn web_api_limits(&self) -> yt_api::util::WebApiLimitsShim {
-        yt_api::util::WebApiLimitsShim
-    }
 }
 
 impl Services {
@@ -138,14 +122,13 @@ impl Services {
         let auth = AuthService::new(rt.clone(), settings.clone(), api.clone(), player.clone(), store);
         let history = HistoryService::new(rt.clone(), auth.clone(), player.clone());
         let library = LibraryService::new(rt.clone(), auth.clone(), player.clone(), history.clone(), settings.clone());
-        let catalog = CatalogService::new(auth.clone(), player.clone());
+        let catalog = CatalogService::new(auth.clone(), library.clone(), player.clone());
         let wave = WaveService::new(rt.clone(), auth.clone(), player.clone(), library.clone(), history.clone(), settings.clone());
         let releases = ReleasesService::new(rt.clone(), auth.clone(), library.clone(), history.clone(), player.clone());
         let home = HomeService::new(rt.clone(), auth.clone(), player.clone(), library.clone(), history.clone(), releases.clone(), settings.clone());
         let fetcher = mf_lyrics::LyricsFetcher::new(mf_platform::dirs::cache_subdir("lyrics"));
-        let lyrics = LyricsService::new(rt.clone(), player.clone(), fetcher);
+        let lyrics = LyricsService::new(rt.clone(), player.clone(), fetcher, api.clone());
         let devices = DevicesService::new(rt.clone(), auth.clone(), player.clone(), settings.clone());
-        let social = SocialService::new(rt.clone(), auth.clone(), player.clone());
         glue::spawn_settings_glue(rt, settings.clone(), player.clone());
         let (app_requests, _) = broadcast::channel(16);
         let update = update::UpdateService::new(rt.clone(), settings.clone(), app_requests.clone());
@@ -166,7 +149,6 @@ impl Services {
             lyrics,
             history,
             devices,
-            social,
             update,
             player,
             app_requests,

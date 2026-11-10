@@ -57,7 +57,7 @@ Item {
             MorphShape {
                 anchors.fill: parent
                 visible: (root.context.cover ?? "") === ""
-                shape: root.kind === "liked" ? "cookie9" : "softSquare"
+                shape: "softSquare"
                 color: root.kind === "liked" ? Theme.primaryContainer : Theme.secondaryContainer
                 Icon {
                     anchors.centerIn: parent

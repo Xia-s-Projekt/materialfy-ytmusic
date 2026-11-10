@@ -119,14 +119,44 @@ impl AuthService {
         let events = self.events.clone();
         let has = self.store.has_auth();
         if !has {
-            let _ = snapshot.send(AuthSnapshot { web_state: "none".into(), personal_state: "none".into(), ..Default::default() });
+            let _ = snapshot.send_replace(AuthSnapshot { web_state: "none".into(), personal_state: "none".into(), ..Default::default() });
             return;
         }
         let rt = self.rt.clone();
         // Show progress immediately (QML `checking` view) — don't wait for the
         // Python bridge round-trip, or the click looks dead.
-        let _ = snapshot.send(AuthSnapshot { state: AuthState::Waiting, has_headers: true, web_state: "none".into(), personal_state: "none".into(), ..Default::default() });
+        let _ = snapshot.send_replace(AuthSnapshot { state: AuthState::Waiting, has_headers: true, web_state: "none".into(), personal_state: "none".into(), ..Default::default() });
         rt.spawn(async move {
+            // A guest cookie answers library calls with an empty list instead of
+            // an auth error, so "the library answered" does not mean "signed in".
+            // Ask the account menu first: only a real session has an account.
+            let signed_in = match api.check_session().await {
+                Ok(v) => v,
+                Err(e) => {
+                    let (text, code) = match &e {
+                        YtError::Network(_) => (e.user_text(), "noResponse"),
+                        YtError::Remote(msg) if msg.contains("authentication") || msg.contains("Please provide authentication") => (e.user_text(), "expired"),
+                        YtError::Decode => (e.user_text(), "badJson"),
+                        YtError::NotSignedIn => (e.user_text(), "expired"),
+                        YtError::PythonMissing => (e.user_text(), "other"),
+                        YtError::Remote(_) => (e.user_text(), "other"),
+                    };
+                    let _ = snapshot.send_replace(AuthSnapshot { state: AuthState::Failed, error_text: text, error_code: code.into(), web_state: "error".into(), personal_state: "error".into(), has_headers: true, ..Default::default() });
+                    return;
+                }
+            };
+            if !signed_in {
+                let _ = snapshot.send_replace(AuthSnapshot {
+                    state: AuthState::Failed,
+                    error_text: "These headers are not signed in to a Google account".to_string(),
+                    error_code: "notSignedIn".into(),
+                    web_state: "error".into(),
+                    personal_state: "error".into(),
+                    has_headers: true,
+                    ..Default::default()
+                });
+                return;
+            }
             match api.get_library_playlists(1).await {
                 Ok(_) => {
                     // Real channel name/avatar (fallback to "YouTube Music" on any failure).
@@ -149,7 +179,7 @@ impl AuthService {
                         has_headers: true,
                         ..Default::default()
                     };
-                    let _ = snapshot.send(snap);
+                    let _ = snapshot.send_replace(snap);
                     let _ = events.send(AuthEvent::SignedIn(account));
                     let _ = events.send(AuthEvent::PlaybackReady("this-computer".into()));
                 }
@@ -164,7 +194,7 @@ impl AuthService {
                         YtError::PythonMissing => (e.user_text(), "other"),
                         YtError::Remote(_) => (e.user_text(), "other"),
                     };
-                    let _ = snapshot.send(AuthSnapshot { state: AuthState::Failed, error_text: text, error_code: code.into(), web_state: "error".into(), personal_state: "error".into(), has_headers: true, ..Default::default() });
+                    let _ = snapshot.send_replace(AuthSnapshot { state: AuthState::Failed, error_text: text, error_code: code.into(), web_state: "error".into(), personal_state: "error".into(), has_headers: true, ..Default::default() });
                 }
             }
         });
@@ -178,7 +208,7 @@ impl AuthService {
     pub fn cancel_login(&self) {}
     pub fn sign_out(&self) {
         self.store.clear();
-        let _ = self.snapshot.send(AuthSnapshot { web_state: "none".into(), personal_state: "none".into(), ..Default::default() });
+        let _ = self.snapshot.send_replace(AuthSnapshot { web_state: "none".into(), personal_state: "none".into(), ..Default::default() });
         let _ = self.events.send(AuthEvent::SignedOut);
     }
     pub fn retry(&self) { self.start(); }

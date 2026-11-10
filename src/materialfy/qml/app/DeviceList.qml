@@ -107,7 +107,7 @@ ColumnLayout {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: 64
             Layout.preferredHeight: 64
-            shape: "cookie9"
+            shape: "softSquare"
             color: Theme.secondaryContainer
             Icon { anchors.centerIn: parent; visible: !emptyBox.looking; name: "devices_off"; size: 30; color: Theme.fgSecondaryContainer }
             LoadingIndicator {

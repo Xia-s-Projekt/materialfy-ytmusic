@@ -161,7 +161,7 @@ Item {
         width: Math.min(parent.width - 32, 300)
         visible: root.count === 0
         icon: "queue_music"
-        shape: "cookie6"
+        shape: "softSquare"
         animated: !Theme.reducedMotion
         title: I18n.t("Queue is empty")
         text: Player.remote ? I18n.t("The queue on “{0}” is empty", Player.device.name ?? "")
@@ -288,7 +288,7 @@ Item {
                 scale: row.dragging ? 1.03 : 1
                 Behavior on scale { NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutBack } }
                 track: root.rowData(cell.index, cell.model.uid, cell.model.title)
-                current: cell.sec === "current"
+                current: cell.index === Player.currentIndex
                 draggable: cell.m >= 0 && Player.queueReorderable
                 dragging: cell.lifted && root.dragFrom >= 0
                 activeFocusOnTab: true

@@ -20,7 +20,7 @@ Item {
     property string coverTitle
     property real size: 168
     property var shape: round ? "circle" : "softSquare"
-    property var hoverShape: round ? "cookie12" : "cookie9"
+    property var hoverShape: "softSquare"
     property bool showPlay: false
     property bool playing: false        // играет из этой плитки — иконка паузы
     property string badge
@@ -51,7 +51,7 @@ Item {
                 fallbackArtist: root.coverArtist
                 fallbackTitle: root.coverTitle
                 shape: root.hovered ? root.hoverShape : root.shape
-                duration: Theme.motion.spatialDefault
+                duration: 0
             }
             // Заглушка, плашка, булавка и «Слушать» создаются, только когда нужны: плиток на полках сотни,
             // а без обложки, с плашкой или под курсором — единицы
@@ -118,8 +118,8 @@ Item {
                         size: 48
                         playing: root.playing
                         spin: false
-                        pausedShape: "cookie6"
-                        playingShape: "cookie9"
+                        pausedShape: "softSquare"
+                        playingShape: "softSquare"
                         onClicked: root.playClicked()
                     }
                     MouseArea { id: playArea; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }

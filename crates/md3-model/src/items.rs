@@ -42,6 +42,9 @@ pub struct TrackItem {
     pub added_by: String,
     /// прослушивания на Spotify (GraphQL-шлюз: страницы альбома и исполнителя); 0 — неизвестно
     pub play_count: i64,
+    /// строка плейлиста YouTube Music: id вхождения в плейлисте (нужен для
+    /// удаления и перестановки; "" — не из плейлиста или недоступен)
+    pub set_video_id: String,
 }
 
 impl TrackItem {

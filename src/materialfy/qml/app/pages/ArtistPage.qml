@@ -139,7 +139,7 @@ Page {
                 source: page.info.coverLarge || page.info.cover || ""
                 fallbackKind: "artist"
                 fallbackArtist: page.info.name ?? ""
-                shape: page.playingHere && Player.playing ? "cookie12" : "circle"
+                shape: page.playingHere && Player.playing ? "softSquare" : "circle"
                 duration: Theme.motion.spatialSlow
             }
 

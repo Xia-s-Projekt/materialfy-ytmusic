@@ -12,9 +12,7 @@ Item {
     id: page
 
     property var router
-    property string folderId
-    property string folderTitle
-    readonly property string title: folderId !== "" ? (folderTitle !== "" ? folderTitle : I18n.t("Folder")) : I18n.t("Library")
+    readonly property string title: I18n.t("Library")
     readonly property bool showHeader: false
     readonly property bool scrolled: list.contentY - list.originY > 8
 
@@ -23,12 +21,10 @@ Item {
     property bool searchOpen: false
     property string query
     readonly property bool signedIn: Auth.state === "signedIn"
-    readonly property bool inFolder: folderId !== ""
     readonly property bool grid: Settings.libraryView !== "list"
-    readonly property bool showLiked: kind === "playlists" && !inFolder && owner === "all" && query.trim() === ""
+    readonly property bool showLiked: kind === "playlists" && owner === "all" && query.trim() === ""
 
     readonly property var model: !signedIn ? null
-        : inFolder ? Library.folderChildren(folderId)
         : Library.items(kind, owner, Settings.librarySort)
 
     component Head: Label {
@@ -39,7 +35,7 @@ Item {
 
     readonly property var sorts: [
         { id: "recent", text: I18n.t("Recents") },
-        { id: "added", text: I18n.t("Recently added") },
+        { id: "added", text: I18n.t("Recently played") },
         { id: "alpha", text: I18n.t("Alphabetical") },
         { id: "author", text: I18n.t("Creator") },
         { id: "ytmusic", text: I18n.t("YouTube Music order") }
@@ -52,23 +48,16 @@ Item {
         const out = []
         const m = page.model
         const q = page.query.trim().toLowerCase()
-        // папки в корне есть только в порядке YouTube Music; их дети — внутри папки. В других сортировках
-        // сервис отдаёт плоский список (folderId — для справки), и такие строки не прячем
-        const folders = new Set()
         let liked = -1
         for (let i = 0; m && i < m.count; i++) {
             const e = m.get(i)
-            if (e.kind === "folder")
-                folders.add(e.id)
-            else if (e.kind === "liked")
+            if (e.kind === "liked")
                 liked = e.trackCount ?? -1
         }
         likedTotal = liked
         for (let i = 0; m && i < m.count; i++) {
             const e = m.get(i)
             if (e.kind === "liked")
-                continue
-            if (!page.inFolder && folders.has(e.folderId ?? ""))
                 continue
             if (q !== "" && ((e.title ?? "") + " " + (e.subtitle ?? "") + " " + (e.owner ?? "")).toLowerCase().indexOf(q) < 0)
                 continue
@@ -168,8 +157,6 @@ Item {
             play(e)
         else if (k === "liked")
             router.push("liked")
-        else if (k === "folder")
-            router.push("folder", { folderId: e.id, folderTitle: e.title ?? "" })
         else if (k === "playlist")
             router.push("playlist", { playlistId: e.id, playlistTitle: e.title ?? "", cover: e.cover ?? "" })
         else if (k === "album")
@@ -200,13 +187,6 @@ Item {
     }
     function _menuItems(e) {
         const k = e.kind ?? ""
-        if (k === "folder")
-            return [
-                { id: "open", text: I18n.t("Open folder"), icon: "folder_open" },
-                { separator: true },
-                { id: "rename", text: I18n.t("Rename — YouTube Music only"), icon: "edit", enabled: false },
-                { id: "move", text: I18n.t("Move — YouTube Music only"), icon: "folder", enabled: false }
-            ]
         if (k === "liked")
             return [
                 { id: "play", text: I18n.t("Play"), icon: "play_arrow" },
@@ -370,27 +350,9 @@ Item {
                 width: parent.width - 64
                 spacing: 12
 
-                // Хлебные крошки папки
-                RowLayout {
-                    visible: page.inFolder
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Label {
-                        text: I18n.t("Library")
-                        type: "bodyLarge"
-                        color: Theme.fgSurfaceVariant
-                        TapHandler { onTapped: page.router.reset("library") }
-                        HoverHandler { cursorShape: Qt.PointingHandCursor }
-                    }
-                    Icon { name: "chevron_right"; size: 20; color: Theme.fgSurfaceVariant }
-                    Label { text: page.title; type: "titleLarge"; weight: 500 }
-                    ReadOnlyBadge { text: I18n.t("YouTube Music folder · read-only") }
-                    Item { Layout.fillWidth: true }
-                }
-
                 // Разделы
                 Flow {
-                    visible: !page.inFolder
+                    visible: true
                     Layout.fillWidth: true
                     spacing: 8
                     Repeater {
@@ -410,7 +372,7 @@ Item {
                 }
                 // Владелец (только плейлисты)
                 Flow {
-                    visible: !page.inFolder && page.kind === "playlists"
+                    visible: page.kind === "playlists"
                     Layout.fillWidth: true
                     spacing: 8
                     Repeater {
@@ -452,7 +414,7 @@ Item {
 
                 // Подсказки
                 Rectangle {
-                    visible: page.kind === "shows" && !page.inFolder || page.inFolder
+                    visible: page.kind === "shows"
                     Layout.fillWidth: true
                     implicitHeight: hintRow.implicitHeight + 24
                     radius: Theme.shape.large
@@ -466,9 +428,7 @@ Item {
                         Icon { Layout.alignment: Qt.AlignTop; name: "info"; size: 20; color: Theme.primary }
                         Label {
                             Layout.fillWidth: true
-                            text: page.inFolder
-                                ? I18n.t("Playlists in this folder can be opened, played and edited (your own). The folder itself can't be changed — librespot reads folders but can't write them.")
-                                : I18n.t("Audiobooks from saved shows are hidden: librespot can't play them.")
+                            text: I18n.t("Audiobooks from saved shows are hidden: librespot can't play them.")
                             type: "bodySmall"
                             color: Theme.fgSurfaceVariant
                             wrapMode: Text.WordWrap
@@ -531,7 +491,7 @@ Item {
                         required property var modelData
                         required property int index
                         readonly property int order: rowItem.rowIndex * page.cols + index
-                        sourceComponent: modelData.liked ? likedTile : modelData.kind === "folder" ? folderTile : mediaTile
+                        sourceComponent: modelData.liked ? likedTile : mediaTile
                         // каскад появления: fade + сдвиг снизу 12 px
                         opacity: 1
                         transform: Translate { id: shift; y: 0 }
@@ -559,17 +519,6 @@ Item {
                                 onClicked: page.open({ kind: "liked" })
                                 onPlayClicked: page.play({ kind: "liked" })
                                 onMenuRequested: p => page.showMenu({ kind: "liked" }, p)
-                            }
-                        }
-                        Component {
-                            id: folderTile
-                            FolderTile {
-                                size: page.cell
-                                title: tileLoader.modelData.title ?? ""
-                                subtitle: tileLoader.modelData.subtitle ?? ""
-                                covers: tileLoader.modelData.covers ?? []
-                                onClicked: page.open(tileLoader.modelData)
-                                onMenuRequested: p => page.showMenu(tileLoader.modelData, p)
                             }
                         }
                         Component {
@@ -638,7 +587,7 @@ Item {
             : page.query.trim() !== "" || page.owner !== "all"
             ? ["search_off", I18n.t("Nothing found"), page.query.trim() !== "" ? I18n.t("Try a different search") : I18n.t("This section is empty")]
             : ({
-                playlists: ["queue_music", page.inFolder ? I18n.t("Folder is empty") : I18n.t("No playlists"), I18n.t("Playlists you create or save will appear here.")],
+                playlists: ["queue_music", I18n.t("No playlists"), I18n.t("Playlists you create or save will appear here.")],
                 albums: ["album", I18n.t("No saved albums"), I18n.t("Saved albums will appear here.")],
                 artists: ["person", I18n.t("No followed artists"), I18n.t("Artists you follow will appear here.")],
                 shows: ["podcasts", I18n.t("No podcasts yet"), I18n.t("Podcasts you follow will appear here.")]

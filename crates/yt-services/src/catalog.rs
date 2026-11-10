@@ -3,11 +3,12 @@
 use std::sync::Arc;
 
 use md3_model::{AlbumItem, ArtistItem, EpisodeItem, PlaylistItem, SearchBest, SearchTotals, ShowItem, TrackDetails, TrackItem};
-use tokio::runtime::Handle;
+use serde_json::Value;
 
 use yt_player::PlayerHandle;
 
 use crate::auth::AuthService;
+use crate::library::LibraryService;
 use crate::ServiceError;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -64,12 +65,13 @@ pub struct EpisodePage { pub info: EpisodeItem, pub show: ShowItem, pub more: Ve
 
 pub struct CatalogService {
     auth: Arc<AuthService>,
+    library: Arc<LibraryService>,
     player: PlayerHandle,
 }
 
 impl CatalogService {
-    pub fn new(auth: Arc<AuthService>, player: PlayerHandle) -> Arc<Self> {
-        Arc::new(Self { auth, player })
+    pub fn new(auth: Arc<AuthService>, library: Arc<LibraryService>, player: PlayerHandle) -> Arc<Self> {
+        Arc::new(Self { auth, library, player })
     }
 
     pub async fn search(&self, query: &str, _kind: SearchKind) -> Result<SearchResults, ServiceError> {
@@ -89,13 +91,41 @@ impl CatalogService {
         for item in &list {
             let rt = item.get("resultType").and_then(|t| t.as_str()).unwrap_or("");
             match rt {
-                "song" | "video" => out.tracks.push(yt_api::map::track_item(item)),
+                "song" | "video" => {
+                    if item.get("videoType").and_then(|t| t.as_str()).map_or(false, |vt| vt.contains("PODCAST")) {
+                        out.episodes.push(yt_api::map::episode_item(item));
+                    } else {
+                        out.tracks.push(yt_api::map::track_item(item));
+                    }
+                }
                 "album" => out.albums.push(yt_api::map::album_item(item)),
                 "artist" | "channel" => out.artists.push(yt_api::map::artist_item(item)),
-                "playlist" => out.playlists.push(yt_api::map::playlist_item(item)),
+                "playlist" => {
+                    if item.get("browseId").and_then(|b| b.as_str()).map_or(false, |b| b.starts_with("MPSP")) {
+                        out.shows.push(yt_api::map::show_item(item));
+                    } else {
+                        out.playlists.push(yt_api::map::playlist_item(item));
+                    }
+                }
+                "show" => out.shows.push(yt_api::map::show_item(item)),
+                "episode" => out.episodes.push(yt_api::map::episode_item(item)),
                 _ => {
-                    if item.get("videoId").is_some() { out.tracks.push(yt_api::map::track_item(item)); }
-                    else if item.get("browseId").is_some() && item.get("title").is_some() { out.albums.push(yt_api::map::album_item(item)); }
+                    if item.get("videoId").is_some() {
+                        if item.get("videoType").and_then(|t| t.as_str()).map_or(false, |vt| vt.contains("PODCAST")) {
+                            out.episodes.push(yt_api::map::episode_item(item));
+                        } else {
+                            out.tracks.push(yt_api::map::track_item(item));
+                        }
+                    } else if item.get("browseId").is_some() && item.get("title").is_some() {
+                        let bid = item.get("browseId").and_then(|b| b.as_str()).unwrap_or("");
+                        if bid.starts_with("MPSP") {
+                            out.shows.push(yt_api::map::show_item(item));
+                        } else if bid.starts_with("MPREb_") {
+                            out.albums.push(yt_api::map::album_item(item));
+                        } else {
+                            out.playlists.push(yt_api::map::playlist_item(item));
+                        }
+                    }
                 }
             }
         }
@@ -104,7 +134,8 @@ impl CatalogService {
             albums: out.albums.len() as i64,
             artists: out.artists.len() as i64,
             playlists: out.playlists.len() as i64,
-            shows: 0, episodes: 0,
+            shows: out.shows.len() as i64,
+            episodes: out.episodes.len() as i64,
         };
         if let Some(first) = out.tracks.first() {
             if let Ok(map) = serde_json::to_value(first) {
@@ -113,6 +144,9 @@ impl CatalogService {
                 }
             }
         }
+        // Remember these items so a later bare-URI queue entry shows the real
+        // name instantly (in-session only, always fresh API data).
+        crate::data::known::remember(out.tracks.iter().cloned());
         Ok(out)
     }
 
@@ -120,6 +154,7 @@ impl CatalogService {
         let api = self.auth.api();
         let v = api.get_album(album_id).await.map_err(ServiceError::from)?;
         let (info, tracks) = yt_api::map::album_page(&v);
+        crate::data::known::remember(tracks.iter().cloned());
         Ok(AlbumPage { info, tracks })
     }
 
@@ -138,13 +173,16 @@ impl CatalogService {
         }
         let similar: Vec<ArtistItem> = v.get("related").and_then(|s| s.as_array())
             .map(|a| a.iter().map(yt_api::map::artist_item).collect()).unwrap_or_default();
+        crate::data::known::remember(popular.iter().cloned());
         Ok(ArtistPage { info, popular, albums, also_albums: vec![], similar })
     }
 
     pub async fn track(&self, track_id: &str) -> Result<TrackItem, ServiceError> {
         let api = self.auth.api();
         let v = api.get_song(track_id).await.map_err(ServiceError::from)?;
-        Ok(yt_api::map::track_item(&v))
+        let track = yt_api::map::track_item(&v);
+        crate::data::known::remember(std::iter::once(track.clone()));
+        Ok(track)
     }
 
     pub async fn track_details(&self, track_id: &str, _album_id: &str) -> Result<TrackDetails, ServiceError> {
@@ -152,14 +190,69 @@ impl CatalogService {
         Ok(TrackDetails { track, popularity: -1, ..Default::default() })
     }
 
-    pub async fn show(&self, _show_id: &str) -> Result<ShowPage, ServiceError> {
-        Err(ServiceError::Other("Podcasts/shows are not available via ytmusicapi in this build".into()))
+    pub async fn show(&self, show_id: &str) -> Result<ShowPage, ServiceError> {
+        let api = self.auth.api();
+        let v = api.get_podcast(show_id, 100).await.map_err(ServiceError::from)?;
+        let info = yt_api::map::show_item(&v);
+        let episodes: Vec<EpisodeItem> = v
+            .get("episodes")
+            .and_then(|e| e.as_array())
+            .map(|a| a.iter().map(yt_api::map::episode_item).collect::<Vec<EpisodeItem>>())
+            .unwrap_or_default();
+        let total = episodes.len() as i64;
+        // показ сохранён, если флаг пришёл с данными страницы
+        self.library.note_saved(&info.uri, info.saved);
+        Ok(ShowPage { info, episodes, total })
     }
-    pub async fn show_episodes(&self, _show_id: &str, _offset: u32) -> Result<Vec<EpisodeItem>, ServiceError> {
-        Err(ServiceError::Other("Podcasts/shows are not available via ytmusicapi in this build".into()))
+
+    pub async fn show_episodes(&self, show_id: &str, _offset: u32) -> Result<Vec<EpisodeItem>, ServiceError> {
+        let api = self.auth.api();
+        let v = api.get_podcast(show_id, 100).await.map_err(ServiceError::from)?;
+        let episodes: Vec<EpisodeItem> = v
+            .get("episodes")
+            .and_then(|e| e.as_array())
+            .map(|a| a.iter().map(yt_api::map::episode_item).collect::<Vec<EpisodeItem>>())
+            .unwrap_or_default();
+        Ok(episodes)
     }
-    pub async fn episode(&self, _episode_id: &str) -> Result<EpisodePage, ServiceError> {
-        Err(ServiceError::Other("Podcasts/shows are not available via ytmusicapi in this build".into()))
+
+    pub async fn episode(&self, episode_id: &str) -> Result<EpisodePage, ServiceError> {
+        let api = self.auth.api();
+        let v = api.get_episode(episode_id).await.map_err(ServiceError::from)?;
+        let info = yt_api::map::episode_item(&v);
+        // playlistId ответа — идентификатор шоу (с префиксом MPSP)
+        let show_id = v
+            .get("playlistId")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim_start_matches("MPSP")
+            .to_owned();
+        let show = if !show_id.is_empty() {
+            match api.get_podcast(&show_id, 1).await {
+                Ok(sv) => {
+                    let mut sh = yt_api::map::show_item(&sv);
+                    sh.saved = v.get("saved").and_then(Value::as_bool).unwrap_or(false);
+                    self.library.note_saved(&sh.uri, sh.saved);
+                    sh
+                }
+                Err(_) => ShowItem {
+                    show_id: show_id.clone(),
+                    uri: format!("ytmusic:show:{show_id}"),
+                    ..Default::default()
+                },
+            }
+        } else {
+            ShowItem::default()
+        };
+        let more: Vec<EpisodeItem> = v
+            .get("episodes")
+            .and_then(|e| e.as_array())
+            .map(|a| a.iter().map(yt_api::map::episode_item).collect::<Vec<EpisodeItem>>())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| e.episode_id != info.episode_id)
+            .collect();
+        Ok(EpisodePage { info, show, more })
     }
     pub fn forget(&self) {}
     pub fn player(&self) -> &PlayerHandle { &self.player }

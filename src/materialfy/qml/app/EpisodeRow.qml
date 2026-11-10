@@ -100,7 +100,7 @@ Item {
             Layout.preferredHeight: side
             Layout.alignment: Qt.AlignTop
             source: root.episode.cover ?? ""
-            shape: root.isCurrent ? "cookie9" : "softSquare"
+            shape: "softSquare"
         }
 
         ColumnLayout {

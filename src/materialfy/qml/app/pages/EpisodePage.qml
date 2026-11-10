@@ -56,7 +56,7 @@ Page {
                 Layout.preferredHeight: Layout.preferredWidth
                 Layout.alignment: Qt.AlignTop
                 source: page.info.coverLarge || page.info.cover || ""
-                shape: page.isCurrent ? "cookie12" : "softSquare"
+                shape: "softSquare"
                 duration: Theme.motion.spatialSlow
             }
             ColumnLayout {

@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use thiserror::Error;
-use tokio::io::AsyncReadExt;
 
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum YtError {
@@ -66,7 +65,20 @@ fn bridge_path() -> PathBuf {
 }
 
 fn python_bin() -> String {
-    std::env::var("MATERIALFY_PYTHON").unwrap_or_else(|_| "python3".to_string())
+    if let Ok(p) = std::env::var("MATERIALFY_PYTHON") {
+        if !p.trim().is_empty() {
+            return p;
+        }
+    }
+    // A bare `python3` can resolve to a tool-manager wrapper (pyenv/asdf/agent
+    // shims) that blocks when spawned non-interactively. Prefer a real system
+    // interpreter; fall back to PATH only when none of these exist.
+    for cand in ["/usr/bin/python3", "/usr/local/bin/python3", "/bin/python3"] {
+        if std::path::Path::new(cand).is_file() {
+            return cand.to_string();
+        }
+    }
+    "python3".to_string()
 }
 
 /// Vendored dependency dir (`python/vendor` next to the bridge), so no
@@ -206,6 +218,12 @@ impl YtClient {
         self.call("get_home", json!({"limit": limit})).await
     }
 
+    /// "New releases" browse: normalized two-row items (albums for signed-in
+    /// users, release playlists for guests). Bridge `get_new_releases`.
+    pub async fn get_new_releases(&self) -> Result<Value> {
+        self.call("get_new_releases", json!({})).await
+    }
+
     pub async fn get_library_playlists(&self, limit: u32) -> Result<Value> {
         self.call("get_library_playlists", json!({"limit": limit})).await
     }
@@ -213,6 +231,14 @@ impl YtClient {
     /// Signed-in channel profile: `{name, avatar, channelId}` (bridge `get_account`).
     pub async fn get_account(&self) -> Result<Value> {
         self.call("get_account", json!({})).await
+    }
+
+    /// Whether the saved headers belong to a signed-in account (bridge `check_session`).
+    /// A guest cookie answers library calls with an empty list instead of an error,
+    /// so the library cannot tell the two apart; this asks the account menu instead.
+    pub async fn check_session(&self) -> Result<bool> {
+        let v = self.call("check_session", json!({})).await?;
+        Ok(v.get("signedIn").and_then(Value::as_bool).unwrap_or(false))
     }
 
     pub async fn get_liked_songs(&self, limit: u32) -> Result<Value> {
@@ -236,6 +262,128 @@ impl YtClient {
             .await
     }
 
+    /// New playlist; returns the playlistId (or a dict carrying it).
+    pub async fn create_playlist(
+        &self,
+        title: &str,
+        description: &str,
+        privacy: &str,
+        video_ids: &[String],
+    ) -> Result<Value> {
+        self.call(
+            "create_playlist",
+            json!({
+                "title": title,
+                "description": description,
+                "privacyStatus": privacy,
+                "videoIds": video_ids,
+            }),
+        )
+        .await
+    }
+
+    /// Rename / re-describe / change visibility of a playlist.
+    pub async fn edit_playlist(
+        &self,
+        playlist_id: &str,
+        title: Option<&str>,
+        description: Option<&str>,
+        privacy: Option<&str>,
+    ) -> Result<Value> {
+        self.call(
+            "edit_playlist",
+            json!({
+                "playlistId": playlist_id,
+                "title": title,
+                "description": description,
+                "privacyStatus": privacy,
+            }),
+        )
+        .await
+    }
+
+    pub async fn delete_playlist(&self, playlist_id: &str) -> Result<Value> {
+        self.call("delete_playlist", json!({"playlistId": playlist_id})).await
+    }
+
+    /// Append (or prepend, with `to_top`) videos to a playlist.
+    pub async fn add_playlist_items(
+        &self,
+        playlist_id: &str,
+        video_ids: &[String],
+        to_top: bool,
+        duplicates: bool,
+    ) -> Result<Value> {
+        self.call(
+            "add_playlist_items",
+            json!({"playlistId": playlist_id, "videoIds": video_ids, "addToTop": to_top, "duplicates": duplicates}),
+        )
+        .await
+    }
+
+    /// Remove entries: each needs the videoId and its setVideoId.
+    pub async fn remove_playlist_items(
+        &self,
+        playlist_id: &str,
+        videos: &[serde_json::Value],
+    ) -> Result<Value> {
+        self.call("remove_playlist_items", json!({"playlistId": playlist_id, "videos": videos}))
+            .await
+    }
+
+    /// Move one playlist entry before another (both identified by setVideoId).
+    pub async fn move_playlist_item(
+        &self,
+        playlist_id: &str,
+        set_video_id: &str,
+        before_set_video_id: &str,
+    ) -> Result<Value> {
+        self.call(
+            "edit_playlist",
+            json!({
+                "playlistId": playlist_id,
+                "moveItem": [set_video_id, before_set_video_id],
+            }),
+        )
+        .await
+    }
+
+    /// Add (LIKE) or remove (INDIFFERENT) a playlist from the library.
+    pub async fn rate_playlist(&self, playlist_id: &str, rating: &str) -> Result<Value> {
+        self.call("rate_playlist", json!({"playlistId": playlist_id, "rating": rating}))
+            .await
+    }
+
+    /// Thumbs up / thumbs down / indifferent for one track (`LIKE`, `DISLIKE`,
+    /// `INDIFFERENT`).
+    pub async fn rate_song(&self, video_id: &str, rating: &str) -> Result<Value> {
+        self.call("rate_song", json!({"videoId": video_id, "rating": rating}))
+            .await
+    }
+
+    /// Podcasts the account follows (library → «Подкасты»).
+    pub async fn get_library_podcasts(&self, limit: u32) -> Result<Value> {
+        self.call("get_library_podcasts", json!({"limit": limit})).await
+    }
+
+    /// Podcast page: `{title, author, description, saved, episodes: […]}`.
+    pub async fn get_podcast(&self, playlist_id: &str, limit: u32) -> Result<Value> {
+        self.call("get_podcast", json!({"playlistId": playlist_id, "limit": limit}))
+            .await
+    }
+
+    pub async fn get_episode(&self, video_id: &str) -> Result<Value> {
+        self.call("get_episode", json!({"videoId": video_id})).await
+    }
+
+    pub async fn subscribe_artist(&self, channel_id: &str) -> Result<Value> {
+        self.call("subscribe_artist", json!({"channelId": channel_id})).await
+    }
+
+    pub async fn unsubscribe_artist(&self, channel_id: &str) -> Result<Value> {
+        self.call("unsubscribe_artist", json!({"channelId": channel_id})).await
+    }
+
     pub async fn get_album(&self, browse_id: &str) -> Result<Value> {
         self.call("get_album", json!({"browseId": browse_id})).await
     }
@@ -248,17 +396,24 @@ impl YtClient {
         self.call("get_song", json!({"videoId": video_id})).await
     }
 
-    /// Playback URL from the anonymous ANDROID player: `{url, bitrate}`.
-    /// Library/browse calls use the signed-in WEB_REMIX bridge, but that
-    /// response only carries `signatureCipher` formats (403 without JS
-    /// deciphering); the ANDROID player hands back plain `url` formats.
+    /// Playback URL via InnerTube `player`: `{url, bitrate, mime}`.
+    /// Direct Rust post (no Python/yt-dlp needed for playback).
     pub async fn get_stream_url(&self, video_id: &str) -> Result<Value> {
-        self.call("get_stream_url", json!({"videoId": video_id})).await
+        crate::innertube::stream_url(video_id).await
+    }
+
+    /// Track metadata for a video (bridge `check_session`-independent, direct InnerTube post).
+    /// Queue rows created from bare URIs carry only the video id; the up-next list
+    /// needs a title/artist/cover before the track ever plays.
+    pub async fn get_video_details(&self, video_id: &str) -> Result<Value> {
+        crate::innertube::video_details_json(video_id).await
     }
 
     /// Download audio to `output` via vendored yt-dlp (bridge `download_audio`):
-    /// returns the file path. Google Video caps plain `url` GETs at ~1 MiB per
-    /// token on some networks, so yt-dlp handles manifest/fragment download.
+    /// returns the file path. Google Video caps plain `url` GETs at 1 MiB per
+    /// token (verified: exactly 1048576 bytes, then 403), so direct streaming
+    /// can never play a full song on this network; yt-dlp's JS deciphering is
+    /// what lifts the cap.
     pub async fn download_audio(&self, video_id: &str, output: &std::path::Path) -> Result<PathBuf> {
         let v = self
             .call(

@@ -6,8 +6,13 @@ Fork of [fatyzzz/materialfy](https://github.com/fatyzzz/materialfy) (Xia-s-Proje
 
 User request: adapt Materialfy from Spotify to YTMusic using
 [sigma67/ytmusicapi](https://github.com/sigma67/ytmusicapi). The Python library already covers
-search, home, library, playlists, albums, artists, watch playlists and `get_song` stream URLs.
-A native Innertube Rust rewrite would duplicate that work, so this fork uses a Python sidecar bridge.
+search, home, library, playlists, albums, artists and watch playlists, so catalogue and library
+calls go through a Python sidecar bridge.
+
+Playback does **not** use ytmusicapi or yt-dlp. Its signed-in `WEB_REMIX` player response only
+carries `signatureCipher` URLs, which need JS deciphering before Google will serve them. Instead
+`yt-api::innertube` posts to `youtubei/v1/player` with the anonymous `ANDROID` client, which
+returns plain `url` formats, and `yt-player` streams those bytes directly.
 
 ## Bridge
 
@@ -29,8 +34,8 @@ A native Innertube Rust rewrite would duplicate that work, so this fork uses a P
 | Spotify | YouTube Music |
 |---|---|
 | `sf-auth` | `yt-auth` — validates browser headers-auth JSON, file store |
-| `sf-api` | `yt-api` — bridge client, `YtError`, YT link parser (`music.youtube.com` / `youtube.com` / `youtu.be`), `md3-model` mapping |
-| `sf-player` | `yt-player` — queue actor, `get_song` stream URL picker; audio output stubbed |
+| `sf-api` | `yt-api` — bridge client, `YtError`, YT link parser (`music.youtube.com` / `youtube.com` / `youtu.be`), `md3-model` mapping, InnerTube `player` (`innertube.rs`) |
+| `sf-player` | `yt-player` — queue actor, InnerTube stream URL, streaming AAC decode through rodio |
 | `sf-services` | `yt-services` — service façade mirroring `sf-services` bridge API (`AuthService`, `CatalogService`, `LibraryService`, `HomeService`, `HistoryService`, `DevicesService`, `WaveService`, `LyricsService`, `ReleasesService`, `SocialService`, `UpdateService`) |
 
 Old `sf-*` crates are kept in the workspace but `materialfy` now depends on `yt-*`.
@@ -55,12 +60,34 @@ tap **Save & sign in** — `Auth.saveHeaders` calls
 - QML URI fallbacks were rewritten from `spotify:` to `ytmusic:`; `MiniPlayer` drop handler now
   accepts `ytmusic:` and `music.youtube.com` / `youtube.com/watch` links.
 
+## Playback
+
+1. `yt-player` asks `yt-api` for a stream URL. `innertube.rs` POSTs to
+   `youtubei/v1/player` (anonymous `ANDROID` client, `clientVersion 20.10.38`) and picks the
+   best audio-only format with a plain `url`, preferring AAC-LC `audio/mp4; codecs="mp4a.40.2"`
+   because symphonia/rodio has no Opus decoder.
+2. `audio.rs` opens the default cpal device once, then starts a `StreamReader` that fetches
+   256 KiB HTTP `Range` windows from the returned CDN URL on demand. rodio's `Decoder` reads
+   and seeks through it, so the `moov` atom lookup is a small ranged request, not a full
+   download.
+3. A background thread decodes into a bounded PCM channel (8192 frames × 16 batches, roughly
+   three seconds of audio). The rodio callback only pops samples and never touches the
+   network, so a slow CDN stalls the decoder thread instead of the audio device.
+4. Seek restarts the decoder at the new position via `Decoder::try_seek`; position is
+   `base_ms + player.get_pos()`.
+
+Nothing is written to disk and nothing is downloaded up front. `cargo run -p yt-api --example
+dl_test -- <videoId>` resolves a URL without playing, and `cargo run -p yt-player --example
+play_test -- <videoId>` plays it end to end.
+
 ## Known limitations
 
-- **Local audio playback is a stub.** `yt-player` resolves stream URLs via `get_song` and drives
-  the queue state machine preserved from `sf-player`, but there is no audio sink: rodio playback
-  conflicts with the fastframe/cpal 0.18/alsa stack used by the original app. Wiring a
-  `rodio` `Sink` + `rodio::Decoder` (or a `cpal` output) is the next step.
+- **InnerTube `ANDROID` client.** Public tracks play anonymously. Age-restricted, region-locked
+  or sign-in-only tracks may return `UNPLAYABLE` from that client even when the signed-in
+  library lists them.
+- **AAC only.** Formats are filtered to `audio/mp4`; an Opus-only response fails with
+  "No playable audio from InnerTube" rather than falling back.
+- **No offline mode.** Tracks are not downloaded; the app does not bypass DRM.
 - **Connect / remote devices, social (friend activity), jam** are stubs; YouTube Music has no
   equivalent APIs.
 - **Update service** points at `Xia-s-Projekt/materialfy-ytmusic` releases but cannot

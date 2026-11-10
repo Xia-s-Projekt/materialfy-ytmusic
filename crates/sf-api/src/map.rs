@@ -73,6 +73,7 @@ pub fn track_item(track: &models::Track) -> m::TrackItem {
         added_at: String::new(),
         added_by: String::new(),
         play_count: 0,
+        set_video_id: String::new(),
     }
 }
 
@@ -101,6 +102,7 @@ pub fn episode_track(episode: &models::Episode) -> m::TrackItem {
         added_at: String::new(),
         added_by: String::new(),
         play_count: 0,
+        set_video_id: String::new(),
     }
 }
 

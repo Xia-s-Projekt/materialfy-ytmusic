@@ -60,22 +60,15 @@ Item {
                     }
                     Icon { anchors.centerIn: parent; name: "favorite"; size: 22; fill: 1; color: Theme.fgPrimaryContainer }
                 }
-                Rectangle {
-                    anchors.fill: parent
-                    visible: root.kind === "folder"
-                    radius: 12
-                    color: Theme.surfaceContainerHigh
-                    Icon { anchors.centerIn: parent; name: "folder"; size: 22; color: Theme.fgSurfaceVariant }
-                }
                 MorphImage {
                     anchors.fill: parent
-                    visible: root.kind !== "liked" && root.kind !== "folder" && (root.entry.cover ?? "") !== ""
+                    visible: root.kind !== "liked" && (root.entry.cover ?? "") !== ""
                     source: visible ? root.entry.cover : ""
-                    shape: root.kind === "artist" ? (hover.hovered ? "cookie12" : "circle") : (hover.hovered ? "cookie9" : "softSquare")
+                    shape: root.kind === "artist" ? "circle" : "softSquare"
                 }
                 MorphShape {
                     anchors.fill: parent
-                    visible: root.kind !== "liked" && root.kind !== "folder" && (root.entry.cover ?? "") === ""
+                    visible: root.kind !== "liked" && (root.entry.cover ?? "") === ""
                     shape: root.kind === "artist" ? "circle" : "softSquare"
                     color: Theme.surfaceContainerHigh
                     Icon {
@@ -101,7 +94,6 @@ Item {
                         weight: 500
                     }
                     Icon { visible: root.entry.pinned === true; name: "push_pin"; size: 18; fill: 1; color: Theme.primary }
-                    ReadOnlyBadge { visible: root.kind === "folder" }
                     Item { Layout.fillWidth: true }
                 }
                 Label {

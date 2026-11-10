@@ -250,7 +250,7 @@ Window {
                     fallbackArtist: Player.artist.split(", ")[0]
                     fallbackTitle: Player.album !== "" ? Player.album : Player.title
                     // MD3E: на паузе — мягкий квадрат, играет — «печенье»; при наведении — круг
-                    shape: hover.hovered ? "circle" : Player.playing ? "cookie12" : "softSquare"
+                    shape: hover.hovered ? "circle" : "softSquare"
                     // как в приложении: «Пульс обложки» и «Вращение рамки» из настроек
                     pulse: root.wantsLevels ? Math.min(0.24, Player.level * 0.35) : 0
                     MaskSpin { target: coverImage; spinning: Settings.coverSpin && Player.playing && Player.isLocal === true && root.motion }

@@ -9,7 +9,7 @@ use tokio::sync::broadcast;
 
 use yt_player::{PlayerEvent, PlayerHandle};
 
-use crate::auth::{AuthEvent, AuthService};
+use crate::auth::AuthService;
 use crate::lock;
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -78,7 +78,6 @@ impl HistoryService {
             }
         });
         let mut auth = self.auth.subscribe();
-        let me = self.me.clone();
         self.rt.spawn(async move {
             loop {
                 match auth.recv().await {

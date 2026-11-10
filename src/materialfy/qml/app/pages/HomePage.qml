@@ -19,7 +19,9 @@ Page {
     // «Недавно прослушанного» не пересоздаёт «Сделано для вас» и остальные плитки.
     property var shelfIds: []
     function _syncShelves() {
-        const list = signedIn ? (Home.shelves ?? []) : []
+        // Главная YouTube Music работает и без входа (гостевые полки: подборки, новинки) —
+        // поэтому полки показываем всегда, как только сервис их отдал.
+        const list = Home.shelves ?? []
         const ids = list.map(s => ({ key: s.key ?? "", kind: s.kind ?? "" }))
         if (JSON.stringify(ids) !== JSON.stringify(shelfIds))
             shelfIds = ids
@@ -40,11 +42,10 @@ Page {
     }
     onSignedInChanged: _syncShelves()
 
-    onVisibleChanged: if (visible && signedIn) Home.refresh(false)
+    onVisibleChanged: if (visible) Home.refresh(false)
     Component.onCompleted: {
         _syncShelves()
-        if (signedIn)
-            Home.refresh(false)
+        Home.refresh(false)
     }
     Connections {
         target: Auth
@@ -68,6 +69,14 @@ Page {
             router.push("liked")
         else if (k === "playlist")
             router.push("playlist", { playlistId: e.id, playlistTitle: e.title ?? "", cover: e.cover ?? "" })
+        else if (k === "album")
+            router.push("album", { albumId: e.id, cover: e.cover ?? "" })
+        else if (k === "artist")
+            router.push("artist", { artistId: e.id, cover: e.cover ?? "" })
+        else if (k === "show")
+            router.push("show", { showId: e.id, cover: e.cover ?? "" })
+        else if (k === "episode")
+            router.push("episode", { episodeId: e.id })
         else if (k === "radio")     // id — сид (spotify:track:…), uri — станция; Radio.open понимает оба
             router.push("radio", { seed: (e.id ?? "") !== "" ? e.id : (e.uri ?? "") })
         else if (e.uri)
@@ -174,8 +183,9 @@ Page {
     // ---- Полки ----
     ColumnLayout {
         Layout.fillWidth: true
-        visible: page.signedIn
+        visible: true
         spacing: 12
+
 
         // Загрузка: заглушки без мерцания
         ColumnLayout {
@@ -228,36 +238,8 @@ Page {
                 property var shelfData: ({})
                 property string json
                 Layout.fillWidth: true
-                sourceComponent: modelData.key === "quick" ? quickShelf
-                    : modelData.kind === "tracks" ? tracksShelf
+                sourceComponent: modelData.kind === "tracks" ? tracksShelf
                     : rowShelf
-            }
-        }
-    }
-
-    // «Быстрый доступ»: сетка 2–4 колонки
-    Component {
-        id: quickShelf
-        ColumnLayout {
-            readonly property var shelfData: parent ? parent.shelfData : ({})
-            spacing: 12
-            SectionHeader { text: shelfData.title ?? "" }
-            GridLayout {
-                Layout.fillWidth: true
-                columns: Math.max(2, Math.min(4, Math.floor((page.width - 2 * page.sideMargin) / 300)))
-                columnSpacing: 10
-                rowSpacing: 10
-                Repeater {
-                    model: shelfData.items ?? []
-                    QuickAccessTile {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        entry: modelData
-                        onClicked: page.openEntry(modelData)
-                        onPlayClicked: page.playEntry(modelData)
-                        onMenuRequested: p => page.showMenu(modelData, p)
-                    }
-                }
             }
         }
     }
@@ -340,39 +322,6 @@ Page {
                     type: "headlineSmall"
                     weight: 600
                 }
-                Icon {
-                    visible: rowCol.shelfData.key === "madeForYou"
-                    name: "info"
-                    size: 20
-                    color: Theme.fgSurfaceVariant
-                    HoverHandler { id: infoHover }
-                    Rectangle {
-                        visible: infoHover.hovered
-                        x: 28
-                        y: -8
-                        z: 10
-                        width: 300
-                        height: tip.implicitHeight + 16
-                        radius: Theme.shape.small
-                        color: Theme.inverseSurface
-                        Label {
-                            id: tip
-                            x: 10
-                            y: 8
-                            width: parent.width - 20
-                            text: I18n.t("Personal playlists and mixes from YouTube Music — read through your signed-in account")
-                            type: "bodySmall"
-                            color: Theme.fgInverseSurface
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-                Label {
-                    visible: rowCol.shelfData.key === "topArtists"
-                    text: I18n.t("last 4 weeks")
-                    type: "bodySmall"
-                    color: Theme.fgSurfaceVariant
-                }
                 Item { Layout.fillWidth: true }
                 // Стрелки не скрываются через `visible`: показ/скрытие меняет ширину строки, от неё
                 // зависит `strip.width`, и условие «контент шире полки» начинало мигать — ColumnLayout
@@ -398,7 +347,7 @@ Page {
                 Layout.fillWidth: true
                 Layout.leftMargin: -32
                 Layout.rightMargin: -32
-                Layout.preferredHeight: rowCol.kind === "episodes" ? 104 : rowCol.kind === "artists" ? 200 : 220
+                Layout.preferredHeight: rowCol.kind === "episode" ? 104 : rowCol.kind === "artist" ? 200 : 220
                 orientation: ListView.Horizontal
                 spacing: 24
                 leftMargin: 32
@@ -434,7 +383,7 @@ Page {
                 }
                 delegate: Loader {
                     required property var modelData
-                    sourceComponent: rowCol.kind === "episodes" ? episodeCard : rowCol.kind === "artists" ? artistTile : mediaTile
+                    sourceComponent: rowCol.kind === "episode" ? episodeCard : rowCol.kind === "artist" ? artistTile : mediaTile
                 }
                 // Плитки — одни компоненты на всю полку, а не по три на каждую плитку
                 Component {
@@ -449,7 +398,7 @@ Page {
                         title: e.title ?? ""
                         subtitle: e.subtitle ?? ""
                         round: e.kind === "artist"
-                        shape: e.kind === "radio" ? "flower8" : e.kind === "dj" ? "cookie12" : e.kind === "artist" ? "circle" : "softSquare"
+                        shape: e.kind === "artist" ? "circle" : "softSquare"
                         badge: e.kind === "radio" ? I18n.t("RADIO") : ""
                         placeholderIcon: ({ playlist: "queue_music", album: "album", artist: "person", show: "podcasts", radio: "radio", dj: "graphic_eq" })[e.kind] ?? "album"
                         showPlay: true

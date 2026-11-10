@@ -110,14 +110,14 @@ Item {
             fallbackKind: Player.album !== "" ? "album" : "track"
             fallbackArtist: Player.artist.split(", ")[0]
             fallbackTitle: Player.album !== "" ? Player.album : Player.title
-            shape: Player.playing ? "cookie12" : "softSquare"
+            shape: "softSquare"
             pulse: Settings.coverPulse && Player.isLocal === true ? root.beat : 0
             MaskSpin { target: img; spinning: Settings.coverSpin && Player.playing && Player.isLocal === true }
         }
         MorphShape {
             anchors.fill: parent
             visible: Player.cover === ""
-            shape: cover.size >= 96 ? "cookie9" : "softSquare"
+            shape: "softSquare"
             color: Theme.secondaryContainer
             Icon { anchors.centerIn: parent; name: Player.isEpisode ? "podcasts" : "music_note"; size: Math.max(20, cover.size * 0.32); color: Theme.fgSecondaryContainer }
         }

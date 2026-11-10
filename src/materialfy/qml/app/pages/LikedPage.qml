@@ -7,7 +7,7 @@ TrackListPage {
     title: I18n.t("Liked Songs")
     overline: I18n.t("COLLECTION")
     heroIcon: "favorite"
-    heroShape: "clover4"
+    heroShape: "softSquare"
     subtitle: Auth.state !== "signedIn" ? I18n.t("Tracks you’ve liked")
             : Library.liked.loading && Library.liked.count === 0 ? I18n.t("Loading…")
             : I18n.n(Library.liked.count, "{0} track", "{0} tracks")
@@ -27,7 +27,7 @@ TrackListPage {
         width: Math.min(parent.width - 64, 420)
         visible: Auth.state !== "signedIn"
         icon: "favorite"
-        shape: "clover4"
+        shape: "softSquare"
         title: I18n.t("Sign in to see your Liked Songs")
         text: I18n.t("Your saved tracks will sync from your YouTube Music account")
         actionText: I18n.t("Sign in")

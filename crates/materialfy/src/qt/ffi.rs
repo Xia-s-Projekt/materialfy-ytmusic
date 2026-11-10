@@ -36,7 +36,6 @@ pub mod ffi {
         unsafe fn set_cpp_ownership(object: *mut QObject);
         fn system_color_scheme_dark() -> bool;
         fn watch_color_scheme();
-        fn watch_app_state();
         fn start_gui_heartbeat();
         fn open_local_folder(path: &QString) -> bool;
 
@@ -67,8 +66,6 @@ pub mod ffi {
     extern "Rust" {
         /// QStyleHints::colorSchemeChanged (cpp/mf_shell.cpp, watch_color_scheme)
         fn system_dark_changed(dark: bool);
-        /// QGuiApplication::applicationStateChanged (cpp/mf_shell.cpp, watch_app_state)
-        fn app_active_changed(active: bool);
         /// таймер GUI-потока (cpp/mf_shell.cpp, start_gui_heartbeat)
         fn gui_heartbeat();
     }
@@ -80,10 +77,4 @@ fn gui_heartbeat() {
 
 fn system_dark_changed(dark: bool) {
     super::set_system_dark(dark);
-}
-
-fn app_active_changed(active: bool) {
-    if let Some(context) = crate::context::try_ctx() {
-        context.services.player.set_app_active(active);
-    }
 }

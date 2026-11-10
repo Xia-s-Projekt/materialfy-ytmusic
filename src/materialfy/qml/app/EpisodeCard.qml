@@ -40,7 +40,7 @@ Item {
             Layout.preferredWidth: 80
             Layout.preferredHeight: 80
             source: root.episode.cover ?? ""
-            shape: root.hovered ? "cookie9" : "softSquare"
+            shape: "softSquare"
         }
         ColumnLayout {
             Layout.fillWidth: true

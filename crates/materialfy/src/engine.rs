@@ -419,8 +419,6 @@ pub fn run(cli: Cli) -> i32 {
         },
         system_dark: crate::qt::system_dark_watch(),
     });
-    // Активность окна → частота опроса удалённого плеера
-    crate::qt::watch_app_state();
     crate::qt::ffi::ffi::start_gui_heartbeat();
     // Все синглтоны — до создания движка: регистрация после загрузки модуля ломает разрешение типов
     ffi::register_qml_types();

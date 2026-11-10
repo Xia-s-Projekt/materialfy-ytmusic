@@ -34,7 +34,7 @@ Rectangle {
     SequentialAnimation {
         id: swap
         NumberAnimation { target: body; property: "opacity"; to: 0.2; duration: Theme.motion.effectsFast / 2 }
-        ScriptAction { script: { shape.jumpTo("circle"); shape.shape = "cookie9" } }
+        ScriptAction { script: { shape.jumpTo("circle"); shape.shape = "softSquare" } }
         NumberAnimation { target: body; property: "opacity"; to: 1; duration: Theme.motion.effectsDefault }
     }
 
@@ -52,7 +52,7 @@ Rectangle {
                 id: shape
                 Layout.preferredWidth: 40
                 Layout.preferredHeight: 40
-                shape: "cookie9"
+                shape: "softSquare"
                 duration: Theme.motion.spatialFast
                 color: Theme.primary
                 Icon {

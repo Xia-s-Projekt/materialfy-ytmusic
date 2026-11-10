@@ -27,7 +27,7 @@ TrackListPage {
     overline: I18n.t("RADIO")
     heroImage: seedCover
     heroIcon: "radio"
-    heroShape: "flower8"
+    heroShape: "softSquare"
     subtitle: model && model.count > 0 ? I18n.t("{0} tracks · a fresh mix every time", model.count)
             : Radio.loading ? I18n.t("Building your station…") : ""
     model: Radio.tracks

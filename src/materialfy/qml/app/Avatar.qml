@@ -1,7 +1,7 @@
 import QtQuick
 import Md3
 
-// Аватар-«печенька»: фото (source), иначе инициалы, иначе значок человека.
+// Аватар: фото (source), иначе инициалы, иначе значок человека.
 MorphShape {
     id: root
     property string name
@@ -12,7 +12,7 @@ MorphShape {
     height: size
     implicitWidth: size
     implicitHeight: size
-    shape: "cookie9"
+    shape: "circle"
     color: Theme.tertiaryContainer
 
     readonly property string initials: name.split(/\s+/).filter(p => p.length).slice(0, 2).map(p => p[0].toUpperCase()).join("")
@@ -40,7 +40,7 @@ MorphShape {
         active: root.source !== ""
         sourceComponent: MorphImage {
             source: root.source
-            shape: "cookie9"
+            shape: "circle"
             placeholderColor: "transparent"
         }
     }

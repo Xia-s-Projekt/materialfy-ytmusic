@@ -188,6 +188,8 @@
   "TV": "Телевизор",
   "Tablet": "Планшет",
   "The reply comes to 127.0.0.1:{0} · your computer": "Ответ придёт на 127.0.0.1:{0} · ваш компьютер",
+  "These headers are from a signed-out browser. Sign in to your Google account on music.youtube.com, then copy the request headers again.": "Эти заголовки взяты из браузера без входа. Войдите в аккаунт Google на music.youtube.com и скопируйте заголовки запроса заново.",
+  "These headers are not signed in to a Google account": "Эти заголовки не соответствуют входу в аккаунт Google",
   "This album has no tracks": "В альбоме нет треков",
   "This computer": "Этот компьютер",
   "This computer, “{0}”, is in your Spotify devices list. You can move music here from your phone and back.": "Компьютер «{0}» есть в списке устройств Spotify. Сюда можно перенести музыку с телефона и обратно.",

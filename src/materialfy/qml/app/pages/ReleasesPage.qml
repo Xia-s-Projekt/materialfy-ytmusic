@@ -114,7 +114,7 @@ Page {
             MorphShape {
                 Layout.preferredWidth: 56
                 Layout.preferredHeight: 56
-                shape: "cookie9"
+                shape: "softSquare"
                 color: Theme.secondaryContainer
                 Icon { anchors.centerIn: parent; name: "new_releases"; size: 28; color: Theme.fgSecondaryContainer }
             }
@@ -144,14 +144,14 @@ Page {
             Layout.preferredWidth: page.width < 560 ? 104 : 144
             Layout.preferredHeight: Layout.preferredWidth
             source: page.radar.cover ?? ""
-            shape: page.radarPlaying && Player.playing ? "cookie12" : "cookie9"
+            shape: "softSquare"
             duration: Theme.motion.spatialSlow
             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: page.openRadar() }
         }
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 4
-            Label { text: I18n.t("Playlist").toUpperCase() + " · SPOTIFY"; type: "labelLarge"; color: Theme.primary; font.letterSpacing: 1.2 }
+            Label { text: I18n.t("Playlist").toUpperCase(); type: "labelLarge"; color: Theme.primary; font.letterSpacing: 1.2 }
             Label {
                 Layout.fillWidth: true
                 text: page.radar.title ?? ""

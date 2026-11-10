@@ -45,10 +45,10 @@ Item {
 
     // Тональные пары групп: цвет / контейнер / текст на них; фигура группы
     readonly property var styles: ({
-        recent:      { role: "primary", shape: "sunny" },
-        artists:     { role: "tertiary", shape: "cookie4" },
-        collections: { role: "secondary", shape: "cookie9" },
-        any:         { role: "neutral", shape: "cookie6" }
+        recent:      { role: "primary", shape: "softSquare" },
+        artists:     { role: "tertiary", shape: "softSquare" },
+        collections: { role: "secondary", shape: "softSquare" },
+        any:         { role: "neutral", shape: "softSquare" }
     })
     readonly property var groupKeys: ["recent", "artists", "collections", "any"]
     readonly property var defaultTitles: ({ recent: I18n.t("Recent tracks"), artists: I18n.t("Your artists"), collections: I18n.t("Albums & playlists"), any: I18n.t("Any track") })
@@ -149,7 +149,7 @@ Item {
 
                         MorphShape {
                             anchors.fill: parent
-                            shape: card.closed ? "cookie12" : root.currentStyle.shape
+                            shape: card.closed ? "softSquare" : root.currentStyle.shape
                             duration: root.reduced ? 0 : Theme.motion.spatialSlow
                             color: card.closed ? Theme.surfaceContainerHighest : root.roleBox(root.currentStyle.role)
                             Behavior on color { enabled: !Theme.transitioning && !root.reduced; ColorAnimation { duration: Theme.motion.effectsSlow } }
@@ -160,7 +160,7 @@ Item {
                             anchors.centerIn: parent
                             visible: !card.closed && root.current !== null && (root.current.item.cover ?? "") !== ""
                             source: visible ? root.current.item.cover : ""
-                            shape: root.playing ? "cookie6" : "clover4"
+                            shape: "softSquare"
                             duration: root.reduced ? 0 : Theme.motion.spatialSlow
                         }
                         PlayButton {
@@ -169,8 +169,8 @@ Item {
                             size: Math.round(hero.size * 0.32)
                             playing: root.playing
                             spin: false
-                            pausedShape: "cookie6"
-                            playingShape: "cookie9"
+                            pausedShape: "softSquare"
+                            playingShape: "softSquare"
                             enabled: root.current !== null
                             onClicked: root.playClicked()
                         }
@@ -401,13 +401,13 @@ Item {
                                             anchors.fill: parent
                                             visible: !seed.add && seed.cover !== ""
                                             source: visible ? seed.cover : ""
-                                            shape: seed.on ? group.style.shape : seed.hovered ? "cookie12" : "circle"
+                                            shape: seed.on ? group.style.shape : seed.hovered ? "softSquare" : "circle"
                                             duration: root.reduced ? 0 : Theme.motion.spatialDefault
                                         }
                                         MorphShape {
                                             anchors.fill: parent
                                             visible: seed.add || seed.cover === ""
-                                            shape: seed.on ? group.style.shape : seed.hovered ? "cookie12" : "circle"
+                                            shape: seed.on ? group.style.shape : seed.hovered ? "softSquare" : "circle"
                                             duration: root.reduced ? 0 : Theme.motion.spatialDefault
                                             color: seed.add ? Theme.surfaceVariant : root.roleBox(group.style.role)
                                             Icon {

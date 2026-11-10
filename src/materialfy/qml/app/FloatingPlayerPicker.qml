@@ -310,12 +310,12 @@ ColumnLayout {
             anchors.fill: parent
             visible: Player.cover !== ""
             source: Player.cover
-            shape: "cookie12"
+            shape: "softSquare"
         }
         MorphShape {
             anchors.fill: parent
             visible: Player.cover === ""
-            shape: "cookie12"
+            shape: "softSquare"
             color: Theme.primary
         }
     }

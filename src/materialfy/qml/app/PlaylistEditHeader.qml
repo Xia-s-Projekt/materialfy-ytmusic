@@ -49,7 +49,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: root.pageWidth < 560 ? 18 : 28
 
-        // Обложка: cookie9 → softSquare в правке, «Сменить» поверх
+        // Обложка: softSquare → softSquare в правке, «Сменить» поверх
         Item {
             Layout.preferredWidth: root.pageWidth > 760 ? 184 : root.pageWidth < 560 ? 96 : 128
             Layout.preferredHeight: Layout.preferredWidth
@@ -67,23 +67,6 @@ ColumnLayout {
                 shape: "softSquare"
                 color: Theme.primaryContainer
                 Icon { anchors.centerIn: parent; name: "queue_music"; size: parent.width * 0.38; fill: 1; color: Theme.fgPrimaryContainer }
-            }
-            Button {
-                id: coverButton
-                visible: root.own
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 10
-                text: I18n.t("Change")
-                icon: "photo_camera"
-                style: "tonal"
-                size: "xs"
-                opacity: 0
-                scale: 0.9
-                Component.onCompleted: { opacity = 1; scale = 1 }
-                Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsDefault } }
-                Behavior on scale { NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutBack } }
-                onClicked: coverDialog.open()
             }
         }
 
@@ -229,14 +212,3 @@ ColumnLayout {
             Label { text: I18n.t("Changes are saved right away"); type: "bodySmall"; color: Theme.fgSurfaceVariant }
         }
     }
-
-    FileDialog {
-        id: coverDialog
-        title: I18n.t("Playlist cover")
-        nameFilters: [I18n.t("Images ({0})", "*.jpg *.jpeg *.png")]
-        onAccepted: {
-            Library.uploadCover(root.playlistId, selectedFile.toString())
-            root.notify(I18n.t("Cover uploaded"))
-        }
-    }
-}

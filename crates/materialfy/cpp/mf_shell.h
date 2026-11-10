@@ -47,8 +47,6 @@ void set_cpp_ownership(QObject* object);
 bool system_color_scheme_dark();
 // Подписка на QStyleHints::colorSchemeChanged → Rust system_dark_changed(bool)
 void watch_color_scheme();
-// Подписка на QGuiApplication::applicationStateChanged → Rust app_active_changed(bool) (опрос удалённого плеера)
-void watch_app_state();
 // GUI-поток жив: раз в секунду gui_heartbeat() (single_instance: зависшее окно не «показываем»)
 void start_gui_heartbeat();
 // Каталог в файловом менеджере (Settings.openCacheFolder)

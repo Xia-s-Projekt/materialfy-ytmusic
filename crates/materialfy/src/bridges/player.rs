@@ -205,10 +205,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "transferHere"]
         fn transfer_here(self: &Player);
-        /// Окно приложения активно (частота опроса удалённого плеера).
-        #[qinvokable]
-        #[cxx_name = "setAppActive"]
-        fn set_app_active(self: &Player, active: bool);
     }
 
     impl cxx_qt::Threading for Player {}
@@ -643,11 +639,7 @@ impl qobject::Player {
     }
 
     fn transfer_here(&self) {
-        ctx().services.player.transfer_here(true);
-    }
-
-    fn set_app_active(&self, active: bool) {
-        ctx().services.player.set_app_active(active);
+        ctx().services.player.transfer_here();
     }
 
     // --- снимок плеера → свойства -------------------------------------------

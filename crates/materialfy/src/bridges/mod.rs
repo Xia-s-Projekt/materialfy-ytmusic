@@ -13,7 +13,6 @@ pub mod player;
 pub mod radio;
 pub mod releases;
 pub mod settings;
-pub mod social;
 pub mod theme;
 pub mod translations;
 pub mod updater;

@@ -21,7 +21,8 @@ pub fn open_spotify_url(uri: &str) -> Option<String> {
     crate::map::open_url(uri)
 }
 
-/// "3:45" / "1:02:03" / "245" (seconds) → milliseconds. Unparseable → 0.
+/// "3:45" / "1:02:03" / "245" (seconds) / "25 min" / "1 hr 5 min" → milliseconds.
+/// Unparseable → 0.
 pub fn duration_ms(value: &str) -> i64 {
     let value = value.trim();
     if value.is_empty() {
@@ -29,6 +30,41 @@ pub fn duration_ms(value: &str) -> i64 {
     }
     if let Ok(secs) = value.parse::<i64>() {
         return secs.saturating_mul(1000);
+    }
+    // Длительность выпуска: «25 min», «1 hr 5 min», «45 sec» (число идёт перед единицей)
+    let words = value.split_whitespace().collect::<Vec<_>>();
+    if words.len() >= 2
+        && words
+            .iter()
+            .any(|w| *w == "min" || *w == "minutes" || *w == "hr" || *w == "hours" || *w == "sec" || *w == "seconds")
+    {
+        let mut total: i64 = 0;
+        let mut pending: Option<i64> = None;
+        for word in words {
+            match word {
+                "hr" | "hour" | "hours" => {
+                    if let Some(n) = pending.take() {
+                        total += n.saturating_mul(3_600_000);
+                    }
+                }
+                "min" | "minute" | "minutes" => {
+                    if let Some(n) = pending.take() {
+                        total += n.saturating_mul(60_000);
+                    }
+                }
+                "sec" | "second" | "seconds" => {
+                    if let Some(n) = pending.take() {
+                        total += n.saturating_mul(1_000);
+                    }
+                }
+                _ => {
+                    if let Ok(n) = word.parse::<i64>() {
+                        pending = Some(n);
+                    }
+                }
+            }
+        }
+        return total;
     }
     let parts: Vec<&str> = value.split(':').collect();
     let mut total: i64 = 0;
@@ -115,6 +151,14 @@ mod tests {
         assert_eq!(duration_ms("245"), 245_000);
         assert_eq!(duration_ms(""), 0);
         assert_eq!(duration_ms("x"), 0);
+    }
+
+    #[test]
+    fn duration_parses_podcast_lengths() {
+        assert_eq!(duration_ms("25 min"), 1_500_000);
+        assert_eq!(duration_ms("1 hr 5 min"), 3_900_000);
+        assert_eq!(duration_ms("45 sec"), 45_000);
+        assert_eq!(duration_ms("2 minutes"), 120_000);
     }
     #[test]
     fn thumbnail_prefers_smallest_sufficient() {

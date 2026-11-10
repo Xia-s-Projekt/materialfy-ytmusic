@@ -62,7 +62,7 @@ Item {
             active: root.imageSource !== ""
             sourceComponent: MorphImage {
                 source: root.imageSource
-                shape: root.selected ? "cookie9" : "softSquare"
+                shape: "softSquare"
             }
         }
     }

@@ -63,7 +63,7 @@ impl DevicesService {
 
     pub fn refresh(&self) {}
     pub fn transfer(&self, _device_id: String, _play: bool) {}
-    pub fn transfer_here(&self) { self.player.transfer_here(true); }
+    pub fn transfer_here(&self) { self.player.transfer_here(); }
     pub fn set_volume(&self, _device_id: String, percent: u8) {
         self.player.set_volume(f64::from(percent) / 100.0);
     }

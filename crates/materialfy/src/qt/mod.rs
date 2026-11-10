@@ -35,11 +35,6 @@ pub fn open_local_folder(path: &std::path::Path) -> bool {
     ffi::ffi::open_local_folder(&QString::from(path.to_string_lossy().as_ref()))
 }
 
-/// Активность окна приложения → PlayerHandle::set_app_active (после context::init и QApplication).
-pub fn watch_app_state() {
-    ffi::ffi::watch_app_state();
-}
-
 static SYSTEM_DARK: OnceLock<watch::Sender<bool>> = OnceLock::new();
 
 /// Канал системной темы для AppContext::system_dark: начальное значение — [`system_dark`],

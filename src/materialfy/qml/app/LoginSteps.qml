@@ -59,7 +59,7 @@ GridLayout {
                 MorphShape {
                     Layout.preferredWidth: 40
                     Layout.preferredHeight: 40
-                    shape: card.done ? "sunny" : "cookie9"
+                    shape: "softSquare"
                     duration: card.instant ? 0 : Theme.motion.spatialDefault
                     overshoot: 1.15
                     color: card.isActive || card.done ? Theme.primary : Theme.secondaryContainer

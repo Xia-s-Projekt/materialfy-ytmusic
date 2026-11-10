@@ -53,7 +53,7 @@ impl WaveService {
     pub fn play(&self) {
         let selected = self.snapshot.borrow().selected.clone();
         if selected.is_empty() {
-            let _ = self.snapshot.send(WaveSnapshot { error_text: "Play something first — the radio will start from your last track".into(), ..self.snapshot.borrow().clone() });
+            let _ = self.snapshot.send_replace(WaveSnapshot { error_text: "Play something first — the radio will start from your last track".into(), ..self.snapshot.borrow().clone() });
             return;
         }
         self.play_station(selected, String::new());
@@ -67,17 +67,22 @@ impl WaveService {
         let video_id = seed.rsplit(':').next().unwrap_or(&seed).to_string();
         let title = if title.is_empty() { format!("Radio {seed}") } else { title };
         rt.spawn(async move {
-            let _ = snapshot.send(WaveSnapshot { loading: true, station_title: title.clone(), ..snapshot.borrow().clone() });
+            let _ = snapshot.send_replace(WaveSnapshot { loading: true, station_title: title.clone(), ..snapshot.borrow().clone() });
             match api.get_watch_playlist(Some(&video_id), None, true, 25).await {
                 Ok(v) => {
-                    let list: Vec<serde_json::Value> = v.as_array().cloned().unwrap_or_default();
+                    // get_watch_playlist отвечает {"tracks": [...]}, не массивом.
+                    let list: Vec<serde_json::Value> = v
+                        .get("tracks")
+                        .and_then(|t| t.as_array())
+                        .cloned()
+                        .unwrap_or_default();
                     let tracks: Vec<TrackItem> = list.iter().map(yt_api::map::track_item).collect();
                     if tracks.is_empty() {
-                        let _ = snapshot.send(WaveSnapshot { loading: false, error_text: "Radio returned no tracks".into(), ..snapshot.borrow().clone() });
+                        let _ = snapshot.send_replace(WaveSnapshot { loading: false, error_text: "Radio returned no tracks".into(), ..snapshot.borrow().clone() });
                         return;
                     }
                     let ctx = PlayContext::with_uri("radio", format!("ytmusic:radio:{video_id}")).titled(title.clone());
-                    let _ = snapshot.send(WaveSnapshot {
+                    let _ = snapshot.send_replace(WaveSnapshot {
                         active: true, loading: false,
                         station_uri: format!("ytmusic:radio:{video_id}"),
                         station_title: title,
@@ -89,21 +94,48 @@ impl WaveService {
                     player.play_items(tracks, 0, ctx);
                 }
                 Err(e) => {
-                    let _ = snapshot.send(WaveSnapshot { loading: false, error_text: e.user_text(), ..snapshot.borrow().clone() });
+                    let _ = snapshot.send_replace(WaveSnapshot { loading: false, error_text: e.user_text(), ..snapshot.borrow().clone() });
                 }
             }
         });
     }
 
     pub fn select(&self, seed: String) {
-        let _ = self.snapshot.send(WaveSnapshot { selected: seed, ..self.snapshot.borrow().clone() });
+        let _ = self.snapshot.send_replace(WaveSnapshot { selected: seed, ..self.snapshot.borrow().clone() });
     }
     pub fn open(&self, seed: String) { self.play_station(seed, String::new()); }
     pub fn refresh(&self) {
         let seed = self.snapshot.borrow().selected.clone();
         if !seed.is_empty() { self.play_station(seed, String::new()); }
     }
-    pub fn save(&self) {}
+    pub fn save(&self) {
+        let snapshot = self.snapshot.borrow();
+        if snapshot.tracks.is_empty() { return; }
+        let video_ids: Vec<String> = snapshot.tracks.iter()
+            .filter(|t| !t.track_id.is_empty())
+            .map(|t| t.track_id.clone())
+            .collect();
+        if video_ids.is_empty() { return; }
+        let title = if snapshot.station_title.is_empty() {
+            "Radio station".to_owned()
+        } else {
+            snapshot.station_title.clone()
+        };
+        let api = self.auth.api();
+        let rt = self.rt.clone();
+        let library = self._library.clone();
+        rt.spawn(async move {
+            match api.create_playlist(&title, "", "PRIVATE", &video_ids).await {
+                Ok(_) => {
+                    library.refresh();
+                    library.notice(format!("Station saved as playlist “{title}”"));
+                }
+                Err(e) => {
+                    library.notice(format!("Couldn't save station: {}", e.user_text()));
+                }
+            }
+        });
+    }
     pub fn snapshot(&self) -> WaveSnapshot { self.snapshot.borrow().clone() }
     pub fn watch(&self) -> watch::Receiver<WaveSnapshot> { self.snapshot.subscribe() }
 }

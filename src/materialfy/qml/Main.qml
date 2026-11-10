@@ -321,7 +321,6 @@ Window {
                             home: Qt.resolvedUrl("app/pages/HomePage.qml"),
                             search: Qt.resolvedUrl("app/pages/SearchPage.qml"),
                             library: Qt.resolvedUrl("app/pages/LibraryPage.qml"),
-                            folder: Qt.resolvedUrl("app/pages/FolderPage.qml"),
                             liked: Qt.resolvedUrl("app/pages/LikedPage.qml"),
                             playlist: Qt.resolvedUrl("app/pages/PlaylistPage.qml"),
                             album: Qt.resolvedUrl("app/pages/AlbumPage.qml"),

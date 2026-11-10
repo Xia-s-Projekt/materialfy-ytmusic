@@ -103,7 +103,7 @@ TrackListPage {
             if (i === row || model.get(i).uri === t.uri)
                 group.push({ uri: t.uri, pos: i })
         }
-        Library.removeTracks(playlistId, [{ uri: t.uri, pos: row }])
+        Library.removeTracks(playlistId, [{ uri: t.uri, pos: row, setVideoId: t.setVideoId ?? "" }])
         _removed = _removed.concat([group])
         undoWindow.restart()
         const n = _removed.reduce((a, g) => a + g.length, 0)

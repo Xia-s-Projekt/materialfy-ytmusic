@@ -6,14 +6,15 @@
 > `Xia-s-Projekt/materialfy-ytmusic`.
 
 This fork keeps the Materialfy Qt/QML shell and **replaces the Spotify stack** (`sf-auth`/`sf-api`/
-`sf-player`/`sf-services`, librespot, Spotify Connect) with new `yt-*` crates that shell out to a
-Python **ytmusicapi bridge** (`crates/yt-api/python/yt_bridge.py`):
+`sf-player`/`sf-services`, librespot, Spotify Connect) with new `yt-*` crates. Catalogue and library
+calls use a Python **ytmusicapi bridge** (`crates/yt-api/python/yt_bridge.py`); playback does not
+touch Python at all:
 
 | Old (Spotify) | New (YouTube Music) |
 |---|---|
 | `sf-auth` (OAuth PKCE + librespot session) | `yt-auth` (browser headers-auth JSON) |
-| `sf-api` (Web API) | `yt-api` (`YtClient` → `yt_bridge.py`) |
-| `sf-player` (librespot playback) | `yt-player` (queue + `get_song` stream URL; local audio output is a stub — see below) |
+| `sf-api` (Web API) | `yt-api` (`YtClient` → `yt_bridge.py`; InnerTube `player` for streams) |
+| `sf-player` (librespot playback) | `yt-player` (queue + InnerTube stream URL, AAC decoded by rodio, bytes streamed with HTTP Range) |
 | `sf-services` | `yt-services` (bridge API mirrors `sf-services`) |
 
 ## Quick start (YTMusic)
@@ -28,10 +29,11 @@ tap **Save & sign in** (https://music.youtube.com → open DevTools → Applicat
 browser headers). The file fallback still works too: save them as `~/.ytmusic_headers_auth` or
 `headers_auth.json` (see `crates/yt-auth`).
 
-Audio output is currently stubbed (rodio/fastframe-sink conflict on this branch); the queue,
-`get_song` resolution, search, library and home mapping are wired. See [YTMUSIC.md](YTMUSIC.md)
-for the migration map and known limitations. The original Spotify docs below are kept for reference
-except where marked as fork-specific.
+Playback streams straight from YouTube's CDN: `yt-api` resolves a plain URL through InnerTube's
+anonymous ANDROID client, and `yt-player` fetches it in 256 KiB `Range` windows while rodio
+decodes. Nothing is downloaded to disk, and neither yt-dlp nor Python is involved in playback.
+See [YTMUSIC.md](YTMUSIC.md) for the migration map and known limitations. The original Spotify
+docs below are kept for reference except where marked as fork-specific.
 
 ---
 

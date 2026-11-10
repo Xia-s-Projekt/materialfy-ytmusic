@@ -37,7 +37,6 @@ pub mod qobject {
         #[qproperty(*mut QObject, albums, READ = albums_ptr, CONSTANT)]
         #[qproperty(*mut QObject, artists, READ = artists_ptr, CONSTANT)]
         #[qproperty(*mut QObject, shows, READ = shows_ptr, CONSTANT)]
-        #[qproperty(*mut QObject, episodes, READ = episodes_ptr, CONSTANT)]
         #[qproperty(*mut QObject, recent, READ = recent_ptr, CONSTANT)]
         #[qproperty(QString, error_text, cxx_name = "errorText", READ, NOTIFY = error_changed)]
         #[qproperty(i32, likes_revision, cxx_name = "likesRevision", READ, NOTIFY = likes_changed)]
@@ -52,7 +51,6 @@ pub mod qobject {
         fn albums_ptr(self: &Library) -> *mut QObject;
         fn artists_ptr(self: &Library) -> *mut QObject;
         fn shows_ptr(self: &Library) -> *mut QObject;
-        fn episodes_ptr(self: &Library) -> *mut QObject;
         fn recent_ptr(self: &Library) -> *mut QObject;
 
         #[qsignal]
@@ -113,7 +111,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "insertTracks"]
         fn insert_tracks(self: &Library, playlist_id: &QString, uris: &QStringList, position: i32);
-        /// rows: [{uri, pos}]
+        /// rows: [{uri, pos, setVideoId}] — удалению нужен id вхождения в плейлисте
         #[qinvokable]
         #[cxx_name = "removeTracks"]
         fn remove_tracks(self: &Library, playlist_id: &QString, rows: &QList_QVariant);
@@ -138,10 +136,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setPublic"]
         fn set_public(self: &Library, playlist_id: &QString, value: bool);
-        /// Путь или file:// URL JPEG/PNG (FileDialog).
-        #[qinvokable]
-        #[cxx_name = "uploadCover"]
-        fn upload_cover(self: &Library, playlist_id: &QString, source: &QString);
         #[qinvokable]
         #[cxx_name = "followPlaylist"]
         fn follow_playlist(self: &Library, playlist_id: &QString);
@@ -171,13 +165,10 @@ pub mod qobject {
         /// kind: playlists|albums|artists|shows; owner: all|mine|followed|collab; sort — как Settings.librarySort.
         #[qinvokable]
         fn items(self: Pin<&mut Library>, kind: &QString, owner: &QString, sort: &QString) -> *mut QObject;
-        /// Последние добавленные/обновлённые строки всех разделов (для боковой панели), limit — сколько.
+        /// Последние прослушанные контексты всех разделов (для боковой панели), limit — сколько.
         #[qinvokable]
         #[cxx_name = "recentEntries"]
         fn recent_entries(self: Pin<&mut Library>, limit: i32) -> *mut QObject;
-        #[qinvokable]
-        #[cxx_name = "folderChildren"]
-        fn folder_children(self: Pin<&mut Library>, folder_id: &QString) -> *mut QObject;
         #[qinvokable]
         #[cxx_name = "isPinned"]
         fn is_pinned(self: &Library, uri: &QString) -> bool;
@@ -196,15 +187,13 @@ pub struct LibraryRust {
     albums: UniquePtr<DictListModel>,
     artists: UniquePtr<DictListModel>,
     shows: UniquePtr<DictListModel>,
-    episodes: UniquePtr<DictListModel>,
     /// недавно прослушанные треки (HistoryService::recent) — источник «Недавние» в AddTracksPanel
     recent: UniquePtr<DictListModel>,
     playlist_models: HashMap<PlaylistId, UniquePtr<DictListModel>>,
     /// сколько экранов открыли плейлист: последний release отменяет идущее чтение (сервис решает сам)
     playlist_refs: HashMap<PlaylistId, u32>,
-    /// items(kind, owner, sort) → модель; ключ "kind|owner|sort"
+    /// items(kind, owner, sort) → модель; ключ "kind|owner|sort" или "recent|<limit>"
     entry_models: HashMap<String, UniquePtr<DictListModel>>,
-    folder_models: HashMap<String, UniquePtr<DictListModel>>,
     error_text: QString,
     likes_revision: i32,
     saved_revision: i32,
@@ -217,8 +206,6 @@ impl Default for LibraryRust {
     fn default() -> Self {
         let mut liked = DictListModel::create(ModelKind::Track);
         with_model(&mut liked, |m| m.set_context(PlayContext::new(contexts::LIKED)));
-        let mut episodes = DictListModel::create(ModelKind::Episode);
-        with_model(&mut episodes, |m| m.set_context(PlayContext::new(contexts::EPISODE)));
         let mut recent = DictListModel::create(ModelKind::Track);
         with_model(&mut recent, |m| m.set_context(PlayContext::new(contexts::TRACKS)));
         Self {
@@ -227,12 +214,10 @@ impl Default for LibraryRust {
             albums: DictListModel::create(ModelKind::Album),
             artists: DictListModel::create(ModelKind::Artist),
             shows: DictListModel::create(ModelKind::Show),
-            episodes,
             recent,
             playlist_models: HashMap::new(),
             playlist_refs: HashMap::new(),
             entry_models: HashMap::new(),
-            folder_models: HashMap::new(),
             error_text: QString::default(),
             likes_revision: 0,
             saved_revision: 0,
@@ -337,10 +322,6 @@ impl qobject::Library {
         model_ptr(&self.shows)
     }
 
-    fn episodes_ptr(&self) -> *mut cxx_qt::QObject {
-        model_ptr(&self.episodes)
-    }
-
     fn refresh(&self) {
         ctx().services.library.refresh();
     }
@@ -417,7 +398,7 @@ impl qobject::Library {
                 let row = qvariant_to_json(row);
                 let row = row.as_object()?;
                 let pos = row.get("pos").and_then(|p| p.as_f64())? as usize;
-                Some((json_str(row, "uri"), pos))
+                Some((json_str(row, "uri"), pos, json_str(row, "setVideoId")))
             })
             .collect();
         ctx().services.library.remove_tracks(pid(playlist_id), rows);
@@ -460,11 +441,6 @@ impl qobject::Library {
 
     fn set_public(&self, playlist_id: &QString, value: bool) {
         ctx().services.library.set_public(pid(playlist_id), value);
-    }
-
-    fn upload_cover(&self, playlist_id: &QString, source: &QString) {
-        let path = super::local_path(source);
-        ctx().services.library.upload_cover(pid(playlist_id), path.into());
     }
 
     fn follow_playlist(&self, playlist_id: &QString) {
@@ -525,15 +501,6 @@ impl qobject::Library {
             m.as_mut().sync_rows(rows, ENTRY_KEY);
             m.set_loading(loading);
         });
-        model_ptr(model)
-    }
-
-    fn folder_children(mut self: Pin<&mut Self>, folder_id: &QString) -> *mut cxx_qt::QObject {
-        let id = folder_id.to_string();
-        let rows = to_rows(&ctx().services.library.folder_children(&id));
-        let this = self.as_mut().rust_mut().get_mut();
-        let model = this.folder_models.entry(id).or_insert_with(|| DictListModel::create(ModelKind::Library));
-        with_model(model, |m| m.sync_rows(rows, ENTRY_KEY));
         model_ptr(model)
     }
 
@@ -602,10 +569,6 @@ impl qobject::Library {
             let rows = to_rows(&library.entries(LibraryKind::from_name(kind), owner, sort));
             with_model(model, |m| m.sync_rows(rows, ENTRY_KEY));
         }
-        for (id, model) in this.folder_models.iter_mut() {
-            let rows = to_rows(&library.folder_children(id));
-            with_model(model, |m| m.sync_rows(rows, ENTRY_KEY));
-        }
         self.entries_changed();
     }
 
@@ -625,7 +588,6 @@ impl qobject::Library {
             with_model(&mut this.albums, |m| m.reset_rows(to_rows(&library.albums())));
             with_model(&mut this.artists, |m| m.reset_rows(to_rows(&library.artists())));
             with_model(&mut this.shows, |m| m.reset_rows(to_rows(&library.shows())));
-            with_model(&mut this.episodes, |m| m.reset_rows(to_rows(&library.episodes())));
         }
         let ids: Vec<PlaylistId> = self.playlist_models.keys().cloned().collect();
         // Перезаливка кэша всем моделям, не только пустым: пропуск событий (Lagged) мог оставить
@@ -688,7 +650,6 @@ impl qobject::Library {
             LibraryEvent::Albums(change) => with_model(&mut this.albums, |m| apply_list_change(m, &change)),
             LibraryEvent::Artists(change) => with_model(&mut this.artists, |m| apply_list_change(m, &change)),
             LibraryEvent::Shows(change) => with_model(&mut this.shows, |m| apply_list_change(m, &change)),
-            LibraryEvent::Episodes(change) => with_model(&mut this.episodes, |m| apply_list_change(m, &change)),
             LibraryEvent::PlaylistTracks { id, change } => {
                 if let Some(model) = this.playlist_models.get_mut(&id) {
                     with_model(model, |m| apply_list_change(m, &change));

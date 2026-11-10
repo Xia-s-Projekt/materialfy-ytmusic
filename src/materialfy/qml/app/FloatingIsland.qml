@@ -355,7 +355,6 @@ Window {
                 return
             curtain.trigger(oldTitle, oldArtist)
             textSlide.restart()
-            coverDance.restart()
         }
     }
 
@@ -631,7 +630,7 @@ Window {
                         fallbackKind: Player.album !== "" ? "album" : "track"
                         fallbackArtist: Player.artist.split(", ")[0]
                         fallbackTitle: Player.album !== "" ? Player.album : Player.title
-                        shape: root._danceShape !== "" ? root._danceShape : Player.playing ? "cookie12" : "softSquare"
+                        shape: "softSquare"
                         pulse: root.motion && Player.playing && Settings.coverPulse ? Math.min(0.24, Player.level * 0.35) : 0
                         MaskSpin { target: cmpCoverImg; spinning: Settings.coverSpin && Player.playing && Player.isLocal === true && root.motion }
                     }
@@ -776,7 +775,7 @@ Window {
                         fallbackKind: Player.album !== "" ? "album" : "track"
                         fallbackArtist: Player.artist.split(", ")[0]
                         fallbackTitle: Player.album !== "" ? Player.album : Player.title
-                        shape: Player.playing ? "cookie12" : "softSquare"
+                        shape: "softSquare"
                         pulse: root.motion && Player.playing && Settings.coverPulse ? Math.min(0.24, Player.level * 0.35) : 0
                         TapHandler { onTapped: WindowShell.raiseMain() }
                     }
@@ -841,7 +840,7 @@ Window {
                             fallbackKind: Player.album !== "" ? "album" : "track"
                             fallbackArtist: Player.artist.split(", ")[0]
                             fallbackTitle: Player.album !== "" ? Player.album : Player.title
-                            shape: root._danceShape !== "" ? root._danceShape : Player.playing ? "cookie12" : "softSquare"
+                            shape: "softSquare"
                             pulse: root.motion && Player.playing && Settings.coverPulse ? Math.min(0.24, Player.level * 0.35) : 0
                             MaskSpin { target: expCoverImg; spinning: Settings.coverSpin && Player.playing && Player.isLocal === true && root.motion }
                         }
@@ -1049,16 +1048,9 @@ Window {
         NumberAnimation { target: root; property: "_textSlideX"; from: 24; to: 0; duration: 460; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate }
         NumberAnimation { target: root; property: "_textSlideOpacity"; from: 0; to: 1; duration: 320; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasizedDecelerate }
     }
-    // обложка: «цветок» → «печенье» с перелётом → обычная фигура
+    // обложка на островке — статичная фигура, без «танца» при смене трека
     SequentialAnimation {
         id: coverDance
-        PropertyAction { target: root; property: "_danceShape"; value: "flower8" }
-        NumberAnimation { targets: [expCover, cmpCover]; property: "scale"; from: 1; to: 0.88; duration: 130; easing.type: Easing.InQuad }
-        PauseAnimation { duration: 200 }
-        PropertyAction { target: root; property: "_danceShape"; value: "cookie12" }
-        NumberAnimation { targets: [expCover, cmpCover]; property: "scale"; to: 1.08; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 1.35 }
-        PauseAnimation { duration: 260 }
-        NumberAnimation { targets: [expCover, cmpCover]; property: "scale"; to: 1; duration: 220; easing.type: Easing.OutQuad }
         PropertyAction { target: root; property: "_danceShape"; value: "" }
     }
 

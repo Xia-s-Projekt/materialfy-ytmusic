@@ -2,15 +2,13 @@ import QtQuick
 import Materialfy.Core
 import Md3
 
-// Обложка полноэкранного плеера. Смена трека — морф через фигуру: старая обложка, вращаясь,
-// сжимается в маленькую «печеньку» и тает; новая вырастает из неё, морфясь из цветка в свою
-// фигуру (с лёгким перелётом). Две обложки — двойной буфер: новая показывается, когда загрузилась.
-// pulse — «дыхание» фигуры в такт, spinning — медленное вращение рамки (обложка внутри неподвижна).
+// Обложка полноэкранного плеера. Статичная фигура MD3: смена трека — просто кроссфейд,
+// без морфа и вращения. Две обложки — двойной буфер: новая показывается, когда загрузилась.
 Item {
     id: root
 
     property string source
-    property var restShape: "cookie12"
+    property var restShape: "softSquare"
     property real pulse: 0
     property bool spinning: false
     property int direction: 1              // +1 — вперёд по очереди, -1 — назад: куда вращаться
@@ -50,18 +48,15 @@ Item {
         outAnim.complete()
         inAnim.complete()
         const oldL = _layers[_front], newL = _layers[1 - _front]
-        newL.jumpTo("flower8")
-        newL.scale = 0.2
-        newL.rotation = 120 * direction
+        newL.jumpTo("softSquare")
         newL.opacity = 0
         newL.z = 1
         oldL.z = 0
-        oldL.shape = "cookie4"
+        oldL.shape = "softSquare"
         outAnim.target = oldL
-        outRot.to = -90 * direction
         inAnim.target = newL
         _front = 1 - _front
-        newL.shape = Qt.binding(() => root.restShape)   // морф цветок → своя фигура
+        newL.shape = Qt.binding(() => root.restShape)
         outAnim.start()
         inAnim.start()
     }
@@ -74,7 +69,7 @@ Item {
         fallbackKind: Player.album !== "" ? "album" : "track"
         fallbackArtist: Player.artist.split(", ")[0]
         fallbackTitle: Player.album !== "" ? Player.album : Player.title
-        duration: Theme.motion.spatialSlow
+        duration: 0
         shape: root.restShape
         pulse: index === root._front ? root.pulse : 0
         MaskSpin { target: layer; spinning: layer.index === root._front && root.spinning }
@@ -87,18 +82,15 @@ Item {
     ParallelAnimation {
         id: outAnim
         property Item target
-        NumberAnimation { target: outAnim.target; property: "scale"; to: 0.15; duration: 380; easing.type: Easing.InCubic }
-        NumberAnimation { id: outRot; target: outAnim.target; property: "rotation"; duration: 380; easing.type: Easing.InCubic }
-        NumberAnimation { target: outAnim.target; property: "opacity"; to: 0; duration: 380; easing.type: Easing.InQuad }
+        NumberAnimation { target: outAnim.target; property: "opacity"; to: 0; duration: 180; easing.type: Easing.OutQuad }
     }
-    SequentialAnimation {
+    NumberAnimation {
         id: inAnim
         property Item target
-        PauseAnimation { duration: 140 }
-        ParallelAnimation {
-            NumberAnimation { target: inAnim.target; property: "scale"; to: 1; duration: 680; easing.type: Easing.OutBack; easing.overshoot: 1.25 }
-            NumberAnimation { target: inAnim.target; property: "rotation"; to: 0; duration: 680; easing.type: Easing.OutCubic }
-            NumberAnimation { target: inAnim.target; property: "opacity"; to: 1; duration: 220; easing.type: Easing.OutQuad }
-        }
+        target: inAnim.target
+        property: "opacity"
+        to: 1
+        duration: 220
+        easing.type: Easing.OutQuad
     }
 }

@@ -9,8 +9,8 @@ Item {
     property real size: 64
     property color containerColor: Theme.primary
     property color iconColor: Theme.fgPrimary
-    property var playingShape: "cookie9"
-    property var pausedShape: "cookie4"
+    property var playingShape: "softSquare"
+    property var pausedShape: "softSquare"
     property bool spin: true
     // выбранный трек ещё грузится: вместо значка — индикатор MD3, кнопка при этом остаётся нажимаемой
     property bool loading: false

@@ -54,15 +54,15 @@ impl HomeService {
         let api = self.auth.api();
         let snapshot = self.snapshot.clone();
         rt.spawn(async move {
-            let _ = snapshot.send(HomeSnapshot { loading: true, ..Default::default() });
+            let _ = snapshot.send_replace(HomeSnapshot { loading: true, ..Default::default() });
             match api.get_home(3).await {
                 Ok(v) => {
                     let list: Vec<serde_json::Value> = v.as_array().cloned().unwrap_or_default();
                     let shelves = yt_api::map::home_shelves(&list);
-                    let _ = snapshot.send(HomeSnapshot { loading: false, shelves: Arc::new(shelves), error_text: String::new() });
+                    let _ = snapshot.send_replace(HomeSnapshot { loading: false, shelves: Arc::new(shelves), error_text: String::new() });
                 }
                 Err(e) => {
-                    let _ = snapshot.send(HomeSnapshot { loading: false, error_text: e.user_text(), ..Default::default() });
+                    let _ = snapshot.send_replace(HomeSnapshot { loading: false, error_text: e.user_text(), ..Default::default() });
                 }
             }
         });
@@ -74,10 +74,10 @@ impl HomeService {
             Ok(v) => {
                 let list: Vec<serde_json::Value> = v.as_array().cloned().unwrap_or_default();
                 let shelves = yt_api::map::home_shelves(&list);
-                let _ = service.snapshot.send(HomeSnapshot { loading: false, shelves: Arc::new(shelves), error_text: String::new() });
+                let _ = service.snapshot.send_replace(HomeSnapshot { loading: false, shelves: Arc::new(shelves), error_text: String::new() });
             }
             Err(e) => {
-                let _ = service.snapshot.send(HomeSnapshot { loading: false, error_text: e.user_text(), ..Default::default() });
+                let _ = service.snapshot.send_replace(HomeSnapshot { loading: false, error_text: e.user_text(), ..Default::default() });
             }
         }
     }

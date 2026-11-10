@@ -43,7 +43,7 @@ Item {
     function openRowMenu(entry, point) {
         _menuEntry = entry
         const uri = entry.uri ?? ""
-        if (uri === "" || entry.kind === "folder")
+        if (uri === "")
             return
         const pinned = Library.pinsRevision >= 0 && Library.isPinned(uri)
         rowMenu.open([{ id: "pin", text: pinned ? I18n.t("Unpin") : I18n.t("Pin to top"), icon: "push_pin" }],
@@ -65,9 +65,7 @@ Item {
     function openEntry(entry) {
         const kind = entry.kind ?? ""
         closeDrawer()
-        if (kind === "folder")
-            router.reset("folder", { folderId: entry.id, folderTitle: entry.title ?? "" })
-        else if (kind === "dj")
+        if (kind === "dj")
             // DJ не плейлист: у него нет страницы со списком треков — только запуск
             Player.playContext(entry.uri ?? "", "")
         else if (kind === "liked")
@@ -109,18 +107,6 @@ Item {
     readonly property var _source: signedIn && !libraryMode ? Library.items("playlists", "all", "spotify") : null
     property var playlists: []
     property var recentItems: []
-    property var expandedFolders: ({})      // id папки → true
-    readonly property int indentStep: 16
-    readonly property int maxDepth: 4         // глубже — без доп. отступа (подпись не должна исчезнуть)
-    function toggleFolder(id) {
-        const next = Object.assign({}, expandedFolders)
-        if (next[id])
-            delete next[id]
-        else
-            next[id] = true
-        expandedFolders = next
-        _rebuild()
-    }
     function _rebuild() {
         if (libraryMode) {
             const rows = []
@@ -132,34 +118,11 @@ Item {
         }
         const out = []
         const m = _source
-        // «Любимые» — отдельным пунктом выше; дети папок — внутри папки (если папки в списке есть)
-        const folders = new Set()
         for (let i = 0; m && i < m.count; i++) {
             const e = m.get(i)
-            if (e.kind === "folder")
-                folders.add(e.id)
-        }
-        const seen = new Set()
-        // в рейле вложенных строк нет: иконки держат одну ось
-        const addChildren = (id, depth) => {
-            if (root.rail || !root.expandedFolders[id] || seen.has(id))
-                return
-            seen.add(id)
-            const children = Library.folderChildren(id)
-            for (let i = 0; children && i < children.count; i++) {
-                const c = Object.assign({}, children.get(i), { depth: depth })
-                out.push(c)
-                if (c.kind === "folder")
-                    addChildren(c.id, depth + 1)
-            }
-        }
-        for (let i = 0; m && i < m.count; i++) {
-            const e = m.get(i)
-            if (e.kind === "liked" || folders.has(e.folderId ?? ""))
+            if (e.kind === "liked")
                 continue
             out.push(Object.assign({}, e, { depth: 0 }))
-            if (e.kind === "folder")
-                addChildren(e.id, 1)
         }
         playlists = out
     }
@@ -187,8 +150,7 @@ Item {
     Connections {
         target: Library
         function onEntriesChanged() {
-            if (root.libraryMode || Object.keys(root.expandedFolders).length > 0)
-                root._rebuild()
+            root._rebuild()
         }
         // закрепили/открепили строку — сводка переставляется
         function onPinsChanged() { if (root.libraryMode) root._rebuild() }
@@ -334,7 +296,7 @@ Item {
                 id: sectionLabel
                 x: root.iconInset
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.libraryMode ? I18n.t("Recently added") : I18n.t("Playlists")
+                text: root.libraryMode ? I18n.t("Recently played") : I18n.t("Playlists")
                 type: "labelMedium"
                 color: Theme.fgSurfaceVariant
             }
@@ -426,52 +388,28 @@ Item {
                 id: row
                 required property var modelData
                 readonly property string kind: modelData.kind ?? ""
-                readonly property bool folder: kind === "folder"
-                readonly property bool expanded: folder && root.expandedFolders[modelData.id] === true
-                readonly property real indent: Math.min(modelData.depth ?? 0, root.maxDepth) * root.indentStep
+                readonly property real indent: 0
                 width: ListView.view.width
                 compact: root.rail
-                iconInset: root.iconInset + indent
-                labelWidth: root.labelWidth - indent - (folder ? 28 : 0)
+                iconInset: root.iconInset
+                labelWidth: root.labelWidth
                 text: modelData.title ?? ""
-                // в сводке у каждой строки свой значок: обложки у альбомов и подкастов тоже есть
-                icon: folder ? (expanded ? "folder_open" : "folder")
-                      : kind === "album" ? "album"
+                icon: kind === "album" ? "album"
                       : kind === "artist" ? "person"
                       : kind === "show" ? "podcasts"
                       : kind === "liked" ? "favorite"
                       : kind === "dj" ? "graphic_eq" : "queue_music"
-                imageSource: folder ? "" : (modelData.cover ?? "")
-                // у папки справа — своя кнопка-стрелка (ниже); закреплённый — булавка
-                trailingIcon: !folder && modelData.pinned === true ? "push_pin" : ""
+                imageSource: modelData.cover ?? ""
+                trailingIcon: modelData.pinned === true ? "push_pin" : ""
                 trailingColor: Theme.primary
-                selected: folder ? root.router.currentName === "folder" && (root.router.current.props.folderId ?? "") === modelData.id
-                          : kind === "playlist"
-                            ? root.router.currentName === "playlist" && (root.router.current.props.playlistId ?? "") === modelData.id
+                selected: kind === "playlist"
+                          ? root.router.currentName === "playlist" && (root.router.current.props.playlistId ?? "") === modelData.id
                           : kind === "album" ? root.router.currentName === "album" && (root.router.current.props.albumId ?? "") === modelData.id
                           : kind === "artist" ? root.router.currentName === "artist" && (root.router.current.props.artistId ?? "") === modelData.id
                           : kind === "show" ? root.router.currentName === "show" && (root.router.current.props.showId ?? "") === modelData.id
                           : kind === "liked" ? root.router.rootName === "liked" : false
                 onClicked: root.openEntry(modelData)
                 onRightClicked: point => root.openRowMenu(modelData, point)
-
-                // Стрелка папки: раскрыть/свернуть прямо в списке (поворот на 90° — MD3 expand)
-                IconButton {
-                    visible: row.folder && opacity > 0
-                    opacity: root.rail ? 0 : 1
-                    Behavior on opacity { NumberAnimation { duration: Theme.motion.effectsFast } }
-                    anchors.right: parent.right
-                    anchors.rightMargin: 6
-                    anchors.verticalCenter: parent.verticalCenter
-                    z: 2
-                    size: "xs"
-                    icon: "chevron_right"
-                    iconColor: Theme.fgSurfaceVariant
-                    rotation: row.expanded ? 90 : 0
-                    Behavior on rotation { NumberAnimation { duration: Theme.motion.spatialFast; easing.type: Easing.OutCubic } }
-                    onClicked: root.toggleFolder(row.modelData.id)
-                    Accessible.name: row.expanded ? I18n.t("Collapse folder") : I18n.t("Expand folder")
-                }
             }
             SmoothScroll { flickable: playlistList; wheelStep: Settings.wheelStep; showScrollBar: false }
         }

@@ -7,6 +7,7 @@
 
 pub mod client;
 pub mod http;
+pub mod innertube;
 pub mod link;
 pub mod map;
 pub mod util;

@@ -1,19 +1,20 @@
 //! YouTube Music player without Qt, replacing librespot (sf-player).
 //!
-//! Playback: `ytmusicapi.get_song(videoId)` → `streamingData.adaptiveFormats`
-//! (audio-only, AAC `audio/mp4` preferred) → download into memory → `rodio`.
+//! Playback: InnerTube `player` (anonymous ANDROID client) → plain CDN URL →
+//! `rodio` decodes AAC while a background thread streams the bytes with HTTP
+//! Range requests. No yt-dlp, no Python, no full-file download.
 //! No Spotify Connect, no mDNS, no remote devices: this computer only.
 //!
 //! Symphonia (via rodio 0.23) decodes the AAC stream. Opus is not decoded by
-//! symphonia, so `stream::pick_audio_url` only falls back to it when no MP4
-//! stream exists; the failure then surfaces through `error_text`.
+//! symphonia, so `yt-api::innertube` only picks MP4 formats; a response with
+//! nothing else surfaces through `error_text`.
 
 pub mod audio;
 pub mod handle;
 pub mod stream;
 
 pub use handle::PlayerHandle;
-pub use stream::{output_devices, pick_audio_url};
+pub use stream::output_devices;
 
 pub struct PlayerSubscription {
     pub snapshot: tokio::sync::watch::Receiver<PlayerSnapshot>,
@@ -158,13 +159,6 @@ pub enum QueueChange {
 }
 
 #[derive(Clone, Debug)]
-pub struct TrackStarted {
-    pub track: TrackItem,
-    pub context: PlayContext,
-    pub local: bool,
-}
-
-#[derive(Clone, Debug)]
 pub struct TrackEnded {
     pub track: TrackItem,
     pub context: PlayContext,
@@ -186,9 +180,7 @@ pub enum PlayerEvent {
     ErrorChanged,
     LevelChanged,
     DeviceChanged,
-    LocalChanged,
     Queue(QueueChange),
-    TrackStarted(TrackStarted),
     TrackEnded(TrackEnded),
     Notice(String),
 }
@@ -204,7 +196,7 @@ pub enum PlayerError {
 }
 
 pub fn codec_label(bitrate_kbps: u16) -> String {
-    format!("OPUS {bitrate_kbps}k")
+    format!("AAC {bitrate_kbps}k")
 }
 
 pub fn volume_to_u16(volume: f64) -> u16 {
@@ -214,32 +206,3 @@ pub fn volume_to_u16(volume: f64) -> u16 {
 pub fn volume_from_u16(volume: u16) -> f64 {
     f64::from(volume) / f64::from(u16::MAX)
 }
-
-// compat shims for old sf-player imports used by bridges
-pub mod engine {
-    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub enum RepeatMode {
-        #[default]
-        Off,
-        Context,
-        Track,
-    }
-    impl RepeatMode {
-        pub fn next(self) -> Self {
-            match self {
-                Self::Off => Self::Context,
-                Self::Context => Self::Track,
-                Self::Track => Self::Off,
-            }
-        }
-    }
-}
-
-pub struct Rootlist;
-pub struct RootlistEntry;
-pub struct Session;
-pub struct SpClient;
-pub struct Credentials;
-pub struct EngineConfig;
-pub struct LoadSpec;
-pub struct LocalState;

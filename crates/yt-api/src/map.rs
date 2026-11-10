@@ -95,6 +95,7 @@ pub fn track_item(v: &Value) -> m::TrackItem {
         added_at: s(v, "addedAt").if_empty(s(v, "date")),
         added_by: String::new(),
         play_count: s(v, "views").parse::<i64>().unwrap_or(0),
+        set_video_id: s(v, "setVideoId"),
     }
 }
 
@@ -125,7 +126,8 @@ pub fn album_item(v: &Value) -> m::AlbumItem {
         cover: pick_thumbnail(&thumb, COVER_PX),
         cover_large: pick_thumbnail(&thumb, COVER_LARGE_PX),
         explicit: explicit_of(v),
-        saved: false,
+        // likeStatus альбома: LIKE — в библиотеке
+        saved: s(v, "likeStatus") == "LIKE",
     }
 }
 
@@ -143,23 +145,82 @@ pub fn artist_item(v: &Value) -> m::ArtistItem {
     }
 }
 
+/// Podcast (search, library subscriptions, podcast page header).
+pub fn show_item(v: &Value) -> m::ShowItem {
+    // browseId подкаста — «MPSP» + id плейлиста; get_podcast ждёт голый id.
+    let id = s(v, "browseId")
+        .if_empty(s(v, "podcastId"))
+        .trim_start_matches("MPSP")
+        .to_owned();
+    let thumb = thumbs(v);
+    let author = v.get("author").or_else(|| v.get("channel"));
+    m::ShowItem {
+        show_id: id.clone(),
+        uri: if id.is_empty() { String::new() } else { format!("ytmusic:show:{id}") },
+        name: s(v, "title").if_empty(s(v, "name")),
+        publisher: s(v, "publisher").if_empty(s(author.unwrap_or(&Value::Null), "name")),
+        description: s(v, "description"),
+        cover: pick_thumbnail(&thumb, COVER_PX),
+        cover_large: pick_thumbnail(&thumb, COVER_LARGE_PX),
+        total_episodes: v.get("episodeCount").and_then(Value::as_i64).unwrap_or(0),
+        // get_podcast отвечает saved; в поиске и библиотеке флага нет
+        saved: v.get("saved").and_then(Value::as_bool).unwrap_or(false),
+        explicit: explicit_of(v),
+    }
+}
+
+/// Выпуск подкаста (список подкаста, поиск, страница выпуска).
+pub fn episode_item(v: &Value) -> m::EpisodeItem {
+    let id = s(v, "videoId");
+    let thumb = thumbs(v);
+    let show = v.get("podcast").or_else(|| v.get("show"));
+    let show_id = s(v, "showId")
+        .if_empty(s(show.unwrap_or(&Value::Null), "id"))
+        .trim_start_matches("MPSP")
+        .to_owned();
+    m::EpisodeItem {
+        episode_id: id.clone(),
+        uri: if id.is_empty() { String::new() } else { format!("ytmusic:episode:{id}") },
+        title: s(v, "title"),
+        description: s(v, "description"),
+        release_date: s(v, "date").if_empty(s(v, "releaseDate")),
+        duration_ms: duration_of(v),
+        explicit: explicit_of(v),
+        resume_ms: 0,
+        fully_played: false,
+        saved: false,
+        cover: pick_thumbnail(&thumb, COVER_PX),
+        cover_large: pick_thumbnail(&thumb, COVER_LARGE_PX),
+        show_id,
+        show_name: s(v, "showName").if_empty(s(show.unwrap_or(&Value::Null), "name")),
+        number: v.get("index").and_then(Value::as_i64).unwrap_or(0),
+    }
+}
+
 pub fn playlist_item(v: &Value) -> m::PlaylistItem {
     let id = s(v, "playlistId").if_empty(s(v, "browseId"));
     let thumb = thumbs(v);
+    let author = v.get("author");
     m::PlaylistItem {
         playlist_id: id.clone(),
         uri: if id.is_empty() { String::new() } else { format!("ytmusic:playlist:{id}") },
         title: s(v, "title"),
         description: s(v, "description"),
-        track_count: v.get("songCount").and_then(Value::as_i64).unwrap_or(
-            v.get("trackCount").and_then(Value::as_i64).unwrap_or(0),
-        ),
+        // get_library_playlists отдаёт count строкой («5»), get_playlist — trackCount числом
+        track_count: v.get("count").and_then(Value::as_i64)
+            .or_else(|| v.get("count").and_then(Value::as_str).and_then(|c| c.parse().ok()))
+            .unwrap_or(
+                v.get("songCount").and_then(Value::as_i64).unwrap_or(
+                    v.get("trackCount").and_then(Value::as_i64).unwrap_or(0),
+                ),
+            ),
         cover: pick_thumbnail(&thumb, COVER_PX),
-        owner: s(v, "author"),
-        owner_id: s(v, "channelId"),
-        can_edit: false,
+        // автор — строка (библиотека) или {name, id} (страница плейлиста)
+        owner: s(v, "author").if_empty(s(author.unwrap_or(&Value::Null), "name")),
+        owner_id: s(author.unwrap_or(&Value::Null), "id"),
+        can_edit: v.get("owned").and_then(Value::as_bool).unwrap_or(false),
         collaborative: false,
-        public: true,
+        public: s(v, "privacy") == "PUBLIC",
         snapshot_id: String::new(),
         pinned: false,
     }
@@ -193,30 +254,76 @@ pub fn artist_info(v: &Value) -> m::ArtistInfo {
     }
 }
 
-/// get_home shelves → md3-model HomeShelf items.
-///
-/// ytmusicapi returns raw parsed dicts (`videoId`, `thumbnails: [{url,width}]`,
-/// `duration_seconds`, `artists: [{name,browseId}]`) while QML TrackRow expects
-/// TrackItem JSON (`cover: "url"`, `durationMs`, `artists: "name, ..."`). Passing
-/// raw values through made every cover empty (blank tiles) and every duration 0.
-/// So map each entry through `track_item` and serialize the model struct.
+/// Классифицировать одну запись полки главной по полям ytmusicapi:
+/// videoType PODCAST → episode, videoId → track, playlistId → playlist,
+/// browseId MPREb_ → album, MPSP → show, UC → artist.
+fn home_item(v: &Value) -> Option<(String, serde_json::Value)> {
+    let video_type = s(v, "videoType");
+    if video_type.contains("PODCAST") {
+        let ep = episode_item(v);
+        if !ep.episode_id.is_empty() {
+            return Some(("episode".to_owned(), serde_json::to_value(&ep).ok()?));
+        }
+    }
+    if !s(v, "videoId").is_empty() {
+        let t = track_item(v);
+        if !t.track_id.is_empty() {
+            return Some(("track".to_owned(), serde_json::to_value(&t).ok()?));
+        }
+    }
+    if !s(v, "playlistId").is_empty() {
+        let p = playlist_item(v);
+        if !p.playlist_id.is_empty() {
+            return Some(("playlist".to_owned(), serde_json::to_value(&p).ok()?));
+        }
+    }
+    if let Some(bid) = v.get("browseId").and_then(Value::as_str) {
+        if bid.starts_with("MPREb_") {
+            let a = album_item(v);
+            if !a.album_id.is_empty() {
+                return Some(("album".to_owned(), serde_json::to_value(&a).ok()?));
+            }
+        } else if bid.starts_with("MPSP") {
+            let sh = show_item(v);
+            if !sh.show_id.is_empty() {
+                return Some(("show".to_owned(), serde_json::to_value(&sh).ok()?));
+            }
+        } else if bid.starts_with("UC") {
+            let ar = artist_item(v);
+            if !ar.artist_id.is_empty() {
+                return Some(("artist".to_owned(), serde_json::to_value(&ar).ok()?));
+            }
+        }
+    }
+    None
+}
+
+/// get_home shelves → md3-model HomeShelf items. Каждая запись полки clasificруется
+/// через `home_item` (трек / плейлист / альбом / исполнитель / подкаст / выпуск),
+/// а kind полки берётся из первой записи. Пустые полки пропускаются.
 pub fn home_shelves(home: &[Value]) -> Vec<m::HomeShelf> {
     home.iter()
-        .map(|row| {
+        .filter_map(|row| {
             let contents = row.get("contents").cloned().unwrap_or(Value::Array(vec![]));
-            let items = match contents {
+            let classified: Vec<(String, serde_json::Value)> = match contents {
                 Value::Array(list) => list
                     .iter()
-                    .filter_map(|v| serde_json::to_value(track_item(v)).ok())
+                    .filter_map(|v| home_item(v))
                     .collect(),
                 _ => vec![],
             };
-            m::HomeShelf {
-                key: s(row, "title"),
-                title: s(row, "title"),
-                kind: "tracks".to_string(),
-                items,
+            if classified.is_empty() {
+                return None;
             }
+            let kind = classified.first().map(|(k, _)| k.clone()).unwrap_or_default();
+            let items: Vec<serde_json::Value> = classified.into_iter().map(|(_, v)| v).collect();
+            let title = s(row, "title");
+            Some(m::HomeShelf {
+                key: title.clone(),
+                title,
+                kind,
+                items,
+            })
         })
         .collect()
 }

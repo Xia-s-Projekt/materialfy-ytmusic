@@ -119,7 +119,7 @@ Page {
                 Layout.alignment: Qt.AlignTop
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: Theme.motion.spatialDefault; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.motion.emphasized } }
                 source: page.info.coverLarge || page.info.cover || ""
-                shape: page.playingEpisode && Player.playing ? "cookie9" : "softSquare"
+                shape: "softSquare"
                 duration: Theme.motion.spatialSlow
             }
 

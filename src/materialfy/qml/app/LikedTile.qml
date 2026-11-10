@@ -4,7 +4,7 @@ import Md3
 import Materialfy.Core
 
 // Большая плитка «Любимые треки» (две ячейки сетки библиотеки): градиент primaryContainer → tertiaryContainer,
-// образцы треков, фигура-ореол с сердцем (cookie12 → flower8 при наведении), «Слушать».
+// образцы треков, фигура-ореол с сердцем (softSquare → softSquare при наведении), «Слушать».
 Item {
     id: root
 
@@ -47,7 +47,7 @@ Item {
             y: -14
             width: 150
             height: 150
-            shape: root.hovered ? "flower8" : "cookie12"
+            shape: "softSquare"
             color: Qt.alpha(Theme.fgPrimaryContainer, 0.18)
             Icon {
                 anchors.centerIn: parent
@@ -106,8 +106,8 @@ Item {
         anchors.margins: 20
         size: 56
         spin: false
-        pausedShape: "cookie6"
-        playingShape: "cookie9"
+        pausedShape: "softSquare"
+        playingShape: "softSquare"
         playing: Player.playing && Player.source === "liked"
         onClicked: root.playClicked()
         MouseArea { id: playArea; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }

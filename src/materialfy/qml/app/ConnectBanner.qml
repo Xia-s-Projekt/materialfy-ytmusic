@@ -90,7 +90,7 @@ Item {
                 Layout.row: 0
                 Layout.column: 0
                 Layout.alignment: root.stacked ? Qt.AlignTop : Qt.AlignVCenter
-                shape: "cookie9"
+                shape: "softSquare"
                 color: root.lost ? Theme.fgErrorContainer : Theme.primary
                 Icon {
                     anchors.centerIn: parent

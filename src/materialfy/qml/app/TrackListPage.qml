@@ -31,7 +31,7 @@ Item {
     property string overline                   // «ПЛЕЙЛИСТ», «КОЛЛЕКЦИЯ»
     property string heroImage                  // обложка (url, лучше coverLarge); если пусто — фигура с иконкой
     property string heroIcon: "queue_music"
-    property var heroShape: "cookie9"
+    property var heroShape: "softSquare"
     property var heroArtistRefs: []            // исполнители-ссылки под названием (альбом)
     property bool showPlayButtons: true
     readonly property bool scrolled: list.contentY - list.originY > 48
@@ -312,7 +312,7 @@ Item {
                     anchors.centerIn: parent
                     width: parent.width * 1.3
                     height: width
-                    shape: "cookie9"
+                    shape: "softSquare"
                     color: Theme.surfaceContainerHighest
                 }
                 TickAnimation {
@@ -324,7 +324,7 @@ Item {
                     anchors.fill: parent
                     visible: page.heroImage !== ""
                     source: page.heroImage
-                    shape: coverHover.hovered ? "cookie12" : "cookie9"
+                    shape: "softSquare"
                     HoverHandler { id: coverHover }
                 }
                 MorphShape {

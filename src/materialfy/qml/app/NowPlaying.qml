@@ -56,7 +56,7 @@ Item {
     readonly property bool animating: revealAnim.running
     readonly property Item coverItem: bigCover
 
-    readonly property var _windowShapes: ["cookie9", "cookie12", "cookie7", "flower8", "flower6", "clover4", "sunny", "cookie6"]
+    readonly property var _windowShapes: ["softSquare", "softSquare", "softSquare", "softSquare", "softSquare", "softSquare", "softSquare", "softSquare"]
     readonly property real _split: 0.45
     // reduced motion: без растущей фигуры — экран сразу во весь размер и проявляется затуханием
     readonly property real _g: Theme.reducedMotion ? (reveal > 0 ? 1 : 0) : reveal
@@ -288,7 +288,7 @@ Item {
                     Layout.preferredHeight: s
                     Layout.bottomMargin: root.layoutCompact ? 12 : 20
                     source: Player.coverLarge !== "" ? Player.coverLarge : Player.cover
-                    restShape: Player.playing ? "cookie12" : "square"
+                    restShape: "softSquare"
                     direction: Player.direction
                     pulse: Settings.coverPulse && Player.isLocal === true ? left.beat : 0
                     spinning: Settings.coverSpin && Player.playing && root.open && Player.isLocal === true

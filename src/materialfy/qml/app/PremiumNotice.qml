@@ -75,7 +75,7 @@ Rectangle {
                 Layout.preferredWidth: 48
                 Layout.preferredHeight: 48
                 Layout.alignment: Qt.AlignTop
-                shape: "cookie9"
+                shape: "softSquare"
                 color: Theme.fgTertiaryContainer
                 Icon {
                     anchors.centerIn: parent

@@ -412,8 +412,8 @@ impl SettingKey {
             NowPlayingBlur => Float(1.0),
             NowPlayingDrift => Float(0.5),
             AmbientBackground => Bool(true),
-            CoverSpin => Bool(true),
-            CoverPulse => Bool(true),
+            CoverSpin => Bool(false),
+            CoverPulse => Bool(false),
             CalmWhenInactive => Bool(true),
             LyricsMode => Str("normal".into()),
             LyricsFontScale => Float(1.0),
@@ -1425,13 +1425,13 @@ mod tests {
         assert!(store.set(SettingKey::Pins, SettingValue::Str("a,b".into())));
         assert!(store.set(SettingKey::ThemeMode, SettingValue::Str("light".into())));
         assert!(store.set(SettingKey::NowPlayingBlur, SettingValue::Float(0.0)));
-        assert!(store.set(SettingKey::CoverSpin, SettingValue::Bool(false)));
+        assert!(store.set(SettingKey::CoverSpin, SettingValue::Bool(true)));
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("volume=0.5\n"), "{text}");
         assert!(text.contains("pins=\"a,b\"\n"), "{text}");
         assert!(text.contains("themeMode=light\n"), "{text}");
         assert!(text.contains("nowPlayingBlur=0\n"), "{text}");
-        assert!(text.contains("coverSpin=false\n"), "{text}");
+        assert!(text.contains("coverSpin=true\n"), "{text}");
         assert!(text.contains("[Other]\nkeep=me\n"), "{text}");
         let general_end = text.find("[Other]").unwrap();
         assert!(text[..general_end].contains("themeMode=light"));
@@ -1441,7 +1441,7 @@ mod tests {
         assert_eq!(again.get_str(SettingKey::Pins), "a,b");
         assert!((again.get_f64(SettingKey::Volume) - 0.5).abs() < 1e-12);
         assert_eq!(again.get_str(SettingKey::ThemeMode), "light");
-        assert!(!again.get_bool(SettingKey::CoverSpin));
+        assert!(again.get_bool(SettingKey::CoverSpin));
         let _ = std::fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
     }
 
@@ -1467,12 +1467,12 @@ mod tests {
         assert_eq!(store.get_int(SettingKey::Bitrate), 96);
         assert!(store.set(SettingKey::WindowHeight, SettingValue::Int(700)));
         assert!(store.set(SettingKey::Volume, SettingValue::Float(0.25)));
-        assert!(store.set(SettingKey::CoverPulse, SettingValue::Bool(false)));
+        assert!(store.set(SettingKey::CoverPulse, SettingValue::Bool(true)));
         assert!(store.set(SettingKey::CustomSeed, SettingValue::Str("@x".into())));
         let key = hkcu.open_subkey(&path).unwrap();
         assert_eq!(key.get_value::<u32, _>("windowHeight").unwrap(), 700);
         assert_eq!(key.get_value::<String, _>("volume").unwrap(), "0.25");
-        assert_eq!(key.get_value::<String, _>("coverPulse").unwrap(), "false");
+        assert_eq!(key.get_value::<String, _>("coverPulse").unwrap(), "true");
         assert_eq!(key.get_value::<String, _>("customSeed").unwrap(), "@@x");
         assert_eq!(store.get_str(SettingKey::CustomSeed), "@x");
         assert_eq!(store.get_int(SettingKey::WindowHeight), 700);

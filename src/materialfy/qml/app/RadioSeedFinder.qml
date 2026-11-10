@@ -108,7 +108,7 @@ Item {
                             Layout.preferredWidth: 40
                             Layout.preferredHeight: 40
                             source: row.model.cover ?? ""
-                            shape: hover.hovered ? "cookie9" : "softSquare"
+                            shape: "softSquare"
                         }
                         ColumnLayout {
                             Layout.fillWidth: true

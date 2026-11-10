@@ -188,6 +188,8 @@
   "TV": "TV",
   "Tablet": "Tablet",
   "The reply comes to 127.0.0.1:{0} · your computer": "A resposta chega em 127.0.0.1:{0} · seu computador",
+  "These headers are from a signed-out browser. Sign in to your Google account on music.youtube.com, then copy the request headers again.": "Estes cabeçalhos vieram de um navegador sem sessão iniciada. Entre na sua conta do Google em music.youtube.com e copie os cabeçalhos da requisição novamente.",
+  "These headers are not signed in to a Google account": "Estes cabeçalhos não correspondem a uma sessão iniciada no Google",
   "This album has no tracks": "Este álbum não tem faixas",
   "This computer": "Este computador",
   "This computer, “{0}”, is in your Spotify devices list. You can move music here from your phone and back.": "Este computador, “{0}”, está na lista de dispositivos do seu Spotify. Você pode mover a música do celular para cá e de volta.",

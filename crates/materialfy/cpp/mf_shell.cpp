@@ -615,14 +615,6 @@ start_gui_heartbeat()
   gui_heartbeat();
 }
 
-void
-watch_app_state()
-{
-  QObject::connect(qApp, &QGuiApplication::applicationStateChanged, qApp, [](Qt::ApplicationState state) {
-    app_active_changed(state == Qt::ApplicationActive);
-  });
-}
-
 bool
 open_local_folder(const QString& path)
 {

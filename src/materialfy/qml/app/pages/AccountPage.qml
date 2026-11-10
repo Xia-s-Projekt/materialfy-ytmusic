@@ -75,6 +75,8 @@ Page {
             return I18n.t("Check your internet connection. If YouTube Music is only reachable through a proxy, turn it on in network settings.")
         if (code === "badJson" || text.indexOf("JSON") >= 0)
             return I18n.t("The pasted text is not valid headers JSON. Copy the browser request headers again from music.youtube.com.")
+        if (code === "notSignedIn")
+            return I18n.t("These headers are from a signed-out browser. Sign in to your Google account on music.youtube.com, then copy the request headers again.")
         return ""
     }
 
